@@ -1,0 +1,284 @@
+@import "tailwindcss";
+
+/* ============================================================
+   1 · STATIC TOKEN SCALES
+   Palette is the signed-off DARP mockup: three institutional colours
+   (indigo, maroon, gold) taken from the BIT Mesra crest and architecture,
+   plus neutrals. Status colours are functional, not decorative.
+   ============================================================ */
+@theme {
+  /* System stack only: this portal may run on a campus server with no
+     outbound internet. Never add a font CDN. */
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas,
+    "Liberation Mono", monospace;
+
+  --text-2xs: 0.6875rem;   /* 11px — table meta, pill text */
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.75rem;      /* 12px — help text, captions */
+  --text-xs--line-height: 1.125rem;
+  --text-sm: 0.8125rem;    /* 13px — table body */
+  --text-sm--line-height: 1.25rem;
+  --text-base: 0.875rem;   /* 14px — app body */
+  --text-base--line-height: 1.5rem;
+  --text-md: 1rem;
+  --text-md--line-height: 1.5rem;
+  --text-lg: 1.125rem;
+  --text-lg--line-height: 1.625rem;
+  --text-xl: 1.375rem;
+  --text-xl--line-height: 1.875rem;
+  --text-2xl: 1.75rem;
+  --text-2xl--line-height: 2.125rem;
+  --text-3xl: 2.25rem;
+  --text-3xl--line-height: 2.5rem;
+
+  /* --- 1 · Institutional indigo (BITS IKAC #211d70, and the tower's night sky) --- */
+  --color-brand-50: #ecebf5;
+  --color-brand-100: #dcdaec;
+  --color-brand-200: #bab6d9;
+  --color-brand-300: #938dc2;
+  --color-brand-400: #6b64a9;
+  --color-brand-500: #4a4293;
+  --color-brand-600: #332f8f;
+  --color-brand-700: #211d70;  /* institutional primary */
+  --color-brand-800: #191557;
+  --color-brand-900: #12103f;  /* utility bar, footer */
+  --color-brand-950: #0b0a2b;
+
+  /* --- 2 · Maroon (the tower dome and the crest) --- */
+  --color-maroon-50: #fdf3f4;
+  --color-maroon-100: #fbe4e7;
+  --color-maroon-200: #f6c8cf;
+  --color-maroon-300: #eb9fac;
+  --color-maroon-400: #db6e82;
+  --color-maroon-500: #c4455e;
+  --color-maroon-600: #a32b46;
+  --color-maroon-700: #82203a;  /* accent primary */
+  --color-maroon-800: #6b1c31;
+  --color-maroon-900: #5a1a2b;
+
+  /* --- 3 · Gold (the lit stonework, NIRF medallions) --- */
+  --color-gold-50: #fbf6e9;
+  --color-gold-100: #f5e9c8;
+  --color-gold-200: #e9d191;
+  --color-gold-300: #d7b355;
+  --color-gold-400: #c49a32;
+  --color-gold-500: #a97a1f;   /* accent tertiary */
+  --color-gold-600: #8d6318;
+  --color-gold-700: #6f4d13;
+
+  /* --- Neutrals: the enterprise greys from the mockup --- */
+  --color-ink-50: #fafbfc;
+  --color-ink-100: #f4f5f7;
+  --color-ink-200: #ebecf0;
+  --color-ink-300: #dfe1e6;
+  --color-ink-400: #c1c7d0;
+  --color-ink-500: #8993a4;
+  --color-ink-600: #5e6c84;
+  --color-ink-700: #42526e;
+  --color-ink-800: #253858;
+  --color-ink-900: #172b4d;
+  --color-ink-950: #091e42;
+
+  /* --- Status. Functional only: these five are the record lifecycle. --- */
+  --color-success-50: #e3fcef;
+  --color-success-100: #abf5d1;
+  --color-success-500: #00875a;
+  --color-success-700: #006644;
+
+  --color-warning-50: #fffae6;
+  --color-warning-100: #fff0b3;
+  --color-warning-500: #ff991f;
+  --color-warning-700: #974f0c;
+
+  --color-danger-50: #ffebe6;
+  --color-danger-100: #ffbdad;
+  --color-danger-500: #de350b;
+  --color-danger-700: #bf2600;
+
+  --color-info-50: #deebff;
+  --color-info-100: #b3d4ff;
+  --color-info-500: #0052cc;
+  --color-info-700: #0747a6;
+
+  --color-violet-50: #eae6ff;
+  --color-violet-100: #c0b6f2;
+  --color-violet-500: #5243aa;
+  --color-violet-700: #403294;
+
+  /* --- Radius: 3px everywhere. Enterprise tools are not rounded. --- */
+  --radius-xs: 2px;
+  --radius-sm: 3px;
+  --radius-md: 3px;
+  --radius-lg: 4px;
+  --radius-xl: 6px;
+
+  /* --- Depth comes from borders, not blur. --- */
+  --shadow-xs: 0 1px 1px rgb(9 30 66 / 0.06);
+  --shadow-sm: 0 1px 2px rgb(9 30 66 / 0.08);
+  --shadow-md: 0 2px 6px rgb(9 30 66 / 0.12);
+  --shadow-lg: 0 8px 24px rgb(9 30 66 / 0.16);
+
+  --spacing-sidebar: 15rem;
+  --spacing-topbar: 3.25rem;
+}
+
+/* ============================================================
+   2 · SEMANTIC ALIASES (theme-switchable)
+   ============================================================ */
+@theme inline {
+  --color-canvas: var(--c-canvas);
+  --color-surface: var(--c-surface);
+  --color-surface-2: var(--c-surface-2);
+  --color-surface-inset: var(--c-surface-inset);
+  --color-line: var(--c-line);
+  --color-line-strong: var(--c-line-strong);
+  --color-ink: var(--c-ink);
+  --color-ink-muted: var(--c-ink-muted);
+  --color-ink-faint: var(--c-ink-faint);
+  --color-ink-invert: var(--c-ink-invert);
+  --color-primary: var(--c-primary);
+  --color-primary-hover: var(--c-primary-hover);
+  --color-primary-soft: var(--c-primary-soft);
+  --color-focus: var(--c-focus);
+}
+
+:root {
+  color-scheme: light;
+  --c-canvas: var(--color-ink-100);
+  --c-surface: #ffffff;
+  --c-surface-2: var(--color-ink-50);
+  --c-surface-inset: var(--color-ink-100);
+  --c-line: var(--color-ink-300);
+  --c-line-strong: var(--color-ink-400);
+  --c-ink: var(--color-ink-900);
+  --c-ink-muted: var(--color-ink-600);
+  --c-ink-faint: var(--color-ink-500);
+  --c-ink-invert: #ffffff;
+  --c-primary: var(--color-brand-700);
+  --c-primary-hover: var(--color-brand-800);
+  --c-primary-soft: var(--color-brand-50);
+  --c-focus: var(--color-brand-500);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --c-canvas: #0b0a20;
+    --c-surface: #14132e;
+    --c-surface-2: #1b1a3a;
+    --c-surface-inset: #1b1a3a;
+    --c-line: #2d2b52;
+    --c-line-strong: #3d3a68;
+    --c-ink: #e8e9f2;
+    --c-ink-muted: #a9adc4;
+    --c-ink-faint: #868ba6;
+    --c-ink-invert: #0b0a20;
+    --c-primary: #a8a3e0;
+    --c-primary-hover: #c0bcea;
+    --c-primary-soft: #221f4d;
+    --c-focus: #a8a3e0;
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --c-canvas: #0b0a20;
+  --c-surface: #14132e;
+  --c-surface-2: #1b1a3a;
+  --c-surface-inset: #1b1a3a;
+  --c-line: #2d2b52;
+  --c-line-strong: #3d3a68;
+  --c-ink: #e8e9f2;
+  --c-ink-muted: #a9adc4;
+  --c-ink-faint: #868ba6;
+  --c-ink-invert: #0b0a20;
+  --c-primary: #a8a3e0;
+  --c-primary-hover: #c0bcea;
+  --c-primary-soft: #221f4d;
+  --c-focus: #a8a3e0;
+}
+
+/* ============================================================
+   3 · BASE LAYER
+   ============================================================ */
+@layer base {
+  * {
+    border-color: var(--color-line);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: var(--text-base--line-height);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* One focus treatment everywhere. Never remove it. */
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+    border-radius: var(--radius-xs);
+  }
+
+  input,
+  select,
+  textarea,
+  button {
+    font: inherit;
+    color: inherit;
+  }
+
+  table {
+    border-collapse: collapse;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
+  /* Printing an annexure must not waste toner on chrome. */
+  @media print {
+    .no-print {
+      display: none !important;
+    }
+    body {
+      background: #fff;
+      color: #000;
+    }
+  }
+}
+
+@layer components {
+  /* Skip link, visible only on keyboard focus. */
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 100;
+  }
+  .skip-link:focus {
+    left: 0.5rem;
+    top: 0.5rem;
+    padding: 0.5rem 0.875rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-line-strong);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-md);
+  }
+}

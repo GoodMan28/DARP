@@ -1,0 +1,59 @@
+{
+  "name": "darp",
+  "version": "1.0.0",
+  "description": "DARP — Accreditation Data Portal, Birla Institute of Technology, Mesra",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx --env-file=.env.local src/server/db/migrate.ts",
+    "db:harden": "tsx --env-file=.env.local scripts/harden-db.ts",
+    "db:seed": "tsx --conditions=react-server --env-file=.env.local scripts/seed.ts",
+    "db:seed:demo": "tsx --conditions=react-server --env-file=.env.local scripts/seed-demo.ts",
+    "db:reset": "tsx --env-file=.env.local scripts/reset.ts",
+    "db:setup": "npm run db:migrate && npm run db:harden && npm run db:seed",
+    "verify": "npm run typecheck && npm run lint && npm run test"
+  },
+  "dependencies": {
+    "@node-rs/argon2": "^2.0.2",
+    "drizzle-orm": "^0.44.6",
+    "exceljs": "^4.4.0",
+    "next": "^15.5.4",
+    "pg": "^8.16.3",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "server-only": "^0.0.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.7",
+    "@playwright/test": "^1.55.1",
+    "@tailwindcss/postcss": "^4.1.13",
+    "@types/node": "^22.18.6",
+    "@types/pg": "^8.15.5",
+    "@types/react": "^19.1.13",
+    "@types/react-dom": "^19.1.9",
+    "@vitest/coverage-v8": "^3.2.4",
+    "dotenv": "^17.2.2",
+    "drizzle-kit": "^0.31.5",
+    "eslint": "^9.36.0",
+    "eslint-config-next": "^15.5.4",
+    "eslint-plugin-security": "^3.0.1",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4.1.13",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.2",
+    "vitest": "^3.2.4"
+  }
+}
