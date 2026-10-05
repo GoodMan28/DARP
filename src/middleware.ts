@@ -79,4 +79,10 @@ export function middleware(req: NextRequest) {
   return allow();
 }
 
-export const config = { matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'] };
+export const config = {
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  // Next.js 15.5 stabilised the Node.js middleware runtime. Pinned explicitly rather than left
+  // to default, so this never silently runs on the Edge runtime instead (which lacks some
+  // Node globals) on a host — like Vercel — whose default differs from local `next dev`/`start`.
+  runtime: 'nodejs',
+};

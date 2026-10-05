@@ -47,12 +47,16 @@ change its password at first sign-in.
 
 ```bash
 npm run db:seed:demo             # 11 accounts, ~150 records across all 24 modules and all 5 states
-npm run db:seed:demo -- --clear  # remove every trace
+npm run db:seed:demo -- --clear  # remove the demo accounts and their records
 ```
 
 Demo accounts all use the `@demo.bitmesra.ac.in` domain, so `--clear` can find and remove them.
 Sign in as `verma@`, `hodcse@`, `drie@`, `dofa@`, `dugs@`, `cdc@` or `iqac@` with the password the
 script prints. **This is review data — delete it before the portal is used for real.**
+
+`--clear` does **not** remove the demo activity from `audit_log` — that table is append-only by
+database trigger (see Security posture below), so demo logins and record changes stay visible
+there permanently. See `DEPLOYMENT.md` if that matters for your deployment.
 
 > Running `npm run test` truncates the records tables, which removes the demo data with it.
 > Re-run `npm run db:seed:demo` afterwards if you want it back.
@@ -149,6 +153,27 @@ read that config. No other file changes.
    cycle's own period rather than a year the workbook has no column for.
 5. **Public pages render per request** so the CSP nonce reaches Next's hydration scripts. A
    prerendered page cannot carry one.
+
+---
+
+## Troubleshooting
+
+**"Security check failed. Reload the page and try again." on sign-in.** `APP_URL` in `.env.local`
+must be the *exact* origin you're typing into the browser — `http://localhost:3000` and
+`http://127.0.0.1:3000` (or a LAN IP) are different origins even though they reach the same
+machine, and the CSRF/origin guard rejects a mismatch by design. Fix `APP_URL`, restart the server,
+and use the matching address.
+
+**A page loads with no styling (raw black-and-white HTML) after switching between `npm run dev`
+and `npm run build`/`npm run start`.** Dev mode and the production build use incompatible layouts
+inside `.next/`, and running both against the same folder at the same time corrupts it — the page
+ends up referencing a CSS file that no longer exists on disk. Stop every running instance, delete
+`.next`, and start exactly one of the two modes again. Don't run both at once.
+
+**Only ever run one server on port 3000 at a time.** Both issues above get much harder to diagnose
+once two servers (or two modes) are fighting over the same port or build folder.
+
+For a production deployment rather than local running, see `DEPLOYMENT.md`.
 
 ---
 

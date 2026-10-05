@@ -8,7 +8,11 @@ services:
       POSTGRES_USER: darp_owner
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-devpassword}
     ports:
-      - '5432:5432' # in production bind to 127.0.0.1:5432 only
+      # Loopback-only: only this machine's own processes can reach it. Needed even for local
+      # dev now that the app itself has been exposed to the LAN for testing (firewall rule
+      # "DARP dev (3000)") — without this, the database's default devpassword would be
+      # reachable from any other device on the same network.
+      - '127.0.0.1:5432:5432'
     volumes:
       - darp_pgdata:/var/lib/postgresql/data
     healthcheck:

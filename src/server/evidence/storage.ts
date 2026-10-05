@@ -59,8 +59,46 @@ export const localStorageAdapter: StorageAdapter = {
   },
 };
 
+/**
+ * Vercel's serverless functions have an ephemeral, effectively read-only filesystem — anything
+ * `localStorageAdapter` writes disappears between requests. This adapter is the same interface
+ * backed by Vercel Blob instead, selected by `STORAGE_DRIVER=blob` (see .env.example).
+ *
+ * Security is unchanged, not weakened: `access: 'public'` only means "fetchable by anyone who
+ * has the exact URL" — that URL is never sent to the browser. The download route
+ * (src/app/api/evidence/[id]/route.ts) re-checks scopeFilter()/canReadRecord() on every request
+ * and only then calls storage.get() itself; a caller who is not authorised for a record never
+ * learns its blob URL exists.
+ */
+export const vercelBlobStorageAdapter: StorageAdapter = {
+  async put(bytes, ext) {
+    const { put } = await import('@vercel/blob');
+    const pathname = `evidence/${randomUUID()}/${randomUUID()}.${ext}`;
+    const blob = await put(pathname, bytes, {
+      access: 'public',
+      addRandomSuffix: false,
+      contentType: 'application/octet-stream', // real type is served by the route, from the DB column
+    });
+    return {
+      storageKey: blob.url, // the opaque key IS the blob URL — never handed to the client
+      sha256: createHash('sha256').update(bytes).digest('hex'),
+      sizeBytes: bytes.length,
+    };
+  },
+  async get(storageKey) {
+    const res = await fetch(storageKey);
+    if (!res.ok) throw new Error('evidence blob not found');
+    return Buffer.from(await res.arrayBuffer());
+  },
+  async remove(storageKey) {
+    const { del } = await import('@vercel/blob');
+    await del(storageKey).catch(() => undefined);
+  },
+};
+
 /** Swap this one binding to move to object storage later (locked decision #4). */
-export const storage: StorageAdapter = localStorageAdapter;
+export const storage: StorageAdapter =
+  process.env.STORAGE_DRIVER === 'blob' ? vercelBlobStorageAdapter : localStorageAdapter;
 
 /* ───────────────────────── content-based type checking ───────────────────────── */
 

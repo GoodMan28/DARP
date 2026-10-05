@@ -43,19 +43,31 @@ const UNSAFE = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
  * session yet (login, forgot, reset) — otherwise another site could submit the login form
  * on a visitor's behalf and log them into an account the attacker controls.
  */
-export async function assertSameOrigin(method: string): Promise<boolean> {
-  if (!UNSAFE.has(method.toUpperCase())) return true;
+export interface OriginCheckDetail {
+  ok: boolean;
+  origin: string | null;
+  referer: string | null;
+  expected: string;
+}
 
+/** Same as assertSameOrigin, but also returns what it saw — for diagnosing a mismatch. */
+export async function checkSameOrigin(method: string): Promise<OriginCheckDetail> {
   const h = await headers();
   const origin = h.get('origin');
   const referer = h.get('referer');
   const expected = appOrigin();
 
-  if (origin) return origin === expected;
+  if (!UNSAFE.has(method.toUpperCase())) return { ok: true, origin, referer, expected };
+  if (origin) return { ok: origin === expected, origin, referer, expected };
   if (referer) {
-    try { return new URL(referer).origin === expected; } catch { return false; }
+    try { return { ok: new URL(referer).origin === expected, origin, referer, expected }; }
+    catch { return { ok: false, origin, referer, expected }; }
   }
-  return false;                // no Origin and no Referer on an unsafe method: refuse
+  return { ok: false, origin, referer, expected };
+}
+
+export async function assertSameOrigin(method: string): Promise<boolean> {
+  return (await checkSameOrigin(method)).ok;
 }
 
 /** Two independent checks: same-origin, and a session-bound token. Both must pass. */

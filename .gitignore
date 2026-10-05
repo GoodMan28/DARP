@@ -2,9 +2,16 @@ node_modules
 .next
 out
 next-env.d.ts
+
+# Every real env file is ignored; only .env.example (a template with no secrets) is tracked.
+# Plain ".env.production" (no ".local") is the file 10-deployment-ops.md tells the server to
+# create, and it holds PII_ENCRYPTION_KEY / SESSION_SECRET / DB passwords in plaintext — the
+# old pattern here ("*.local" only) did not match it, so a deploy that followed that doc could
+# have committed real secrets straight into git.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+
 storage/
 *.log
 coverage/
@@ -12,3 +19,11 @@ playwright-report/
 test-results/
 tsconfig.tsbuildinfo
 .DS_Store
+
+.vercel
+.env*
+
+# Reference docs auto-installed by `vercel integration add neon` — Neon's own tooling
+# metadata, not part of this project.
+.agents/
+skills-lock.json

@@ -3,7 +3,7 @@ import { headers } from 'next/headers';
 import { z } from 'zod';
 import { ok, fail } from './respond';
 import { getSessionUser, type SessionUser } from '@/server/auth/session';
-import { assertCsrf, assertSameOrigin } from '@/server/auth/csrf';
+import { assertCsrf, checkSameOrigin } from '@/server/auth/csrf';
 import { rateLimit } from '@/server/auth/rateLimit';
 import { hasCapability, type Capability } from '@/server/auth/permissions';
 import { log } from '@/server/log';
@@ -78,9 +78,17 @@ export function withRoute<S extends z.ZodTypeAny | undefined = undefined>(
 
       /* 3 ── CSRF (unsafe methods only) */
       // Origin is checked even without a session, so login itself cannot be CSRF'd.
-      if (!actor && !(await assertSameOrigin(req.method))) {
-        log.warn('cross-origin unauthenticated request rejected', { path: new URL(req.url).pathname });
-        return fail('FORBIDDEN', { message: 'Security check failed. Reload the page and try again.' });
+      if (!actor) {
+        const check = await checkSameOrigin(req.method);
+        if (!check.ok) {
+          log.warn('cross-origin unauthenticated request rejected', {
+            path: new URL(req.url).pathname,
+            origin: check.origin,
+            referer: check.referer,
+            expected: check.expected,
+          });
+          return fail('FORBIDDEN', { message: 'Security check failed. Reload the page and try again.' });
+        }
       }
       if (actor && !(await assertCsrf(req.method, actor.sessionId))) {
         log.warn('csrf rejected', { userId: actor.id, path: new URL(req.url).pathname });
