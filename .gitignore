@@ -1,6 +1,7 @@
 node_modules
 .next
 out
+dist
 next-env.d.ts
 
 # Every real env file is ignored; only .env.example (a template with no secrets) is tracked.
@@ -10,7 +11,6 @@ next-env.d.ts
 # have committed real secrets straight into git.
 .env
 .env.*
-!.env.example
 
 storage/
 *.log
@@ -22,6 +22,8 @@ tsconfig.tsbuildinfo
 
 .vercel
 .env*
+# Templates hold no secrets and are tracked. Must stay below every .env pattern above.
+!.env.example
 
 # Reference docs auto-installed by `vercel integration add neon` — Neon's own tooling
 # metadata, not part of this project.

@@ -19,14 +19,19 @@ of the original workbooks.
 Requires **Node 22**, **Docker** (for PostgreSQL 16) and **git**.
 
 ```bash
-npm install
-cp .env.example .env.local          # then fill in the two keys below
-docker compose up -d                # PostgreSQL 16 on :5432
-npm run db:setup                    # migrate + harden + seed
-npm run dev                         # http://localhost:3000
+npm install                                          # installs all three workspaces
+cp apps/api/.env.example apps/api/.env.local         # then fill in the two keys below
+cp apps/web/.env.example apps/web/.env.local         # API_URL — the default works locally
+docker compose up -d                                 # PostgreSQL 16 on :5432
+npm run db:setup                                     # migrate + harden + seed
+npm run dev                                          # API on :4000, web on http://localhost:3000
 ```
 
-Generate the two secrets `.env.local` needs:
+Open **http://localhost:3000**. The API on port 4000 listens on loopback only and is not meant to be
+opened in a browser — every browser request goes through the web tier (see "How it is put
+together").
+
+Generate the two secrets `apps/api/.env.local` needs:
 
 ```bash
 node -e "const c=require('crypto');console.log('PII_ENCRYPTION_KEY='+c.randomBytes(32).toString('base64'));console.log('SESSION_SECRET='+c.randomBytes(32).toString('base64'))"
@@ -66,11 +71,12 @@ there permanently. See `DEPLOYMENT.md` if that matters for your deployment.
 ## Verifying it
 
 ```bash
-npm run verify     # typecheck + lint + 113 unit, integration and security tests
-npm run test:e2e   # 11 Playwright journeys against a real browser
+npm run verify     # typecheck (all three packages) + lint + the API's unit, integration and security tests
+npm run test:e2e   # Playwright journeys against a real browser; starts both tiers itself
 ```
 
 The E2E suite signs in as real accounts, so it needs `npm run db:seed:demo` to have run.
+The API tests live in `apps/api/tests/`; the paths below are relative to it.
 
 ### What the test suites protect
 
@@ -78,7 +84,7 @@ The E2E suite signs in as real accounts, so it needs `npm run db:seed:demo` to h
 |---|---|
 | `tests/security/auth.test.ts` | argon2id hashing, AES-256-GCM round-trip and tamper detection, Aadhaar Verhoeff checksum, masking, session-bound CSRF tokens |
 | `tests/security/permissions.test.ts` | the whole role matrix, including "another dean cannot read this module" and "no module is verified by its own owner" |
-| `tests/security/no-unscoped-queries.test.ts` | a static sweep of `src/`: nothing queries `records` outside the service layer, nothing skips `scopeFilter()`, no raw SQL interpolation, no `dangerouslySetInnerHTML`, no bare route handlers, and `decryptPii` is called in only four allowed places |
+| `tests/security/no-unscoped-queries.test.ts` | a static sweep of every tier: nothing queries `records` outside the service layer, nothing skips `scopeFilter()`, no raw SQL interpolation, no `dangerouslySetInnerHTML`, every route goes through `withRoute()` and is mounted, `decryptPii` is called in only four allowed places, and **the web tier never imports a database driver, the password hasher or the API's source, nor reads a secret** |
 | `tests/security/upload.test.ts` | magic-byte sniffing, size caps, rejected file types |
 | `tests/integration/records.test.ts` | the lifecycle end to end, IDOR attempts, the duplicate guard, soft deletes, nil returns |
 | `tests/integration/export.test.ts` | the six workbooks, seed money converted to lakhs on the way out |
@@ -88,22 +94,52 @@ The E2E suite signs in as real accounts, so it needs `npm run db:seed:demo` to h
 
 ## How it is put together
 
+DARP is two tiers in one repository (npm workspaces), plus the code they share:
+
 ```
-src/
-├─ modules/          the 24 ModuleConfig files + the registry. The single source of truth
-│                    for fields, labels, permissions, list columns and export headers.
-├─ server/
-│  ├─ auth/          password, session, CSRF, rate limiting, the permission matrix
-│  ├─ crypto/        AES-256-GCM for Aadhaar and PAN, masking, Verhoeff
-│  ├─ records/       scope filter, validation, storage preparation, the record service
-│  ├─ rollups/       the 49 computed counters and completion tracking
-│  ├─ evidence/      upload, storage adapter, authorised download
-│  ├─ export/        the six workbooks
-│  ├─ audit/         the append-only trail
-│  └─ http/          withRoute() — the wrapper every API route goes through
-├─ components/       hand-written UI: shell, primitives, the generic record form
-└─ app/              pages and API routes
+apps/
+├─ web/                  FRONTEND — Next.js. Pages and components only; no database access.
+│  └─ src/
+│     ├─ app/            pages, and app/api/[...path] — forwards /api/* to the API
+│     ├─ components/     hand-written UI: shell, primitives, the generic record form
+│     ├─ lib/api.server  how a server-rendered page fetches its data from the API
+│     └─ middleware.ts   per-request CSP nonce; sends signed-out visitors to /login
+└─ api/                  BACKEND — Express. The only process with database credentials and keys.
+   ├─ src/
+   │  ├─ routes/         one module per endpoint group; routes/index.ts is the full table
+   │  ├─ server/
+   │  │  ├─ auth/        password, session, CSRF, rate limiting, the permission matrix
+   │  │  ├─ crypto/      AES-256-GCM for Aadhaar and PAN, masking, Verhoeff
+   │  │  ├─ records/     scope filter, validation, storage preparation, the record service
+   │  │  ├─ rollups/     the 49 computed counters and completion tracking
+   │  │  ├─ evidence/    upload, storage adapter, authorised download
+   │  │  ├─ export/      the six workbooks
+   │  │  ├─ audit/       the append-only trail
+   │  │  └─ http/        withRoute() — the wrapper every API route goes through
+   │  ├─ app.ts          the Express app: security headers, routes, 404 and error handlers
+   │  └─ index.ts        starts the server
+   ├─ drizzle/, scripts/ migrations, hardening and seed scripts
+   └─ tests/             unit, integration and security suites
+packages/
+└─ shared/               read by both tiers: the 24 ModuleConfig files and the registry (the single
+                         source of truth for fields, labels, permissions, list columns and export
+                         headers), display formatting, role labels, and contracts.ts — the shape of
+                         every API response the pages read
 ```
+
+How a request travels:
+
+```
+Browser ──► web :3000 ──┬─ pages: rendered on the server, data fetched from the API as the visitor
+                        └─ /api/*: forwarded unchanged ──► api :4000 (loopback only) ──► PostgreSQL
+```
+
+- The browser only ever talks to the web tier, so cookies, `SameSite` and the CSRF origin check
+  behave exactly as in a single app, and the API never needs to be reachable from the internet.
+- A server-rendered page forwards the visitor's own session cookie to the API, so it can never see
+  more than the visitor could — there is no privileged "server" account.
+- `npm run typecheck` proves the API still returns the shapes in `packages/shared/src/contracts.ts`
+  (`apps/api/src/contracts-check.ts`), so a service change that would break a page fails the build.
 
 Two functions are the security boundary and every route passes through both:
 **`prepareForStorage`** (nothing unvalidated goes in) and **`presentForRead`** (nothing sensitive
@@ -111,7 +147,8 @@ comes out).
 
 ### Adding a 25th module
 
-Write one file in `src/modules/`, add it to the registry in `src/modules/index.ts`. The form, the
+Write one file in `packages/shared/src/modules/`, add it to the registry in
+`packages/shared/src/modules/index.ts`. The form, the
 list view, validation, permissions, the duplicate guard, search, roll-ups and the Excel export all
 read that config. No other file changes.
 
@@ -137,6 +174,13 @@ read that config. No other file changes.
   owner can rewrite it.
 - **Headers** — CSP with a per-request nonce, `X-Frame-Options: DENY`, `nosniff`, a same-origin
   referrer policy, and `no-store` on every API response.
+- **Tier separation** — database credentials, `PII_ENCRYPTION_KEY` and `SESSION_SECRET` exist only
+  in the API's environment. The web tier holds no secrets, so a compromise of the rendering layer
+  does not hand over the keys. In production the session cookie carries the `__Host-` prefix, so
+  no other `*.bitmesra.ac.in` site can plant or overwrite it.
+- **Client IP** — the API believes `X-Forwarded-For` only from private-network hops
+  (`TRUST_PROXY`). In production a reverse proxy such as Caddy must sit in front of the web tier
+  and overwrite that header; if the web tier is exposed directly, a client can supply its own.
 
 ### Known deviations from the implementation plan
 
@@ -158,8 +202,9 @@ read that config. No other file changes.
 
 ## Troubleshooting
 
-**"Security check failed. Reload the page and try again." on sign-in.** `APP_URL` in `.env.local`
-must be the *exact* origin you're typing into the browser — `http://localhost:3000` and
+**"Security check failed. Reload the page and try again." on sign-in.** `APP_URL` in
+`apps/api/.env.local` must be the *exact* origin you're typing into the browser — the **web** tier's
+address, not the API's — `http://localhost:3000` and
 `http://127.0.0.1:3000` (or a LAN IP) are different origins even though they reach the same
 machine, and the CSRF/origin guard rejects a mismatch by design. Fix `APP_URL`, restart the server,
 and use the matching address.
@@ -170,8 +215,13 @@ inside `.next/`, and running both against the same folder at the same time corru
 ends up referencing a CSS file that no longer exists on disk. Stop every running instance, delete
 `.next`, and start exactly one of the two modes again. Don't run both at once.
 
-**Only ever run one server on port 3000 at a time.** Both issues above get much harder to diagnose
-once two servers (or two modes) are fighting over the same port or build folder.
+**Only ever run one server on port 3000 (and one API on port 4000) at a time.** Both issues above get
+much harder to diagnose once two servers (or two modes) are fighting over the same port or build
+folder.
+
+**Every page shows an error, or "The data service could not be reached".** The web tier is up but the
+API is not. `npm run dev` starts both; if you start them separately, start the API too
+(`npm run dev -w @darp/api`) and check `API_URL` in `apps/web/.env.local`.
 
 For a production deployment rather than local running, see `DEPLOYMENT.md`.
 
@@ -181,14 +231,19 @@ For a production deployment rather than local running, see `DEPLOYMENT.md`.
 
 | Command | Purpose |
 |---|---|
-| `npm run dev` | Development server |
-| `npm run build` / `npm run start` | Production build and serve |
-| `npm run verify` | typecheck + lint + tests — the gate |
-| `npm run db:generate` | Generate a migration after changing `schema.ts` |
-| `npm run db:reset` | Drop and recreate the schema (development only) |
+Run from the repository root:
 
-Evidence files are written to `EVIDENCE_DIR` (default `./storage/evidence`), which is gitignored
-and must be backed up alongside the database.
+| Command | Purpose |
+|---|---|
+| `npm run dev` | Both tiers in watch mode: API on :4000, web on :3000 |
+| `npm run build` / `npm run start` | Production build and serve, both tiers |
+| `npm run verify` | typecheck + lint + tests — the gate |
+| `npm run dev -w @darp/api` / `-w @darp/web` | One tier on its own |
+| `npm run db:generate -w @darp/api` | Generate a migration after changing `schema.ts` |
+| `npm run db:reset -w @darp/api` | Drop and recreate the schema (development only) |
+
+Evidence files are written to `EVIDENCE_DIR` (default `./storage/evidence`, relative to `apps/api`),
+which is gitignored and must be backed up alongside the database.
 
 ---
 

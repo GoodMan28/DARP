@@ -1,0 +1,20 @@
+{
+  "name": "@darp/shared",
+  "version": "1.0.0",
+  "description": "Code both tiers read: the 24 module configs, display formatting, role labels and the API contract.",
+  "type": "module",
+  "private": true,
+  "exports": {
+    "./modules": "./src/modules/index.ts",
+    "./modules/types": "./src/modules/_types.ts",
+    "./format": "./src/format.ts",
+    "./roles": "./src/roles.ts",
+    "./contracts": "./src/contracts.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}
