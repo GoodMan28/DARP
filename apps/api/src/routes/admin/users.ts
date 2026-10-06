@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { asc, eq, sql } from 'drizzle-orm';
+import { asc, eq, ne, sql } from 'drizzle-orm';
+import { SYSTEM_EMAIL } from '@/server/lookup/system';
 import { db } from '@/server/db';
 import { users, departments } from '@/server/db/schema';
 import { withRoute, ok, fail } from '@/server/http/handler';
@@ -33,6 +34,7 @@ export const GET = withRoute(
       })
       .from(users)
       .leftJoin(departments, eq(departments.id, users.departmentId))
+      .where(ne(users.email, SYSTEM_EMAIL))
       .orderBy(asc(users.name));
 
     const depts = await db

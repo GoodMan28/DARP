@@ -8,6 +8,13 @@
       "when": 1790249443553,
       "tag": "0000_luxuriant_omega_flight",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791302245703,
+      "tag": "0001_familiar_giant_girl",
+      "breakpoints": true
     }
   ]
 }

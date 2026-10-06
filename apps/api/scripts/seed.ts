@@ -98,6 +98,21 @@ async function main() {
     }
   }
 
+  // 5. The system account automatic approvals are recorded under. It can never sign in:
+  //    it is inactive and its password is a random secret nobody knows.
+  const sysFound = await db.select().from(users).where(sql`lower(${users.email}) = 'system@darp.invalid'`);
+  if (sysFound.length === 0) {
+    const { randomBytes } = await import('node:crypto');
+    await db.insert(users).values({
+      email: 'system@darp.invalid',
+      name: 'DARP automatic check',
+      role: 'admin',
+      passwordHash: await hashPassword(randomBytes(48).toString('base64url')),
+      mustChangePassword: false,
+      isActive: false,
+    });
+  }
+
   await pool.end();
   console.error('seed complete');
 }
