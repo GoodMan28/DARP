@@ -90,6 +90,21 @@ export function JournalListsPanel() {
     await load();
   }
 
+  async function refreshScopus() {
+    setBusy(true);
+    setResult(null);
+    setProgress('Downloading the Scopus list from Elsevier (about 25 MB)…');
+    const res = await apiJson<NonNullable<JournalListsPayload['scopus']>>('/api/admin/journal-lists', {
+      method: 'POST', body: JSON.stringify({ action: 'syncScopus' }),
+    });
+    setBusy(false);
+    setProgress(null);
+    setResult(res.ok
+      ? { tone: 'success', text: `Fetched ${res.data.file}: ${res.data.indexed.toLocaleString('en-IN')} journals indexed in Scopus, ${res.data.ranked.toLocaleString('en-IN')} with a quartile.` }
+      : { tone: 'danger', text: res.error.message });
+    await load();
+  }
+
   async function clear(k: Kind, y: number, name?: string) {
     const label = k === 'sjr' ? `SJR ${y}` : `${name} ${y}`;
     if (!window.confirm(`Remove ${label}? Records already saved keep their values.`)) return;
@@ -106,20 +121,48 @@ export function JournalListsPanel() {
   if (!data) return <p className="text-sm text-ink-muted">Loading journal lists…</p>;
 
   const nothingLoaded = data.sjr.length === 0 && data.lists.length === 0;
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
+    'September', 'October', 'November', 'December'];
 
   return (
     <div className="space-y-4">
+      <Card padded={false}>
+        <CardHeader
+          title="Automatic: Scopus list from Elsevier"
+          subtitle="Fetched by the server from Elsevier's public Scopus source list — no download needed. Refreshed every month."
+          actions={<Button type="button" variant="secondary" disabled={busy} onClick={() => void refreshScopus()}>Refresh now</Button>}
+        />
+        <div className="p-4 text-sm">
+          {data.scopus ? (
+            <p>
+              Using the <strong>{months[data.scopus.listMonth - 1]} {data.scopus.listYear}</strong> list
+              ({data.scopus.file}), fetched {new Date(data.scopus.fetchedAt).toLocaleDateString('en-IN')}:{' '}
+              {data.scopus.indexed.toLocaleString('en-IN')} journals indexed in Scopus,{' '}
+              {data.scopus.ranked.toLocaleString('en-IN')} with a quartile from their SJR {data.scopus.sjrYear} value.
+            </p>
+          ) : (
+            <p className="text-ink-muted">Not fetched yet. It is fetched when the API starts; press “Refresh now” to fetch it now.</p>
+          )}
+          <p className="mt-2 text-xs text-ink-muted">
+            Indexing “Scopus” means active in Scopus and not discontinued. The quartile applies SCImago’s method to
+            the SJR values in Elsevier’s list (rank within each subject category, best quartile) and is labelled
+            “Scopus list”. Loading SCImago’s own file below replaces it with SCImago’s figures. Web of Science
+            (SCIE, SSCI, …) cannot be fetched automatically — Clarivate requires a login — so load those below.
+          </p>
+        </div>
+      </Card>
+
       {nothingLoaded ? (
         <Notice tone="warning" title="No journal list is loaded yet">
           Until one is, Publications cannot fill in the quartile or the indexing, and every paper goes to
-          DRIE for a manual check. Load at least the latest SCImago SJR file.
+          DRIE for a manual check. Press “Refresh now” above.
         </Notice>
       ) : null}
 
       <Card padded={false}>
         <CardHeader
-          title="Load a journal list"
-          subtitle="Once a year per list. The file is read on this computer; only the ISSNs are sent."
+          title="Load a journal list (optional)"
+          subtitle="For Web of Science, or SCImago's own quartiles. The file is read on this computer; only the ISSNs are sent."
         />
         <div className="grid gap-4 p-4 sm:grid-cols-2">
           <Field label="List" htmlFor="jl-kind">
@@ -190,21 +233,29 @@ export function JournalListsPanel() {
             </thead>
             <tbody>
               {data.sjr.map((s) => (
-                <tr key={`sjr-${s.year}`}>
-                  <Td>SCImago SJR</Td>
+                <tr key={`sjr-${s.year}-${s.source}`}>
+                  <Td>{s.source === 'scopus-list' ? 'SJR from the Scopus list (automatic)' : 'SCImago SJR'}</Td>
                   <Td>{s.year}</Td>
                   <Td>{s.issns.toLocaleString('en-IN')}</Td>
                   <Td className="text-xs text-ink-muted">{s.ranked.toLocaleString('en-IN')} with a quartile</Td>
-                  <Td><Button type="button" variant="ghost" disabled={busy} onClick={() => void clear('sjr', s.year)}>Remove</Button></Td>
+                  <Td>
+                    {s.source === 'scopus-list'
+                      ? <span className="text-xs text-ink-muted">Refreshed automatically</span>
+                      : <Button type="button" variant="ghost" disabled={busy} onClick={() => void clear('sjr', s.year)}>Remove</Button>}
+                  </Td>
                 </tr>
               ))}
               {data.lists.map((l) => (
-                <tr key={`${l.listName}-${l.year}`}>
-                  <Td>{l.listName}</Td>
+                <tr key={`${l.listName}-${l.year}-${l.source}`}>
+                  <Td>{l.listName}{l.source === 'scopus-list' ? ' (automatic)' : ''}</Td>
                   <Td>{l.year}</Td>
                   <Td>{l.issns.toLocaleString('en-IN')}</Td>
                   <Td className="text-xs text-ink-muted">Indexing list</Td>
-                  <Td><Button type="button" variant="ghost" disabled={busy} onClick={() => void clear('list', l.year, l.listName)}>Remove</Button></Td>
+                  <Td>
+                    {l.source === 'scopus-list'
+                      ? <span className="text-xs text-ink-muted">Refreshed automatically</span>
+                      : <Button type="button" variant="ghost" disabled={busy} onClick={() => void clear('list', l.year, l.listName)}>Remove</Button>}
+                  </Td>
                 </tr>
               ))}
             </tbody>

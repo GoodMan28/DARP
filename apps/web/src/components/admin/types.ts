@@ -126,8 +126,15 @@ export function isAdminTab(value: string | undefined): value is AdminTab {
 
 /** GET /api/admin/journal-lists */
 export interface JournalListsPayload {
-  sjr: Array<{ year: number; issns: number; ranked: number }>;
-  lists: Array<{ listName: string; year: number; issns: number }>;
+  /** source 'scimago' = loaded by IQAC; 'scopus-list' = computed automatically. */
+  sjr: Array<{ year: number; source: string; issns: number; ranked: number }>;
+  /** source 'upload' = loaded by IQAC; 'scopus-list' = fetched automatically. */
+  lists: Array<{ listName: string; year: number; source: string; issns: number }>;
+  /** The automatic copy of Elsevier's public Scopus list, or null before the first fetch. */
+  scopus: {
+    file: string; listYear: number; listMonth: number; sjrYear: number;
+    journals: number; indexed: number; ranked: number; fetchedAt: string;
+  } | null;
   /** The Indexing master list, in IQAC's priority order. */
   listNames: string[];
 }

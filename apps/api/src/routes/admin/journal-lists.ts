@@ -5,6 +5,7 @@ import { audit } from '@/server/audit/log';
 import {
   journalListSummary, storeSjrRows, storeListRows, clearJournalList,
 } from '@/server/lookup/journals';
+import { scopusListStatus, syncScopusList } from '@/server/lookup/scopusList';
 
 /**
  * The journal lists quartile and indexing are read from (SCImago SJR, Web of Science collections).
@@ -17,6 +18,7 @@ export const GET = withRoute(
   async () => ok({
     ...(await journalListSummary()),
     listNames: await getList('indexingTypes'),
+    scopus: await scopusListStatus(),
   }),
 );
 
@@ -28,6 +30,8 @@ const rowSchema = z.object({
 });
 
 const bodySchema = z.discriminatedUnion('action', [
+  /** Fetch Elsevier's public Scopus list again now, instead of waiting for the monthly refresh. */
+  z.object({ action: z.literal('syncScopus') }),
   z.object({
     action: z.literal('import'),
     kind: z.enum(['sjr', 'list']),
@@ -50,6 +54,19 @@ const bodySchema = z.discriminatedUnion('action', [
 export const POST = withRoute(
   { roles: ['admin'], capability: 'manageLists', schema: bodySchema, rate: { limit: 300, windowSeconds: 60 } },
   async ({ actor, body }) => {
+    if (body.action === 'syncScopus') {
+      try {
+        const status = await syncScopusList();
+        await audit({
+          actor, action: 'masterlist.update', entity: 'masterlist',
+          meta: { journalList: 'Scopus (automatic)', file: status.file, journals: status.journals },
+        });
+        return ok(status);
+      } catch (e) {
+        return fail('INTERNAL', { message: `The Scopus list could not be fetched: ${e instanceof Error ? e.message : 'unknown error'}` });
+      }
+    }
+
     if (body.kind === 'list') {
       const allowed = await getList('indexingTypes');
       if (!body.listName || !allowed.includes(body.listName)) {

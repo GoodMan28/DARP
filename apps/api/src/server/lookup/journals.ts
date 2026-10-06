@@ -34,7 +34,9 @@ export async function journalFacts(
     const target = year ?? Math.max(...metrics.map((m) => m.year));
     const notAfter = metrics.filter((m) => m.year <= target).sort((a, b) => b.year - a.year)[0];
     const best = notAfter ?? [...metrics].sort((a, b) => a.year - b.year)[0]!;
-    quartile = best.quartile ? `${best.quartile} (SJR ${best.year})` : `Not ranked in SJR ${best.year}`;
+    // A quartile computed from Elsevier's list says so; SCImago's own file needs no note.
+    const note = best.source === 'scopus-list' ? ' · Scopus list' : '';
+    quartile = best.quartile ? `${best.quartile} (SJR ${best.year}${note})` : `Not ranked in SJR ${best.year}`;
   }
 
   const listings = await db.select({ listName: journalIndexListings.listName })
@@ -60,10 +62,15 @@ export async function storeSjrRows(year: number, rows: JournalListRow[]): Promis
   for (let i = 0; i < rows.length; i += 500) {
     const batch = rows.slice(i, i + 500).map((r) => ({
       issn: r.issn, year, title: r.title, sourceType: r.sourceType ?? '', quartile: r.quartile ?? null,
+      source: 'scimago',
     }));
     await db.insert(journalMetrics).values(batch).onConflictDoUpdate({
       target: [journalMetrics.issn, journalMetrics.year],
-      set: { quartile: sql`excluded.quartile`, title: sql`excluded.title`, sourceType: sql`excluded.source_type` },
+      // SCImago's own figures replace a quartile computed from the Scopus list.
+      set: {
+        quartile: sql`excluded.quartile`, title: sql`excluded.title`,
+        sourceType: sql`excluded.source_type`, source: sql`'scimago'`,
+      },
     });
   }
   await forgetCachedDois();
@@ -83,29 +90,39 @@ export async function storeListRows(listName: string, year: number, rows: Journa
 /** Removes one loaded list, e.g. a file imported under the wrong year. */
 export async function clearJournalList(kind: 'sjr' | 'list', year: number, listName?: string) {
   if (kind === 'sjr') {
-    await db.delete(journalMetrics).where(eq(journalMetrics.year, year));
+    // Only what IQAC loaded; the automatic Scopus rows are replaced by the next sync instead.
+    await db.delete(journalMetrics).where(and(eq(journalMetrics.year, year), eq(journalMetrics.source, 'scimago')));
   } else {
     await db.delete(journalIndexListings)
-      .where(and(eq(journalIndexListings.listName, listName ?? ''), eq(journalIndexListings.year, year)));
+      .where(and(
+        eq(journalIndexListings.listName, listName ?? ''), eq(journalIndexListings.year, year),
+        eq(journalIndexListings.source, 'upload'),
+      ));
   }
   await forgetCachedDois();
 }
 
 export interface JournalListSummary {
-  sjr: Array<{ year: number; issns: number; ranked: number }>;
-  lists: Array<{ listName: string; year: number; issns: number }>;
+  /** source 'scimago' = loaded by IQAC; 'scopus-list' = computed automatically. */
+  sjr: Array<{ year: number; source: string; issns: number; ranked: number }>;
+  /** source 'upload' = loaded by IQAC; 'scopus-list' = fetched automatically. */
+  lists: Array<{ listName: string; year: number; source: string; issns: number }>;
 }
 
 export async function journalListSummary(): Promise<JournalListSummary> {
   const sjr = await db.select({
     year: journalMetrics.year,
+    source: journalMetrics.source,
     issns: count(),
     ranked: sql<number>`count(${journalMetrics.quartile})::int`,
-  }).from(journalMetrics).groupBy(journalMetrics.year).orderBy(journalMetrics.year);
+  }).from(journalMetrics)
+    .groupBy(journalMetrics.year, journalMetrics.source)
+    .orderBy(journalMetrics.year, journalMetrics.source);
   const lists = await db.select({
-    listName: journalIndexListings.listName, year: journalIndexListings.year, issns: count(),
+    listName: journalIndexListings.listName, year: journalIndexListings.year,
+    source: journalIndexListings.source, issns: count(),
   }).from(journalIndexListings)
-    .groupBy(journalIndexListings.listName, journalIndexListings.year)
+    .groupBy(journalIndexListings.listName, journalIndexListings.year, journalIndexListings.source)
     .orderBy(journalIndexListings.listName, journalIndexListings.year);
   return { sjr, lists };
 }

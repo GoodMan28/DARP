@@ -303,6 +303,8 @@ export const journalMetrics = pgTable('journal_metrics', {
   title: text('title').notNull(),
   sourceType: text('source_type').notNull(), // journal | book series | conference and proceedings | trade journal
   quartile: text('quartile'),                // Q1..Q4, or null when unranked
+  /** 'scimago' = SCImago's own file (official quartile); 'scopus-list' = computed from Elsevier's list. */
+  source: text('source').notNull().default('scimago'),
   importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex('journal_metrics_issn_year_uq').on(t.issn, t.year)]);
 
@@ -313,6 +315,8 @@ export const journalIndexListings = pgTable('journal_index_listings', {
   listName: text('list_name').notNull(),     // must equal a value of the indexingTypes master list
   year: integer('year').notNull(),           // the year the list was downloaded
   title: text('title').notNull().default(''),
+  /** 'upload' = loaded by IQAC; 'scopus-list' = fetched automatically from Elsevier's public list. */
+  source: text('source').notNull().default('upload'),
   importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex('journal_index_issn_list_year_uq').on(t.issn, t.listName, t.year)]);
 
