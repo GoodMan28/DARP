@@ -213,6 +213,8 @@ export async function getRecord(actor: SessionUser, moduleKey: string, id: strin
     // Only the person who may edit gets the raw values back for the form.
     editValues: canEdit ? presentForEdit(m, row.data as Record<string, unknown>) : null,
     history,
+    verification: null,
+    lockedFields: [] as string[],
   };
 }
 

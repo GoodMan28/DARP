@@ -22,6 +22,27 @@ export type FieldType =
  *  server in plaintext except in an admin export. 'masked' fields are shown partially. */
 export type PiiLevel = 'none' | 'masked' | 'encrypted';
 
+/** Facts an external register can supply. Field configs name the one they take. */
+export type MetaKey =
+  | 'doi' | 'title' | 'authors' | 'containerTitle' | 'issn' | 'year' | 'volume' | 'issue' | 'pages'
+  | 'publisher' | 'workType' | 'quartile' | 'indexing' | 'citation'
+  | 'bookType' | 'bookTitle' | 'chapterTitle' | 'isbn';
+
+/** Which register a module's records are fetched from. */
+export type LookupKind = 'doi' | 'book';
+
+export interface LookupConfig {
+  kind: LookupKind;
+  /** Fields the identifier may live in, in priority order; the first non-empty one is used. */
+  idFields: string[];
+  /** Label of the identifier box on the form, e.g. 'DOI'. */
+  idLabel: string;
+  /** Approve without a human when every automatic check passes (server/lookup/apply.ts). */
+  autoApprove: boolean;
+  /** Crossref work types that may be approved automatically. Anything else goes to review. */
+  acceptTypes: string[];
+}
+
 export interface FieldConfig {
   key: string;                    // stored key inside records.data JSONB
   label: string;                  // exactly the workbook column wording where possible
@@ -46,6 +67,13 @@ export interface FieldConfig {
   maxSizeMB?: number;             // file: default 5
   /** Column header text in each original workbook sheet, used by the exporter. */
   exportAs?: Partial<Record<WorkbookKey, string>>;
+  /**
+   * Filled from the fetched record. `locked: true` means the owner cannot change it once a lookup
+   * succeeded: the server overwrites it with the fetched value on every save.
+   */
+  autofill?: { from: MetaKey; locked: boolean };
+  /** Server-side normalisation that needs other fields of the record. */
+  normalise?: 'patentNumber';
 }
 
 export interface ModuleConfig {
@@ -72,6 +100,9 @@ export interface ModuleConfig {
    * return; owners get a link to this page instead.
    */
   managedAt?: { href: string; label: string };
+
+  /** Fetch this module's facts from an external register (DOI, ISBN). */
+  lookup?: LookupConfig;
 
   fields: FieldConfig[];
   listColumns: string[];          // field keys shown in the table

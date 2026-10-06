@@ -8,7 +8,7 @@
  * would break a page fails `npm run typecheck` instead of failing in the browser.
  */
 import type {
-  ModuleConfig, PeriodType, RecordStatus, Role,
+  ModuleConfig, PeriodType, RecordStatus, Role, LookupKind,
 } from './modules/_types';
 
 /** What a value looks like after `JSON.stringify` → `JSON.parse`. */
@@ -185,6 +185,8 @@ export interface FormFieldDef {
   accept: string[] | null;
   maxSizeMB: number | null;
   protected: boolean;
+  /** Filled from an external register; `locked` fields cannot be edited after a lookup. */
+  autofill: { locked: boolean } | null;
 }
 
 /** GET /api/modules/:moduleKey/schema — the module's shape plus the caller's standing in it. */
@@ -203,6 +205,8 @@ export interface ModuleSchemaPayload {
   periods: PeriodOption[];
   counts: StatusCounts;
   declaredNil: boolean;
+  /** Present when the module fetches its facts from a register (DOI / ISBN). */
+  lookup: { kind: LookupKind; idFields: string[]; idLabel: string } | null;
   fields: FormFieldDef[];
 }
 
@@ -251,4 +255,42 @@ export interface RecordDetail {
   /** Raw values for the form — present only for someone who may edit. */
   editValues: Record<string, unknown> | null;
   history: RecordHistoryEntry[];
+  /** How the record was checked; null for records entered before automatic checks existed. */
+  verification: RecordVerification | null;
+  /** Fields the edit form must show as locked. */
+  lockedFields: string[];
 }
+
+/* ── automatic lookup (DOI / ISBN) ─────────────────────────────────── */
+
+export type LookupSource = 'crossref' | 'datacite' | 'openlibrary';
+
+/** Stored on a record (records.verification) and returned with it. */
+export interface RecordVerification {
+  /** null = the details were typed by hand. */
+  source: LookupSource | null;
+  identifier: string | null;
+  checkedAt: string;
+  autoApproved: boolean;
+  /** Why it was NOT approved automatically. Empty when it was. */
+  reasons: string[];
+}
+
+/** POST /api/lookup/:moduleKey */
+export interface LookupFillPayload {
+  found: boolean;
+  source: LookupSource | null;
+  authoritative: boolean;
+  /** field key → value to put in the form */
+  fill: Record<string, string>;
+  /** field keys the form must show as locked */
+  locked: string[];
+  /** plain-language notes for the person filling in */
+  notes: string[];
+}
+
+export const LOOKUP_SOURCE_LABEL: Record<LookupSource, string> = {
+  crossref: 'Crossref',
+  datacite: 'DataCite',
+  openlibrary: 'Open Library',
+};
