@@ -84,7 +84,7 @@ named next to it, which is expected to **fail** until the issue is fixed.
 
 | # | Issue | Test |
 |---|---|---|
-| K1 | **Evidence upload is broken in the forms.** The upload button sends the file without saying which field it belongs to, and the server rejects it with "Invalid field." Uploaded files are also never linked to their record, and there is no download link. | EVD-01 |
+| ~~K1~~ | **Fixed (Oct 2026).** Evidence uploads failed with "Invalid field." and files were never linked to their record. Uploads now work, files are attached to the record on save, and the form shows a download link. | EVD-01 – EVD-07 |
 | K2 | **A HOD's lists show every department's records**, not just their own. Opening another department's row gives a 404. Faculty likewise see every department's MoUs. | ROLE-12, ROLE-14 |
 | K3 | **IQAC saving a verified or approved record resets it.** "Save as draft" sets it back to Draft, and "Save and submit" back to Submitted, so the verification is lost. | WF-09 |
 | K4 | **Saves fail after you reopen the browser.** The session lasts 8 hours across browser restarts, but the security token cookie is deleted when the browser closes and is never re-issued. | SES-07 |
@@ -94,7 +94,7 @@ named next to it, which is expected to **fail** until the issue is fixed.
 | K8 | **Missing features in the UI**: <br>• no Delete button <br>• no "Submit" action on the record page (use "Save and submit") <br>• no evidence download <br>• no link to the admin console <br>• no admin "view as" <br>• no screen for the unmasked export (URL only) <br>• no screen to reveal a single Aadhaar/PAN <br>• no screen for "since joining" baselines | REC-08, ADM-09 |
 | K9 | **Years outside the cycle are accepted silently.** A 2019 publication is filed under 2024 and counted, where the plan said such a year should be refused or flagged. | VAL-12 |
 | K10 | **Sign-in small gaps:** <br>• "Keep me signed in" does nothing. <br>• After being sent to sign in, you always land on the dashboard, not the page you asked for. <br>• No confirmation is shown after a password reset. <br>• "Forgot password" shows the same "Check your e-mail" notice even when the request was refused. | AUTH-14 |
-| K11 | **Smaller UI defects:** <br>• The verification queue card disappears instead of saying "Nothing waiting". <br>• "Nothing to report" declarations do not count in the department completion table. <br>• The unsaved-changes warning does not fire when you click a sidebar link. <br>• The error summary is not focused after a failed save. | DASH-08, NIL-03, REC-07, UX-04 |
+| K11 | **Smaller UI defects:** <br>• ~~The verification queue card disappears instead of saying "Nothing waiting".~~ Fixed. <br>• "Nothing to report" declarations do not count in the department completion table. <br>• The unsaved-changes warning does not fire when you click a sidebar link. <br>• The error summary is not focused after a failed save. | DASH-08, NIL-03, REC-07, UX-04 |
 | K12 | **Validation gaps:** <br>• A field's own minimum year is ignored; only 1950–2100 is enforced. <br>• The ₹5,000 minimum on Financial Support is not enforced. <br>• An end date before its start date is accepted. | VAL-07, VAL-13, VAL-14 |
 | K13 | **No e-mail is sent.** Password-reset links are printed in the API terminal only. This is fine for testing; e-mail needs setting up before go-live. | AUTH-09 |
 
@@ -365,11 +365,13 @@ Use `testfac1`, which has no records.
 
 | ID | Do this | You should see | Result |
 |---|---|---|---|
-| EVD-01 | **(known issue K1)** As `verma` → Patents → open a draft → "Attach documents (published/grant certificate)" → "Choose file" → a small PDF | Expected: "Attached" and the file name. Today: "Invalid field." | |
+| EVD-01 | As `verma` → Patents → "Add record" → "Attach documents (published/grant certificate)" → "Choose file" → a small PDF | The file name appears as a link; "Save as draft" keeps it | |
 | EVD-02 | Choose a file larger than 5 MB | "That file is larger than 5 MB." (checked in the browser) | |
-| EVD-03 | Rename a `.txt` file to `.pdf` and upload it | "The file contents do not match its extension." **Blocked by K1.** | |
-| EVD-04 | Upload a `.docx`, `.svg` or `.html` | "Only PDF, JPG and PNG files are accepted." **Blocked by K1.** | |
-| EVD-05 | Download an attached file, as the owner and as the verifier | It downloads as a file, never opens as a web page. **Blocked by K1, and no download link exists (K8).** | |
+| EVD-03 | Rename a `.txt` file to `.pdf` and upload it | "The file contents do not match its extension." | |
+| EVD-04 | Upload a `.docx`, `.svg` or `.html` | "Only PDF, JPG and PNG files are accepted." | |
+| EVD-05 | Click the file link, as the owner and then as `drie` (the verifier) on the same record | It downloads as a file, never opens as a web page | |
+| EVD-06 | As `mahato`, paste the download address of Verma's file (`/api/evidence/<id>`) | Refused (not found) — files follow the record's permissions | |
+| EVD-07 | Submit the patent; as `drie` open it | The attached file is listed and downloadable on the read-only record | |
 
 ---
 
@@ -467,6 +469,27 @@ check it in the **list**, "Save and submit", have the verifier **verify** it, th
 | 24 | Students Qualifying Competitive Exams (5.2.1) | `cdc` | `iqac` | "Other examinations…" needs a name; grand total (EXP-08) | | | | | |
 
 ---
+
+## 22 · Automatic fetch, journal lists and auto-approval
+
+Branch `feat/lookup-autofill`. Load at least one SCImago SJR file first (LOOK-08), or quartile and indexing stay empty and every paper goes to DRIE.
+
+| ID | Do this | You should see | Result |
+|---|---|---|---|
+| LOOK-01 | As `verma` → Publications → "Add record" → paste `10.1109/access.2023.3237542` in the DOI box → "Fetch details" | "Details fetched from Crossref". Title, journal (IEEE Access), year 2023, ISSN 2169-3536, volume, pages and the citation are filled and marked "Fetched · locked"; authors are filled and editable | |
+| LOOK-02 | Try to edit a locked field | It cannot be changed. (Even if forced in dev tools, the server saves the fetched value) | |
+| LOOK-03 | Read the notes under "Fetch details" | "Dr A. K. Verma could not be matched…" — Verma is not an author of this paper | |
+| LOOK-04 | "Save and submit" | Status **Submitted**, not Approved. The record page shows "Why the verifying office checks this record" with the reasons | |
+| LOOK-05 | Fetch `hello`, then `10.9999/nope` | "That does not look like a valid DOI."; then "No published record was found…" with the form left editable | |
+| LOOK-06 | Books & Chapters → fetch `10.1007/978-981-19-0475-2_1` | "Book chapter"; book title "Innovations in Computational Intelligence and Computer Vision" (not the series name); chapter title, ISBN, publisher filled | |
+| LOOK-07 | Books & Chapters → fetch ISBN `978-981-19-0474-5` | "Book", editors listed with "(ed.)" | |
+| LOOK-08 | As `iqac` → `/admin` → "Journal lists" → List "SCImago Journal Rank", Year 2023, choose the CSV downloaded from scimagojr.com → "Load list" | "Loaded N journals…"; the table shows "SCImago SJR · 2023" | |
+| LOOK-09 | Repeat LOOK-01 | Quartile e.g. "Q1 (SJR 2023)" and indexing "Scopus", both locked; the "not in the lists" note is gone | |
+| LOOK-10 | With no SJR list loaded, look at the quartile box | Empty but locked, with the hint "Filled in from the SJR list IQAC loads — never typed by hand" | |
+| LOOK-11 | As `verma`, open `/admin` | Sent back to the dashboard (journal lists are IQAC-only) | |
+| LOOK-12 | "Journal lists" → "Remove" on a loaded list | It disappears; fetching again no longer gives a quartile from it | |
+| LOOK-13 | **Auto-approval.** As `iqac` create a faculty account named `Dr Vandana Bhattacharjee` (CSE). With the SJR list loaded, sign in as her, fetch `10.1109/access.2023.3237542`, "Save and submit" | Status **Approved** at once; the record shows "Checked automatically"; history shows Submitted → Approved by "DARP automatic check" | |
+| LOOK-14 | Patents → Country India → number `IN202331012345A` → save | Stored as `202331012345`; `TEMP/E-1/…` is refused with an explanation | |
 
 ## After testing
 
