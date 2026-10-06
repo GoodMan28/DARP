@@ -66,7 +66,8 @@ export const publications: ModuleConfig = {
     { key: 'pages', label: 'Pages / article number', type: 'text', maxLength: 40, section: 'Journal',
       autofill: { from: 'pages', locked: true } },
     { key: 'quartile', label: 'Journal quartile (SJR)', type: 'text', maxLength: 60, section: 'Journal',
-      autofill: { from: 'quartile', locked: true },
+      autofill: { from: 'quartile', locked: true, lockWhenEmpty: true },
+      placeholder: 'Filled in from the SJR list IQAC loads — never typed by hand',
       help: 'Source: SCImago Journal Rank (scimagojr.com), the edition for the year of publication.' },
 
     { key: 'bibliographic',

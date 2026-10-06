@@ -12,6 +12,7 @@ const FLAG_REASON: Record<string, string> = {
   retracted: 'The publisher has retracted this work.',
   proceedings: 'This DOI belongs to conference proceedings.',
   'not-indexed': 'The journal is not in the Scopus or Web of Science lists IQAC has loaded.',
+  'no-journal-lists': 'IQAC has not loaded the journal lists (SCImago SJR, Web of Science) yet, so the quartile and indexing could not be checked.',
   'no-issn': 'The publisher has not registered an ISSN for this journal.',
   'not-a-book': 'This DOI is not a book or a book chapter.',
   'parent-book-not-found': 'The book this chapter belongs to could not be found, so its title came from the chapter record.',
@@ -62,7 +63,7 @@ export async function applyLookup(
     if (!f.autofill || f.autofill.from === 'citation') continue;
     const fetched = r.values[f.autofill.from] ?? '';
     if (f.autofill.locked && r.authoritative) {
-      if (fetched) data[f.key] = f.maxLength ? fetched.slice(0, f.maxLength) : fetched;
+      if (fetched || f.autofill.lockWhenEmpty) data[f.key] = f.maxLength ? fetched.slice(0, f.maxLength) : fetched;
       // Indexing and quartile come from IQAC's journal lists, not the publisher; a journal missing
       // from them already has its own, clearer reason (the not-indexed flag).
       else if (f.required && f.autofill.from !== 'indexing' && f.autofill.from !== 'quartile') {

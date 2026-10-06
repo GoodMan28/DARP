@@ -169,7 +169,7 @@ const AUTHORITATIVE = new Set(['crossref', 'datacite']);
 function lockedFieldsOf(m: ModuleConfig, v: RecordVerification | null, data: Record<string, unknown>): string[] {
   if (!v?.source || !AUTHORITATIVE.has(v.source)) return [];
   return m.fields
-    .filter((f) => f.autofill?.locked && data[f.key] !== undefined && data[f.key] !== '')
+    .filter((f) => f.autofill?.locked && (f.autofill.lockWhenEmpty || (data[f.key] !== undefined && data[f.key] !== '')))
     .map((f) => f.key);
 }
 

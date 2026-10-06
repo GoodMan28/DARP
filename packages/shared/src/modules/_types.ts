@@ -71,7 +71,15 @@ export interface FieldConfig {
    * Filled from the fetched record. `locked: true` means the owner cannot change it once a lookup
    * succeeded: the server overwrites it with the fetched value on every save.
    */
-  autofill?: { from: MetaKey; locked: boolean };
+  autofill?: {
+    from: MetaKey;
+    locked: boolean;
+    /**
+     * Stay locked even when the fetched value is empty. For derived figures such as the SJR
+     * quartile, which have no meaning when typed by hand.
+     */
+    lockWhenEmpty?: boolean;
+  };
   /** Server-side normalisation that needs other fields of the record. */
   normalise?: 'patentNumber';
 }

@@ -23,6 +23,7 @@ import * as adminAudit from './admin/audit';
 import * as adminBaselines from './admin/baselines';
 import * as adminCycles from './admin/cycles';
 import * as adminMasterLists from './admin/master-lists';
+import * as adminJournalLists from './admin/journal-lists';
 import * as adminReveal from './admin/reveal';
 
 /**
@@ -72,4 +73,6 @@ api.patch('/admin/cycles', adminCycles.PATCH);
 api.get('/admin/master-lists', adminMasterLists.GET);
 api.post('/admin/master-lists', adminMasterLists.POST);
 api.patch('/admin/master-lists', adminMasterLists.PATCH);
+api.get('/admin/journal-lists', adminJournalLists.GET);
+api.post('/admin/journal-lists', adminJournalLists.POST);
 api.post('/admin/reveal/:recordId/:fieldKey', adminReveal.POST);

@@ -59,7 +59,7 @@ export async function lookupForForm(
     if (typeof v === 'string' && v !== '') fill[f.key] = v;
   }
   const locked = result.authoritative
-    ? m.fields.filter((f) => f.autofill?.locked && fill[f.key]).map((f) => f.key)
+    ? m.fields.filter((f) => f.autofill?.locked && (fill[f.key] || f.autofill.lockWhenEmpty)).map((f) => f.key)
     : [];
   const notes = applied.eligible
     ? ['Everything matches the published record. When you press "Save and submit" the record is approved straight away — no manual check is needed.']

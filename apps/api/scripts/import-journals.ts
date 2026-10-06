@@ -1,5 +1,6 @@
 /**
- * Loads the journal lists that quartile and indexing are derived from. Run once a year per list.
+ * Loads the journal lists that quartile and indexing are derived from, from the command line.
+ * IQAC normally uses Administration → Journal lists instead; this is the same import for scripts.
  *
  *   npm run journals:import -- --sjr  <scimagojr-2024.csv> --year 2024
  *   npm run journals:import -- --list SCIE <mjl-scie.csv> --year 2026
@@ -9,19 +10,14 @@
  * The list name must be a value of IQAC's "indexingTypes" master list.
  */
 import { readFileSync } from 'node:fs';
-import { eq, and, sql } from 'drizzle-orm';
-import { db, pool } from '../src/server/db';
-import { journalMetrics, journalIndexListings, lookupCache, masterListItems } from '../src/server/db/schema';
-import { normIssn } from '../src/server/lookup/journals';
-import { parseCsv } from '../src/server/lookup/csv';
+import { pool } from '../src/server/db';
+import { getList } from '../src/server/records/masterLists';
+import { storeSjrRows, storeListRows } from '../src/server/lookup/journals';
+import { parseCsv, extractSjrRows, extractListRows } from '@darp/shared/journals';
 
 function arg(name: string): string | undefined {
   const i = process.argv.indexOf(name);
   return i >= 0 ? process.argv[i + 1] : undefined;
-}
-
-async function insertBatched<T>(rows: T[], insert: (batch: T[]) => Promise<unknown>) {
-  for (let i = 0; i < rows.length; i += 500) await insert(rows.slice(i, i + 500));
 }
 
 async function main() {
@@ -32,45 +28,22 @@ async function main() {
   const listFile = listName ? process.argv[process.argv.indexOf('--list') + 2] : undefined;
 
   if (sjrFile) {
-    const [header, ...data] = parseCsv(readFileSync(sjrFile, 'utf8'));
-    const col = (name: string) => header!.findIndex((h) => h.trim().toLowerCase() === name.toLowerCase());
-    const iIssn = col('Issn'); const iQ = col('SJR Best Quartile'); const iTitle = col('Title'); const iType = col('Type');
-    if ([iIssn, iQ, iTitle, iType].some((i) => i < 0)) {
-      throw new Error(`Not an SJR file. Headers found: ${header!.join(' | ')}`);
-    }
-    const rows = data.flatMap((r) => {
-      const q = (r[iQ] ?? '').trim();
-      return (r[iIssn] ?? '').split(',').map((s) => normIssn(s)).filter((x): x is string => x !== null)
-        .map((issn) => ({
-          issn, year, title: (r[iTitle] ?? '').trim(), sourceType: (r[iType] ?? '').trim().toLowerCase(),
-          quartile: /^Q[1-4]$/.test(q) ? q : null,
-        }));
-    });
-    await insertBatched(rows, (batch) => db.insert(journalMetrics).values(batch).onConflictDoUpdate({
-      target: [journalMetrics.issn, journalMetrics.year],
-      set: { quartile: sql`excluded.quartile`, title: sql`excluded.title`, sourceType: sql`excluded.source_type` },
-    }));
-    console.error(`SJR ${year}: ${rows.length} ISSN rows from ${data.length} journals`);
+    const extracted = extractSjrRows(parseCsv(readFileSync(sjrFile, 'utf8')));
+    if (!extracted.ok) throw new Error(extracted.message);
+    await storeSjrRows(year, extracted.rows);
+    console.error(`SJR ${year}: ${extracted.rows.length} ISSN rows from ${extracted.journals} journals`);
   } else if (listName && listFile) {
-    const allowed = await db.select({ value: masterListItems.value }).from(masterListItems)
-      .where(and(eq(masterListItems.listKey, 'indexingTypes'), eq(masterListItems.isActive, true)));
-    if (!allowed.some((a) => a.value === listName)) {
-      throw new Error(`"${listName}" is not in the indexingTypes master list: ${allowed.map((a) => a.value).join(', ')}`);
+    const allowed = await getList('indexingTypes');
+    if (!allowed.includes(listName)) {
+      throw new Error(`"${listName}" is not in the indexingTypes master list: ${allowed.join(', ')}`);
     }
-    const [header, ...data] = parseCsv(readFileSync(listFile, 'utf8'));
-    const issnCols = header!.map((h, i) => (/issn/i.test(h) ? i : -1)).filter((i) => i >= 0);
-    const iTitle = header!.findIndex((h) => /title/i.test(h));
-    if (issnCols.length === 0) throw new Error(`No ISSN column. Headers found: ${header!.join(' | ')}`);
-    const rows = data.flatMap((r) => issnCols.map((i) => normIssn(r[i] ?? '')).filter((x): x is string => x !== null)
-      .map((issn) => ({ issn, listName, year, title: iTitle >= 0 ? (r[iTitle] ?? '').trim() : '' })));
-    await insertBatched(rows, (batch) => db.insert(journalIndexListings).values(batch).onConflictDoNothing());
-    console.error(`${listName} ${year}: ${rows.length} ISSN rows from ${data.length} journals`);
+    const extracted = extractListRows(parseCsv(readFileSync(listFile, 'utf8')));
+    if (!extracted.ok) throw new Error(extracted.message);
+    await storeListRows(listName, year, extracted.rows);
+    console.error(`${listName} ${year}: ${extracted.rows.length} ISSN rows from ${extracted.journals} journals`);
   } else {
     throw new Error('Use --sjr <file> --year YYYY, or --list <NAME> <file> --year YYYY');
   }
-
-  // Quartile and indexing are cached with each DOI; forget them so the next lookup uses the new lists.
-  await db.delete(lookupCache).where(eq(lookupCache.kind, 'doi'));
   await pool.end();
 }
 
