@@ -63,7 +63,11 @@ export async function applyLookup(
     const fetched = r.values[f.autofill.from] ?? '';
     if (f.autofill.locked && r.authoritative) {
       if (fetched) data[f.key] = f.maxLength ? fetched.slice(0, f.maxLength) : fetched;
-      else if (f.required) reasons.push(`${f.label} is not in the published record and was typed by hand.`);
+      // Indexing and quartile come from IQAC's journal lists, not the publisher; a journal missing
+      // from them already has its own, clearer reason (the not-indexed flag).
+      else if (f.required && f.autofill.from !== 'indexing' && f.autofill.from !== 'quartile') {
+        reasons.push(`${f.label} is not in the published record and was typed by hand.`);
+      }
     } else if (fetched && (data[f.key] === undefined || data[f.key] === '')) {
       data[f.key] = f.maxLength ? fetched.slice(0, f.maxLength) : fetched;
     }
