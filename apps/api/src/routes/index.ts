@@ -12,6 +12,7 @@ import * as moduleRecords from './modules/records';
 import * as moduleRecord from './modules/record';
 import * as moduleTransition from './modules/transition';
 import * as moduleDeclare from './modules/declare';
+import * as lookup from './lookup';
 import * as evidenceUpload from './evidence/upload';
 import * as evidenceFile from './evidence/file';
 import * as exportWorkbook from './export';
@@ -49,6 +50,7 @@ api.patch('/modules/:moduleKey/records/:id', moduleRecord.PATCH);
 api.delete('/modules/:moduleKey/records/:id', moduleRecord.DELETE);
 api.post('/modules/:moduleKey/records/:id/transition', moduleTransition.POST);
 api.post('/modules/:moduleKey/declare', moduleDeclare.POST);
+api.post('/lookup/:moduleKey', lookup.POST);
 
 api.post('/evidence', evidenceUpload.POST);
 api.get('/evidence/:id', evidenceFile.GET);

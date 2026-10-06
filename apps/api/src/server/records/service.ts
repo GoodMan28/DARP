@@ -12,6 +12,9 @@ import { validateRecord } from './validate';
 import { prepareForStorage, presentForRead, presentForEdit } from './prepare';
 import { resolvePeriod, type CycleWindows } from './periods';
 import { audit } from '@/server/audit/log';
+import { applyLookup } from '@/server/lookup/apply';
+import { systemActor } from '@/server/lookup/system';
+import { LOOKUP_SOURCE_LABEL, type RecordVerification } from '@darp/shared/contracts';
 
 export class ServiceError extends Error {
   constructor(
@@ -160,6 +163,16 @@ export async function statusCounts(actor: SessionUser, moduleKey: string) {
 
 /* ─────────────────────────────── read ─────────────────────────────── */
 
+const AUTHORITATIVE = new Set(['crossref', 'datacite']);
+
+/** Fields shown locked on the edit form: fetched from an authoritative register and non-empty. */
+function lockedFieldsOf(m: ModuleConfig, v: RecordVerification | null, data: Record<string, unknown>): string[] {
+  if (!v?.source || !AUTHORITATIVE.has(v.source)) return [];
+  return m.fields
+    .filter((f) => f.autofill?.locked && data[f.key] !== undefined && data[f.key] !== '')
+    .map((f) => f.key);
+}
+
 export async function getRecord(actor: SessionUser, moduleKey: string, id: string) {
   const m = mustGetModule(moduleKey);
   const cycle = await activeCycle();
@@ -213,12 +226,28 @@ export async function getRecord(actor: SessionUser, moduleKey: string, id: strin
     // Only the person who may edit gets the raw values back for the form.
     editValues: canEdit ? presentForEdit(m, row.data as Record<string, unknown>) : null,
     history,
-    verification: null,
-    lockedFields: [] as string[],
+    verification: (row.verification as RecordVerification | null) ?? null,
+    lockedFields: lockedFieldsOf(m, row.verification as RecordVerification | null, row.data as Record<string, unknown>),
   };
 }
 
 /* ────────────────────────────── create ────────────────────────────── */
+
+/** Records the system's Submitted → Approved step for an auto-checked record (decision D1). */
+async function recordAutoApproval(recordId: string, v: RecordVerification) {
+  const system = await systemActor();
+  const source = v.source ? LOOKUP_SOURCE_LABEL[v.source] : 'the publisher register';
+  await db.insert(recordTransitions).values({
+    recordId, fromStatus: 'submitted', toStatus: 'approved',
+    actorUserId: system.id, actorRole: system.role,
+    remark: `Checked automatically against ${source}: the details match the published record and the owner is named on it.`,
+  });
+  await audit({
+    actor: system, action: 'record.transition', entity: 'record', entityId: recordId,
+    before: { status: 'submitted' }, after: { status: 'approved' },
+    meta: { automatic: true, source: v.source, identifier: v.identifier },
+  });
+}
 
 export async function createRecord(
   actor: SessionUser, moduleKey: string, input: Record<string, unknown>, mode: 'draft' | 'submit',
@@ -227,7 +256,8 @@ export async function createRecord(
   if (!canCreateIn(actor, m)) throw new ServiceError('FORBIDDEN', 'You cannot add records to this module.');
 
   const cycle = await activeCycle();
-  const v = await validateRecord(m, input, mode);
+  const looked = await applyLookup(m, input, { ownerName: actor.name, cycle });
+  const v = await validateRecord(m, looked.data, mode);
   if (!v.ok) throw new ServiceError('VALIDATION', 'Some fields need attention.', v.errors);
 
   const departmentId = departmentForRecord(actor, m);
@@ -236,18 +266,28 @@ export async function createRecord(
 
   await assertNoDuplicate(m, cycle.id, naturalKey, null);
 
+  const auto = mode === 'submit' && looked.eligible;
+  const system = auto ? await systemActor() : null;
+  const verification = looked.verification ? { ...looked.verification, autoApproved: auto } : null;
+  const now = new Date();
+
   const [created] = await db.insert(records).values({
     moduleKey: m.key,
     cycleId: cycle.id,
     ownerUserId: actor.id,
     departmentId,
-    status: mode === 'submit' ? 'submitted' : 'draft',
-    submittedAt: mode === 'submit' ? new Date() : null,
+    status: auto ? 'approved' : mode === 'submit' ? 'submitted' : 'draft',
+    submittedAt: mode === 'submit' ? now : null,
+    verifiedAt: auto ? now : null,
+    verifiedBy: system?.id ?? null,
+    approvedAt: auto ? now : null,
+    approvedBy: system?.id ?? null,
     periodLabel,
     periodYear,
     naturalKey,
     data,
     searchText,
+    verification,
     createdBy: actor.id,
     updatedBy: actor.id,
   }).returning({ id: records.id, status: records.status })
@@ -264,6 +304,7 @@ export async function createRecord(
       actorUserId: actor.id, actorRole: actor.role,
     });
   }
+  if (auto && verification) await recordAutoApproval(created!.id, verification);
 
   return { id: created!.id, status: created!.status };
 }
@@ -291,7 +332,10 @@ export async function updateRecord(
     );
   }
 
-  const v = await validateRecord(m, input, mode);
+  const [owner] = await db.select({ name: users.name }).from(users).where(eq(users.id, existing.ownerUserId));
+  const looked = await applyLookup(m, input, { ownerName: owner?.name ?? actor.name, cycle });
+
+  const v = await validateRecord(m, looked.data, mode);
   if (!v.ok) throw new ServiceError('VALIDATION', 'Some fields need attention.', v.errors);
 
   const prepared = prepareForStorage(m, v.data, existing.departmentId);
@@ -306,9 +350,15 @@ export async function updateRecord(
   const { periodYear, periodLabel } = resolvePeriod(m, v.data, cycle);
   await assertNoDuplicate(m, cycle.id, prepared.naturalKey, id);
 
-  const nextStatus: RecordStatus = mode === 'submit'
-    ? 'submitted'
-    : existing.status === 'returned' ? 'returned' : 'draft';
+  const auto = mode === 'submit' && looked.eligible;
+  const system = auto ? await systemActor() : null;
+  const now = new Date();
+  const nextStatus: RecordStatus = auto
+    ? 'approved'
+    : mode === 'submit' ? 'submitted' : existing.status === 'returned' ? 'returned' : 'draft';
+  const verification = looked.verification
+    ? { ...looked.verification, autoApproved: auto }
+    : (existing.verification as RecordVerification | null);
 
   await db.update(records).set({
     data: prepared.data,
@@ -317,8 +367,10 @@ export async function updateRecord(
     periodYear,
     periodLabel,
     status: nextStatus,
-    submittedAt: mode === 'submit' ? new Date() : existing.submittedAt,
+    submittedAt: mode === 'submit' ? now : existing.submittedAt,
     returnedRemark: mode === 'submit' ? null : existing.returnedRemark,
+    verification,
+    ...(auto ? { verifiedAt: now, verifiedBy: system!.id, approvedAt: now, approvedBy: system!.id } : {}),
     updatedBy: actor.id,
   }).where(eq(records.id, id)).catch((e) => asConflict(e, m));
 
@@ -334,6 +386,7 @@ export async function updateRecord(
       actorUserId: actor.id, actorRole: actor.role,
     });
   }
+  if (auto && verification) await recordAutoApproval(id, verification);
 
   return { id, status: nextStatus };
 }
