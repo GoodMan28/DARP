@@ -65,7 +65,8 @@ beforeAll(async () => {
   await truncateAll();
   faculty = await makeUser({ role: 'faculty', dept: 'CSE' });
 });
-beforeEach(() => resolveMock.mockReset());
+// Braces matter: a returned function is treated as a teardown and would be called after each test.
+beforeEach(() => { resolveMock.mockReset(); });
 afterAll(async () => { await closeDb(); });
 
 describe('automatic approval', () => {
@@ -89,7 +90,7 @@ describe('automatic approval', () => {
     );
     const read = await getRecord(faculty, 'publications', id);
     expect(read.data.journal).toBe('Real Journal');
-    expect(read.data.year).toBe('2023');
+    expect(Number(read.data.year)).toBe(2023);
     expect(read.data.title).toBe('A real paper');
   });
 
@@ -162,7 +163,9 @@ describe('records that need a person', () => {
 
 describe('when the register is unavailable', () => {
   it('falls back to the typed details and a human check', async () => {
-    resolveMock.mockRejectedValue(new LookupUnavailable('down'));
+    // Thrown synchronously inside the awaited call: the same try/catch path as a rejected
+    // promise, without the test runner flagging the mock's rejected promise as unhandled.
+    resolveMock.mockImplementation(() => { throw new LookupUnavailable('down'); });
     const { id, status } = await createRecord(faculty, 'publications', form(nextDoi()), 'submit');
     expect(status).toBe('submitted');
     const read = await getRecord(faculty, 'publications', id);

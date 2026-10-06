@@ -2,7 +2,7 @@ import type { ModuleConfig } from '@darp/shared/modules/types';
 import { LOOKUP_SOURCE_LABEL, type RecordVerification } from '@darp/shared/contracts';
 import { isInsideCycle, type CycleWindows } from '@/server/records/periods';
 import { resolve } from './resolve';
-import { LookupUnavailable } from './http';
+import { isLookupUnavailable } from './http';
 import { namesMatch } from './names';
 import { buildCitation } from './citation';
 import type { LookupResult } from './types';
@@ -49,7 +49,7 @@ export async function applyLookup(
   try {
     r = await resolve(m.lookup.kind, raw);
   } catch (e) {
-    if (e instanceof LookupUnavailable) {
+    if (isLookupUnavailable(e)) {
       return manual('The publisher register could not be reached when this was saved, so the details were typed by hand.');
     }
     throw e;

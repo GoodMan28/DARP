@@ -4,7 +4,7 @@ import { canCreateIn } from '@/server/auth/permissions';
 import { mustGetModule, activeCycle, ServiceError } from '@/server/records/service';
 import { applyLookup } from './apply';
 import { resolve } from './resolve';
-import { LookupUnavailable } from './http';
+import { isLookupUnavailable } from './http';
 import { normaliseDoiInput } from './doi';
 import { isbn13 } from './isbn';
 import type { LookupResult } from './types';
@@ -42,7 +42,7 @@ export async function lookupForForm(
   try {
     result = await resolve(m.lookup.kind, identifier);
   } catch (e) {
-    if (e instanceof LookupUnavailable) {
+    if (isLookupUnavailable(e)) {
       return byHand('The publisher register could not be reached just now. Try again in a minute, or fill in the details by hand — the record will then be checked by the verifying office.');
     }
     throw e;

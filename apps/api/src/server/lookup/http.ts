@@ -5,7 +5,14 @@ const TIMEOUT_MS = Number(process.env.LOOKUP_TIMEOUT_MS ?? 8000);
 const USER_AGENT = `DARP/1.0 (BIT Mesra accreditation portal; mailto:${MAILTO})`;
 
 /** The register could not be reached. Callers fall back to manual entry; it is never a crash. */
-export class LookupUnavailable extends Error {}
+export class LookupUnavailable extends Error {
+  override name = 'LookupUnavailable';
+}
+
+/** Matches by name too, so it still works if the module is ever loaded twice (bundler, test runner). */
+export function isLookupUnavailable(e: unknown): boolean {
+  return e instanceof LookupUnavailable || (e instanceof Error && e.name === 'LookupUnavailable');
+}
 
 /**
  * GET a JSON document. Returns null on 404. Retries once on a network error, 429 or 5xx,
