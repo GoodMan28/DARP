@@ -21,7 +21,8 @@
     "test:e2e": "npm run test:e2e -w @darp/web",
     "db:setup": "npm run db:setup -w @darp/api",
     "db:seed:demo": "npm run db:seed:demo -w @darp/api --",
-    "verify": "npm run typecheck && npm run lint && npm run test"
+    "verify": "npm run typecheck && npm run lint && npm run test",
+    "journals:import": "npm run journals:import -w @darp/api --"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
