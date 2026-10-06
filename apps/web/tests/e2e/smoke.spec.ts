@@ -1,14 +1,5 @@
-import { test, expect, type Page } from '@playwright/test';
-
-const PASSWORD = 'DarpDemo!2026Pass';
-
-async function signIn(page: Page, who: string) {
-  await page.goto('/login');
-  await page.getByLabel('Institute e-mail').fill(`${who}@demo.bitmesra.ac.in`);
-  await page.getByLabel('Password').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Sign in' }).click();
-  await page.waitForURL('**/dashboard');
-}
+import { test, expect } from '@playwright/test';
+import { useSession } from './helpers';
 
 test.describe('public pages', () => {
   test('the landing page states what the portal is for', async ({ page }) => {
@@ -44,7 +35,7 @@ test.describe('public pages', () => {
 
 test.describe('faculty journey', () => {
   test('sees their own dashboard, modules and records', async ({ page }) => {
-    await signIn(page, 'verma');
+    await useSession(page, 'verma');
     await expect(page.getByRole('heading', { name: /Good to see you/ })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'My modules' })).toBeVisible();
 
@@ -59,7 +50,7 @@ test.describe('faculty journey', () => {
   });
 
   test('can open the add-record form and see locked attribution', async ({ page }) => {
-    await signIn(page, 'verma');
+    await useSession(page, 'verma');
     await page.goto('/m/publications/new');
     await expect(page.getByText('Pre-filled from your account and locked', { exact: false }))
       .toBeVisible();
@@ -67,7 +58,7 @@ test.describe('faculty journey', () => {
   });
 
   test('sees computed totals on the profile, marked as not editable', async ({ page }) => {
-    await signIn(page, 'verma');
+    await useSession(page, 'verma');
     await page.goto('/profile');
     await expect(page.getByRole('heading', { name: 'My profile' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Computed totals' })).toBeVisible();
@@ -75,7 +66,7 @@ test.describe('faculty journey', () => {
   });
 
   test('never shows a full Aadhaar anywhere in the page', async ({ page }) => {
-    await signIn(page, 'verma');
+    await useSession(page, 'verma');
     await page.goto('/profile');
     const body = await page.locator('body').innerText();
     expect(body).not.toMatch(/\b\d{12}\b/);
@@ -84,12 +75,12 @@ test.describe('faculty journey', () => {
 
 test.describe('verification', () => {
   test('a dean sees a queue rather than a data-entry list', async ({ page }) => {
-    await signIn(page, 'drie');
+    await useSession(page, 'drie');
     await expect(page.getByRole('heading', { name: 'Verification queue' })).toBeVisible();
   });
 
   test('a faculty member cannot reach the admin console', async ({ page }) => {
-    await signIn(page, 'verma');
+    await useSession(page, 'verma');
     await page.goto('/admin');
     // Either redirected away, or told plainly — never the console itself.
     await expect(page.getByRole('heading', { name: 'IQAC administration' })).toHaveCount(0);
@@ -98,7 +89,7 @@ test.describe('verification', () => {
 
 test.describe('administration', () => {
   test('IQAC sees the console and its tabs', async ({ page }) => {
-    await signIn(page, 'iqac');
+    await useSession(page, 'iqac');
     await page.goto('/admin');
     await expect(page.getByRole('heading', { name: /administration/i }).first()).toBeVisible();
   });
