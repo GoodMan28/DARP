@@ -318,6 +318,8 @@ export async function verificationQueue(actor: SessionUser): Promise<Verificatio
         awaitingVerification: pick('submitted'),
         awaitingApproval: actor.role === 'admin' ? pick('verified') : 0,
       };
-    })
-    .filter((r) => r.awaitingVerification > 0 || r.awaitingApproval > 0);
+    });
+  // Zero rows are kept on purpose: a verifying office with nothing pending must still see its
+  // queue, saying "Nothing waiting", rather than have the card disappear. The page hides the
+  // empty rows itself.
 }

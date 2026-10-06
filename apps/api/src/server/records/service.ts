@@ -13,6 +13,7 @@ import { prepareForStorage, presentForRead, presentForEdit } from './prepare';
 import { resolvePeriod, type CycleWindows } from './periods';
 import { audit } from '@/server/audit/log';
 import { applyLookup } from '@/server/lookup/apply';
+import { unattachableFiles, linkEvidence } from './evidenceLinks';
 import { systemActor } from '@/server/lookup/system';
 import { LOOKUP_SOURCE_LABEL, type RecordVerification } from '@darp/shared/contracts';
 
@@ -261,6 +262,9 @@ export async function createRecord(
   if (!v.ok) throw new ServiceError('VALIDATION', 'Some fields need attention.', v.errors);
 
   const departmentId = departmentForRecord(actor, m);
+  const badFiles = await unattachableFiles(actor.id, m, null, v.data);
+  if (Object.keys(badFiles).length > 0) throw new ServiceError('VALIDATION', 'Some fields need attention.', badFiles);
+
   const { data, naturalKey, searchText } = prepareForStorage(m, v.data, departmentId);
   const { periodYear, periodLabel } = resolvePeriod(m, v.data, cycle);
 
@@ -304,6 +308,7 @@ export async function createRecord(
       actorUserId: actor.id, actorRole: actor.role,
     });
   }
+  await linkEvidence(m, created!.id, data);
   if (auto && verification) await recordAutoApproval(created!.id, verification);
 
   return { id: created!.id, status: created!.status };
@@ -337,6 +342,9 @@ export async function updateRecord(
 
   const v = await validateRecord(m, looked.data, mode);
   if (!v.ok) throw new ServiceError('VALIDATION', 'Some fields need attention.', v.errors);
+
+  const badFiles = await unattachableFiles(actor.id, m, id, v.data);
+  if (Object.keys(badFiles).length > 0) throw new ServiceError('VALIDATION', 'Some fields need attention.', badFiles);
 
   const prepared = prepareForStorage(m, v.data, existing.departmentId);
   // An encrypted field left blank on the form keeps its stored ciphertext.
@@ -386,6 +394,7 @@ export async function updateRecord(
       actorUserId: actor.id, actorRole: actor.role,
     });
   }
+  await linkEvidence(m, id, prepared.data);
   if (auto && verification) await recordAutoApproval(id, verification);
 
   return { id, status: nextStatus };

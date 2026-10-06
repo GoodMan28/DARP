@@ -246,6 +246,13 @@ function valueFor(f: FieldConfig, ctx: GenContext): unknown {
         // Kolkata office (3), ordinary application (1): YYYY 3 1 NNNNNN, unique per record.
         return `${2021 + (ctx.index % 4)}31${String(100000 + ctx.index).padStart(6, '0')}`;
       }
+      // Short bibliographic fields: plausible values that fit their maxLength.
+      if (label === 'volume' || label === 'issue') return String(1 + Math.floor(rng() * 40));
+      if (label.startsWith('pages')) {
+        const first = 1 + Math.floor(rng() * 400);
+        return `${first}-${first + 8 + Math.floor(rng() * 20)}`;
+      }
+      if (label.includes('quartile')) return pick(['Q1 (SJR 2023)', 'Q2 (SJR 2023)', 'Q3 (SJR 2022)', 'Q4 (SJR 2024)'], rng);
       if (label.includes('roll') || label.includes('registration') || label.includes('enrol')
         || label.includes('code') || label.includes('application')) {
         return `BIT/${2020 + (ctx.index % 5)}/${1000 + ctx.index}`;
@@ -303,7 +310,9 @@ function buildRecord(m: ModuleConfig, ctx: GenContext): Record<string, unknown> 
     }
     if (f.type === 'file') continue;                     // nothing to upload in a seed
     if (!f.required && ctx.rng() < 0.25) continue;        // leave some optional fields blank
-    values[f.key] = valueFor(f, ctx);
+    const v = valueFor(f, ctx);
+    // Never let a generated value break a field's own length rule.
+    values[f.key] = typeof v === 'string' && f.maxLength ? v.slice(0, f.maxLength) : v;
   }
   return values;
 }

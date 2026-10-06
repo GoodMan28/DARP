@@ -213,7 +213,7 @@ export function RecordForm({
                     htmlFor={`i-${f.key}`}
                     hint={lockedKeys.has(f.key) ? 'Fetched · locked' : f.protected ? 'Protected' : undefined}
                   >
-                    {renderInput(f, values[f.key], (v) => set(f.key, v), !!readOnly || lockedKeys.has(f.key), !!errors[f.key])}
+                    {renderInput(f, values[f.key], (v) => set(f.key, v), !!readOnly || lockedKeys.has(f.key), !!errors[f.key], { moduleKey, recordId })}
                   </Field>
                 </div>
               ))}
@@ -242,6 +242,7 @@ export function RecordForm({
 
 function renderInput(
   f: FormFieldDef, value: unknown, onChange: (v: unknown) => void, readOnly: boolean, invalid: boolean,
+  ctx: { moduleKey: string; recordId?: string },
 ) {
   const common = { id: `i-${f.key}`, disabled: readOnly, 'aria-invalid': invalid || undefined };
   switch (f.type) {
@@ -293,6 +294,9 @@ function renderInput(
           maxSizeMB={f.maxSizeMB ?? 5}
           value={String(value ?? '')}
           onUploaded={(id) => onChange(id)}
+          fieldKey={f.key}
+          moduleKey={ctx.moduleKey}
+          recordId={ctx.recordId}
         />
       );
     case 'date':
