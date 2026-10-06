@@ -1,11 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { apiFetch } from '@/lib/csrf-client';
+import { apiFetch, apiJson } from '@/lib/csrf-client';
 import {
   Field, Input, Select, Textarea, Checkbox, FileInput, Button, Card, Notice,
 } from '@/components/ui';
-import type { FormFieldDef } from '@darp/shared/contracts';
+import { LOOKUP_SOURCE_LABEL, type FormFieldDef, type LookupFillPayload } from '@darp/shared/contracts';
 
 export type { FormFieldDef } from '@darp/shared/contracts';
 
@@ -16,12 +16,24 @@ interface Props {
   initialValues?: Record<string, unknown>;
   locked: { period: string; department: string; enteredBy: string };
   readOnly?: boolean;
+  /** Present when the module fetches its facts from a register (DOI / ISBN). */
+  lookup?: { kind: string; idFields: string[]; idLabel: string } | null;
+  /** Fields locked when the form opens (an existing auto-checked record). */
+  initialLocked?: string[];
 }
 
 export function RecordForm({
-  moduleKey, fields, recordId, initialValues, locked, readOnly,
+  moduleKey, fields, recordId, initialValues, locked, readOnly, lookup, initialLocked,
 }: Props) {
   const [values, setValues] = useState<Record<string, unknown>>(initialValues ?? {});
+  const [lockedKeys, setLockedKeys] = useState<Set<string>>(() => new Set(initialLocked ?? []));
+  const [identifier, setIdentifier] = useState<string>(
+    () => (lookup?.idFields.map((k) => String(initialValues?.[k] ?? '')).find(Boolean)) ?? '',
+  );
+  const [fetching, setFetching] = useState(false);
+  const [lookupNote, setLookupNote] = useState<
+    { tone: 'success' | 'info' | 'warning'; title: string; notes: string[] } | null
+  >(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -54,6 +66,33 @@ export function RecordForm({
     setValues((v) => ({ ...v, [key]: value }));
     setErrors((e) => { const rest = { ...e }; delete rest[key]; return rest; });
     setDirty(true);
+  }
+
+  async function fetchDetails() {
+    if (!lookup || !identifier.trim()) return;
+    setFetching(true);
+    setLookupNote(null);
+    const res = await apiJson<LookupFillPayload>(`/api/lookup/${moduleKey}`, {
+      method: 'POST',
+      body: JSON.stringify({ identifier: identifier.trim() }),
+    });
+    setFetching(false);
+    if (!res.ok) {
+      setLookupNote({ tone: 'warning', title: res.error.message, notes: [] });
+      return;
+    }
+    const p = res.data;
+    setValues((v) => ({ ...v, ...p.fill }));
+    setLockedKeys(new Set(p.locked));
+    setDirty(true);
+    const source = p.source ? LOOKUP_SOURCE_LABEL[p.source] : '';
+    setLookupNote(
+      !p.found
+        ? { tone: 'warning', title: 'No published record found', notes: p.notes }
+        : p.authoritative
+          ? { tone: 'success', title: `Details fetched from ${source}`, notes: p.notes }
+          : { tone: 'info', title: `Suggested details from ${source} — check every field`, notes: p.notes },
+    );
   }
 
   async function save(mode: 'draft' | 'submit') {
@@ -124,6 +163,39 @@ export function RecordForm({
         </p>
       </Card>
 
+      {lookup && !readOnly ? (
+        <Card className="mb-4">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-64 flex-1">
+              <Field
+                label={lookup.idLabel}
+                htmlFor="lookup-identifier"
+                help="Paste it and press Fetch details. Fields marked “Fetched · locked” come from the publisher's record and cannot be changed."
+              >
+                <Input
+                  id="lookup-identifier"
+                  value={identifier}
+                  onChange={(e) => { setIdentifier(e.target.value); setLockedKeys(new Set()); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void fetchDetails(); } }}
+                />
+              </Field>
+            </div>
+            <Button type="button" variant="secondary" disabled={fetching || !identifier.trim()} onClick={() => void fetchDetails()}>
+              {fetching ? 'Fetching…' : 'Fetch details'}
+            </Button>
+          </div>
+          {lookupNote ? (
+            <Notice tone={lookupNote.tone} title={lookupNote.title} className="mt-3">
+              {lookupNote.notes.length > 0 ? (
+                <ul className="mt-1 list-disc pl-5">
+                  {lookupNote.notes.map((n) => <li key={n}>{n}</li>)}
+                </ul>
+              ) : null}
+            </Notice>
+          ) : null}
+        </Card>
+      ) : null}
+
       {sections.map(([section, sectionFields]) => {
         const shown = sectionFields.filter(visible);
         if (shown.length === 0) return null;
@@ -139,9 +211,9 @@ export function RecordForm({
                     help={f.help}
                     error={errors[f.key]}
                     htmlFor={`i-${f.key}`}
-                    hint={f.protected ? 'Protected' : undefined}
+                    hint={lockedKeys.has(f.key) ? 'Fetched · locked' : f.protected ? 'Protected' : undefined}
                   >
-                    {renderInput(f, values[f.key], (v) => set(f.key, v), !!readOnly, !!errors[f.key])}
+                    {renderInput(f, values[f.key], (v) => set(f.key, v), !!readOnly || lockedKeys.has(f.key), !!errors[f.key])}
                   </Field>
                 </div>
               ))}

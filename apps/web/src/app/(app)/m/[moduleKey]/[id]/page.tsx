@@ -9,7 +9,7 @@ import { RecordForm } from '@/components/form/RecordForm';
 import { ActionRail, type RailAction } from '@/components/records/ActionRail';
 import { lockedStrip } from '@/components/records/form-fields';
 import { requireMe, loadPageData } from '@/lib/api.server';
-import type { ModuleSchemaPayload, RecordDetail } from '@darp/shared/contracts';
+import { LOOKUP_SOURCE_LABEL, type ModuleSchemaPayload, type RecordDetail } from '@darp/shared/contracts';
 import { getModule } from '@darp/shared/modules';
 import { formatDateTime, STATUS_LABEL } from '@darp/shared/format';
 import { ROLE_LABEL } from '@darp/shared/roles';
@@ -121,12 +121,30 @@ export default async function RecordPage({ params }: PageProps) {
             fields={fields}
             recordId={record.id}
             initialValues={editable ? (record.editValues ?? {}) : record.data}
+            lookup={schema.data.lookup}
+            initialLocked={record.lockedFields}
             locked={lockedStrip(m, user, record.periodLabel, record.ownerName)}
             readOnly={!editable}
           />
         </div>
 
         <aside className="space-y-4">
+          {record.verification ? (
+            record.verification.autoApproved ? (
+              <Notice tone="success" title="Checked automatically">
+                Matched the published record
+                {record.verification.source ? ` at ${LOOKUP_SOURCE_LABEL[record.verification.source]}` : ''} on{' '}
+                {formatDateTime(record.verification.checkedAt)}. No manual verification was needed.
+              </Notice>
+            ) : record.verification.reasons.length > 0 ? (
+              <Notice tone="info" title="Why the verifying office checks this record">
+                <ul className="mt-1 list-disc pl-5">
+                  {record.verification.reasons.map((r) => <li key={r}>{r}</li>)}
+                </ul>
+              </Notice>
+            ) : null
+          ) : null}
+
           <Card padded={false}>
             <CardHeader title="Status" subtitle={`Last updated ${formatDateTime(record.updatedAt)}`} />
             <div className="space-y-3 p-3">

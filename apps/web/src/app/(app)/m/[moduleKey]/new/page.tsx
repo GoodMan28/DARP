@@ -90,6 +90,7 @@ export default async function NewRecordPage({ params }: PageProps) {
       <RecordForm
         moduleKey={m.key}
         fields={fields}
+        lookup={schema.data.lookup}
         locked={lockedStrip(m, user, periodLabel)}
       />
     </>,
