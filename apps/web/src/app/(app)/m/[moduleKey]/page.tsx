@@ -127,8 +127,11 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
   }
 
   const list = listed.data;
-  const { counts, periods, canCreate: mayCreate } = schema.data;
+  const { counts, periods, canCreate } = schema.data;
+  // A module kept on its own page (the Faculty Profile) is never added to from the list.
+  const mayCreate = canCreate && !m.managedAt;
   const declaredNil = mayCreate && schema.data.declaredNil;
+  const managedLink = m.managedAt && m.ownerRoles.includes(user.role) ? m.managedAt : null;
 
   const base = { q, status, year, page };
   const pageCount = Math.max(1, Math.ceil(list.total / list.pageSize));
@@ -155,6 +158,8 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
           <IconPlus width={14} height={14} />
           Add record
         </LinkButton>
+      ) : managedLink ? (
+        <LinkButton href={managedLink.href} variant="secondary">{managedLink.label}</LinkButton>
       ) : null}
     >
       <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -231,11 +236,13 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
                   <IconPlus width={14} height={14} />
                   Add the first record
                 </LinkButton>
+              ) : managedLink ? (
+                <LinkButton href={managedLink.href}>{managedLink.label}</LinkButton>
               ) : null}
             >
               Records added here are counted automatically in the profile totals and the department
-              roll-up — nothing is tallied by hand. If there is genuinely nothing to report, declare
-              a nil return below.
+              roll-up — nothing is tallied by hand.
+              {mayCreate ? ' If there is genuinely nothing to report, declare a nil return below.' : null}
             </EmptyState>
           )
         ) : (

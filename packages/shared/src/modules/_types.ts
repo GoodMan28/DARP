@@ -66,6 +66,13 @@ export interface ModuleConfig {
   /** Field keys forming the duplicate guard, unique per cycle. e.g. ['doi'] */
   naturalKey?: string[];
 
+  /**
+   * One record per owner per cycle, kept on its own page rather than added from the module list
+   * (the Faculty Profile lives on /profile). The list then shows no "Add record" button and no nil
+   * return; owners get a link to this page instead.
+   */
+  managedAt?: { href: string; label: string };
+
   fields: FieldConfig[];
   listColumns: string[];          // field keys shown in the table
   defaultSort?: { key: string; dir: 'asc' | 'desc' };
