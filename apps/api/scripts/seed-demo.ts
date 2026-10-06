@@ -242,6 +242,10 @@ function valueFor(f: FieldConfig, ctx: GenContext): unknown {
     default: {
       // text — choose by what the column is actually asking for
       const salt = unique ? ` ${ctx.index}` : '';
+      if (f.normalise === 'patentNumber') {
+        // Kolkata office (3), ordinary application (1): YYYY 3 1 NNNNNN, unique per record.
+        return `${2021 + (ctx.index % 4)}31${String(100000 + ctx.index).padStart(6, '0')}`;
+      }
       if (label.includes('roll') || label.includes('registration') || label.includes('enrol')
         || label.includes('code') || label.includes('application')) {
         return `BIT/${2020 + (ctx.index % 5)}/${1000 + ctx.index}`;

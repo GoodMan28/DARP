@@ -3,6 +3,7 @@ import type { FieldConfig, ModuleConfig } from '@darp/shared/modules/types';
 import { getAllLists } from './masterLists';
 import { isValidAadhaar, isValidPan } from '@/server/crypto/pii';
 import { isbn13 } from '@/server/lookup/isbn';
+import { normalisePatentNumber } from './patentNumber';
 
 /** Patterns that are checked server-side, never only in the browser. */
 export const PATTERNS = {
@@ -133,6 +134,12 @@ export async function validateRecord(
     const parsed = fieldSchema(f, lists).safeParse(raw);
     if (!parsed.success) {
       errors[f.key] = parsed.error.issues[0]?.message ?? 'This value is not valid.';
+      continue;
+    }
+    if (f.normalise === 'patentNumber' && typeof parsed.data === 'string') {
+      const n = normalisePatentNumber(parsed.data, String(input.country ?? ''));
+      if ('error' in n) { errors[f.key] = n.error; continue; }
+      out[f.key] = n.value;
       continue;
     }
     out[f.key] = parsed.data;
