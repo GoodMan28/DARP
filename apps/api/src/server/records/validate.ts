@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { FieldConfig, ModuleConfig } from '@darp/shared/modules/types';
 import { getAllLists } from './masterLists';
 import { isValidAadhaar, isValidPan } from '@/server/crypto/pii';
+import { isbn13 } from '@/server/lookup/isbn';
 
 /** Patterns that are checked server-side, never only in the browser. */
 export const PATTERNS = {
@@ -37,7 +38,7 @@ function fieldSchema(f: FieldConfig, lists: Record<string, string[]>): z.ZodType
     case 'issn':
       return baseString(f).regex(PATTERNS.issn, 'ISSN looks like 0167-739X.');
     case 'isbn':
-      return baseString(f).regex(PATTERNS.isbn, 'Enter a valid ISBN.');
+      return baseString(f).refine((v) => v === '' || isbn13(v) !== null, 'Enter a valid ISBN (10 or 13 digits; the last digit is a check digit).');
     case 'pan':
       return baseString(f).refine((v) => v === '' || isValidPan(v), 'PAN looks like ABCDE1234F.');
     case 'aadhaar':

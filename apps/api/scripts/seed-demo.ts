@@ -22,6 +22,9 @@ import { MODULES } from '@darp/shared/modules';
 import type { FieldConfig, ModuleConfig, Role } from '@darp/shared/modules/types';
 import type { SessionUser } from '../src/server/auth/session';
 
+// Demo data is generated offline: never call a publisher register while seeding.
+process.env.LOOKUP_OFFLINE = '1';
+
 const DEMO_DOMAIN = '@demo.bitmesra.ac.in';
 const DEMO_PASSWORD = 'DarpDemo!2026Pass';
 
@@ -185,8 +188,11 @@ function valueFor(f: FieldConfig, ctx: GenContext): unknown {
       return `10.${1000 + (ctx.index % 8999)}/darp.demo.${ctx.index}`;
     case 'issn':
       return `${1000 + Math.floor(rng() * 8999)}-${100 + Math.floor(rng() * 899)}X`;
-    case 'isbn':
-      return `978${String(Math.floor(rng() * 1000000000)).padStart(9, '0')}1`;
+    case 'isbn': {
+      const core = `978${String(Math.floor(rng() * 1e9)).padStart(9, '0')}`;
+      const sum = [...core].reduce((a, ch, i) => a + Number(ch) * (i % 2 === 0 ? 1 : 3), 0);
+      return core + String((10 - (sum % 10)) % 10);
+    }
     case 'email':
       return `${ctx.person.key}.demo@bitmesra.ac.in`;
     case 'phone':
