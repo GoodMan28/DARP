@@ -22,6 +22,8 @@ export const publications: ModuleConfig = {
     acceptTypes: ['journal-article'],
     ownerMustBeIn: 'authors',
     evidenceField: 'evidence',
+    // A paper from another year belongs to another cycle; never count it in this one.
+    refuseOutsideCycle: true,
   },
   fields: [
     { key: 'doi', label: 'Doi', type: 'doi', required: true, section: 'Paper',

@@ -1,6 +1,8 @@
 import type { ModuleConfig } from '@darp/shared/modules/types';
 import { LOOKUP_SOURCE_LABEL, type RecordVerification } from '@darp/shared/contracts';
-import { isInsideCycle, type CycleWindows } from '@/server/records/periods';
+import {
+  isInsideCycle, cycleYears, periodSourceField, yearOfPeriod, type CycleWindows,
+} from '@/server/records/periods';
 import { resolve } from './resolve';
 import { isLookupUnavailable } from './http';
 import { namesMatch } from './names';
@@ -110,14 +112,15 @@ export async function applyLookup(
   } else if (published.every((p) => p.bitAffiliated === false)) {
     reasons.push(`${ctx.ownerName} is listed on the published record with another institution, not BIT Mesra.`);
   }
+  // A module that refuses out-of-cycle records says so on submit (outsideCycle); others note it.
   const year = Number(r.values.year ?? '');
-  if (Number.isInteger(year) && year > 1900 && !isInsideCycle(m, year, ctx.cycle)) {
+  if (!m.lookup.refuseOutsideCycle && Number.isInteger(year) && year > 1900 && !isInsideCycle(m, year, ctx.cycle)) {
     reasons.push(`It was published in ${year}, outside this reporting cycle.`);
   }
 
   return {
     data,
-    eligible: reasons.length === 0,
+    eligible: reasons.length === 0 && outsideCycle(m, data, ctx.cycle) === null,
     verification: {
       source: r.source,
       identifier: r.values.doi || raw,
@@ -125,6 +128,29 @@ export async function applyLookup(
       autoApproved: false,
       reasons: [...new Set(reasons)],
     },
+  };
+}
+
+/**
+ * For a module that refuses out-of-cycle records (`lookup.refuseOutsideCycle`): the field to blame
+ * and a plain message when the record's year is outside the cycle, otherwise null. The year is read
+ * from the final values, so it covers fetched and hand-typed years alike.
+ */
+export function outsideCycle(
+  m: ModuleConfig, data: Record<string, unknown>, cycle: CycleWindows,
+): { field: string; message: string } | null {
+  if (!m.lookup?.refuseOutsideCycle) return null;
+  const src = periodSourceField(m);
+  const raw = src ? data[src.key] : undefined;
+  if (!src || raw === undefined || raw === null || raw === '') return null;
+  const year = src.kind === 'year'
+    ? Number(String(raw))
+    : (Number.isNaN(new Date(String(raw)).getTime()) ? NaN : yearOfPeriod(new Date(String(raw)), m.periodType));
+  if (!Number.isInteger(year) || isInsideCycle(m, year, cycle)) return null;
+  const { from, to } = cycleYears(m, cycle);
+  return {
+    field: src.key,
+    message: `This was published in ${year}. This reporting cycle covers ${from}–${to}, so it cannot be submitted here.`,
   };
 }
 

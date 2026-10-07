@@ -192,6 +192,32 @@ describe('details that could not be fetched are entered by hand', () => {
   });
 });
 
+describe('papers from outside the reporting cycle', () => {
+  const old = () => hit(faculty, { values: { ...hit(faculty).values, year: '2019' } });
+
+  it('refuses to submit them, saying only that', async () => {
+    resolveMock.mockResolvedValue(old());
+    await expect(createRecord(faculty, 'publications', form(nextDoi()), 'submit')).rejects.toMatchObject({
+      code: 'VALIDATION',
+      message: expect.stringContaining('published in 2019'),
+      fields: { year: expect.stringContaining('covers 2022–2024') },
+    });
+  });
+
+  it('still lets them be kept as a draft', async () => {
+    resolveMock.mockResolvedValue(old());
+    const { status } = await createRecord(faculty, 'publications', form(nextDoi()), 'draft');
+    expect(status).toBe('draft');
+  });
+
+  it('refuses a year typed by hand too, when the register is unavailable', async () => {
+    resolveMock.mockImplementation(() => { throw new LookupUnavailable('down'); });
+    await expect(createRecord(
+      faculty, 'publications', form(nextDoi(), { authors: faculty.name, year: '2018', evidence: await evidence() }), 'submit',
+    )).rejects.toMatchObject({ code: 'VALIDATION', fields: { year: expect.stringContaining('2018') } });
+  });
+});
+
 describe('DRIE and IQAC check afterwards', () => {
   it('DRIE can return an approved publication, and the resubmission goes to DRIE', async () => {
     resolveMock.mockResolvedValue(hit(faculty, { flags: ['not-indexed'] }));

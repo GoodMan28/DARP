@@ -12,7 +12,7 @@ import { validateRecord } from './validate';
 import { prepareForStorage, presentForRead, presentForEdit } from './prepare';
 import { resolvePeriod, type CycleWindows } from './periods';
 import { audit } from '@/server/audit/log';
-import { applyLookup, ownerMissingFromAuthors, evidenceMissing } from '@/server/lookup/apply';
+import { applyLookup, ownerMissingFromAuthors, evidenceMissing, outsideCycle } from '@/server/lookup/apply';
 import { unattachableFiles, linkEvidence } from './evidenceLinks';
 import { systemActor } from '@/server/lookup/system';
 import { LOOKUP_SOURCE_LABEL, type RecordVerification } from '@darp/shared/contracts';
@@ -270,9 +270,12 @@ async function recordAutoApproval(recordId: string, v: RecordVerification) {
  */
 function decideSubmission(
   m: ModuleConfig, data: Record<string, unknown>, looked: Awaited<ReturnType<typeof applyLookup>>,
-  ownerName: string, mode: 'draft' | 'submit', previousStatus?: RecordStatus,
+  ownerName: string, mode: 'draft' | 'submit', cycle: CycleWindows, previousStatus?: RecordStatus,
 ): boolean {
   if (mode !== 'submit' || !m.lookup) return false;
+  // A record from outside the cycle is refused on its own, with nothing else to confuse the message.
+  const outside = outsideCycle(m, data, cycle);
+  if (outside) throw new ServiceError('VALIDATION', outside.message, { [outside.field]: outside.message });
   const errors: Record<string, string> = {};
   const owner = ownerMissingFromAuthors(m, data, ownerName);
   if (owner) errors[owner.field] = owner.message;
@@ -304,7 +307,7 @@ export async function createRecord(
 
   await assertNoDuplicate(m, cycle.id, naturalKey, null);
 
-  const auto = decideSubmission(m, v.data, looked, actor.name, mode);
+  const auto = decideSubmission(m, v.data, looked, actor.name, mode, cycle);
   const system = auto ? await systemActor() : null;
   const verification = looked.verification ? { ...looked.verification, autoApproved: auto } : null;
   const now = new Date();
@@ -392,7 +395,7 @@ export async function updateRecord(
   const { periodYear, periodLabel } = resolvePeriod(m, v.data, cycle);
   await assertNoDuplicate(m, cycle.id, prepared.naturalKey, id);
 
-  const auto = decideSubmission(m, v.data, looked, owner?.name ?? actor.name, mode, existing.status);
+  const auto = decideSubmission(m, v.data, looked, owner?.name ?? actor.name, mode, cycle, existing.status);
   const system = auto ? await systemActor() : null;
   const now = new Date();
   const nextStatus: RecordStatus = auto

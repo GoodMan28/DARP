@@ -52,6 +52,11 @@ export interface LookupConfig {
   ownerMustBeIn?: string;
   /** This file field becomes required on submit whenever any detail could not be confirmed. */
   evidenceField?: string;
+  /**
+   * Refuse to submit a record whose year falls outside the reporting cycle (e.g. a 2020 paper in
+   * the 2022–2024 cycle), instead of approving it with a point to check. Drafts are not affected.
+   */
+  refuseOutsideCycle?: boolean;
 }
 
 export interface FieldConfig {
