@@ -43,3 +43,21 @@ describe('normIssn / clean', () => {
     expect(clean('A &amp; B <i>x</i>')).toBe('A & B x');
   });
 });
+
+describe('namesMatch with Indian spelling variants', () => {
+  it('accepts a surname spelt one letter differently when the first names agree', () => {
+    // The real case: her account says Bhattacharjee, IEEE TKDE (10.1109/TKDE.2011.163) says Bhattacherjee.
+    expect(namesMatch('Dr Vandana Bhattacharjee', { given: '', family: '', full: 'Vandana Bhattacherjee' })).toBe(true);
+    expect(namesMatch('Dr Vandana Bhattacharjee', p('Vandana', 'Bhattacherjee'))).toBe(true);
+    expect(namesMatch('Prof. Ravi Shankar Choudhary', p('Ravi Shankar', 'Chaudhary'))).toBe(true);
+    expect(namesMatch('Dr Anjali Srivastava', p('Anjali', 'Shrivastava'))).toBe(true);
+    expect(namesMatch('Dr A. K. Choudhary', p('A. K.', 'Chaudhary'))).toBe(true);
+  });
+
+  it('still refuses a different person', () => {
+    expect(namesMatch('Dr Vandana Bhattacharjee', p('Vivek', 'Bhattacherjee'))).toBe(false);
+    expect(namesMatch('Dr Vandana Bhattacharjee', p('Vandana', 'Banerjee'))).toBe(false);
+    expect(namesMatch('Dr Vandana Bhattacharjee', { given: '', family: '', full: 'Bhattacherjee' })).toBe(false);
+    expect(namesMatch('Dr Anil Rao', p('Anil', 'Roy'))).toBe(false);          // short surnames must match exactly
+  });
+});
