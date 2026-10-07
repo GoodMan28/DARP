@@ -470,26 +470,27 @@ check it in the **list**, "Save and submit", have the verifier **verify** it, th
 
 ---
 
-## 22 · Automatic fetch, journal lists and auto-approval
+## 22 · Publications: automatic fetch, approval on submission, checks afterwards
 
-Branch `feat/lookup-autofill`. Load at least one SCImago SJR file first (LOOK-08), or quartile and indexing stay empty and every paper goes to DRIE.
+Publications are **approved when submitted** — they never wait for DRIE or IQAC. DRIE and IQAC check afterwards: rows with something unconfirmed carry a **Check** marker, and they can return an approved publication. Quartile and Scopus indexing come from Elsevier's public Scopus list, fetched by the server (Administration → Journal lists shows it; "Refresh now" fetches again).
 
 | ID | Do this | You should see | Result |
 |---|---|---|---|
-| LOOK-01 | As `verma` → Publications → "Add record" → paste `10.1109/access.2023.3237542` in the DOI box → "Fetch details" | "Details fetched from Crossref". Title, journal (IEEE Access), year 2023, ISSN 2169-3536, volume, pages and the citation are filled and marked "Fetched · locked"; authors are filled and editable | |
-| LOOK-02 | Try to edit a locked field | It cannot be changed. (Even if forced in dev tools, the server saves the fetched value) | |
-| LOOK-03 | Read the notes under "Fetch details" | "Dr A. K. Verma could not be matched…" — Verma is not an author of this paper | |
-| LOOK-04 | "Save and submit" | Status **Submitted**, not Approved. The record page shows "Why the verifying office checks this record" with the reasons | |
-| LOOK-05 | Fetch `hello`, then `10.9999/nope` | "That does not look like a valid DOI."; then "No published record was found…" with the form left editable | |
-| LOOK-06 | Books & Chapters → fetch `10.1007/978-981-19-0475-2_1` | "Book chapter"; book title "Innovations in Computational Intelligence and Computer Vision" (not the series name); chapter title, ISBN, publisher filled | |
-| LOOK-07 | Books & Chapters → fetch ISBN `978-981-19-0474-5` | "Book", editors listed with "(ed.)" | |
-| LOOK-08 | As `iqac` → `/admin` → "Journal lists" → List "SCImago Journal Rank", Year 2023, choose the CSV downloaded from scimagojr.com → "Load list" | "Loaded N journals…"; the table shows "SCImago SJR · 2023" | |
-| LOOK-09 | Repeat LOOK-01 | Quartile e.g. "Q1 (SJR 2023)" and indexing "Scopus", both locked; the "not in the lists" note is gone | |
-| LOOK-10 | With no SJR list loaded, look at the quartile box | Empty but locked, with the hint "Filled in from the SJR list IQAC loads — never typed by hand" | |
-| LOOK-11 | As `verma`, open `/admin` | Sent back to the dashboard (journal lists are IQAC-only) | |
-| LOOK-12 | "Journal lists" → "Remove" on a loaded list | It disappears; fetching again no longer gives a quartile from it | |
-| LOOK-13 | **Auto-approval.** As `iqac` create a faculty account named `Dr Vandana Bhattacharjee` (CSE). With the SJR list loaded, sign in as her, fetch `10.1109/access.2023.3237542`, "Save and submit" | Status **Approved** at once; the record shows "Checked automatically"; history shows Submitted → Approved by "DARP automatic check" | |
-| LOOK-14 | Patents → Country India → number `IN202331012345A` → save | Stored as `202331012345`; `TEMP/E-1/…` is refused with an explanation | |
+| LOOK-01 | As `verma` → Publications → "Add record" → paste `10.1109/access.2023.3237542` → "Fetch details" | Title, journal (IEEE Access), year 2023, ISSN 2169-3536, volume, pages, citation filled and "Fetched · locked"; Indexing **Scopus**, Quartile **Q1**, Quartile source "SJR 2023 · Scopus list" | |
+| LOOK-02 | Read the notes under "Fetch details" | "Your name (Dr A. K. Verma) must be in the author list before you can submit…" — Verma is not an author of this paper | |
+| LOOK-03 | "Save and submit" straight away | Refused: the author-list message under "Name of the author/s", and "Attach evidence…" under Evidence | |
+| LOOK-04 | "Save as draft" instead | Saved as Draft — the name rule applies only to submitting | |
+| LOOK-05 | Add ", A. K. Verma" to the author list, attach a PDF as Evidence, "Save and submit" | Status **Approved** immediately | |
+| LOOK-06 | As `drie` → Publications → status "Approved" | That row shows a yellow **Check** marker | |
+| LOOK-07 | Open it as `drie` | "Approved automatically — points to check: Dr A. K. Verma is not in the author list the publisher registered — the name was added by hand."; the evidence link downloads; "Return to owner" is offered | |
+| LOOK-08 | "Return to owner" with a remark | Status Returned; Verma sees the remark | |
+| LOOK-09 | As `verma`, fix and "Save and submit" again | Status **Submitted** (goes to DRIE), not straight back to Approved | |
+| LOOK-10 | Fetch a DOI whose journal is not in Scopus (e.g. `10.1016/j.matpr.2021.01.001`, Materials Today: Proceedings) | Indexing and Quartile are **empty and editable** — choose them yourself; Quartile source stays empty and locked; evidence is then required | |
+| LOOK-11 | Fetch `hello`, then `10.9999/nope` | "That does not look like a valid DOI."; then "No published record was found…" and every field editable | |
+| LOOK-12 | A paper where you are a real author (an account named after a real BIT author, e.g. `Dr Vandana Bhattacharjee` for the DOI in LOOK-01) | Approved on submission with **no** evidence needed and no Check marker; the record says "Checked automatically" | |
+| LOOK-13 | Books & Chapters → fetch `10.1007/978-981-19-0475-2_1` | "Book chapter", book title "Innovations in Computational Intelligence and Computer Vision" (not the series name). Books still go to DRIE unless every check passes | |
+| LOOK-14 | As `iqac` → `/admin` → "Journal lists" | "Automatic: Scopus list from Elsevier" shows the November 2024 list and its counts; "Refresh now" works | |
+| LOOK-15 | Patents → Country India → number `IN202331012345A` → save | Stored as `202331012345`; `TEMP/E-1/…` is refused with an explanation. Patents still go to DRIE | |
 
 ## After testing
 
