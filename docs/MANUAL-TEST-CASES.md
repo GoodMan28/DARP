@@ -485,6 +485,7 @@ Publications are **approved when submitted** — they never wait for DRIE or IQA
 | LOOK-07 | Open it as `drie` | "Approved automatically — points to check: Dr A. K. Verma is not in the author list the publisher registered — the name was added by hand."; the evidence link downloads; "Return to owner" is offered | |
 | LOOK-08 | "Return to owner" with a remark | Status Returned; Verma sees the remark | |
 | LOOK-09 | As `verma`, fix and "Save and submit" again | Status **Submitted** (goes to DRIE), not straight back to Approved | |
+| LOOK-09b | As `drie`, open it | The button reads **"Verify and approve"** (note: no IQAC approval follows). Pressing it → status **Approved**; IQAC's dashboard shows nothing to approve for Publications | |
 | LOOK-10 | Fetch a DOI whose journal is not in Scopus (e.g. `10.1016/j.matpr.2021.01.001`, Materials Today: Proceedings) | Indexing and Quartile are **empty and editable** — choose them yourself; Quartile source stays empty and locked; evidence is then required | |
 | LOOK-11 | Fetch `hello`, then `10.9999/nope` | "That does not look like a valid DOI."; then "No published record was found…" and every field editable | |
 | LOOK-12 | A paper where you are a real author (an account named after a real BIT author, e.g. `Dr Vandana Bhattacharjee` for the DOI in LOOK-01) | Approved on submission with **no** evidence needed and no Check marker; the record says "Checked automatically" | |
