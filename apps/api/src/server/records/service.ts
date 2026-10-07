@@ -12,7 +12,7 @@ import { validateRecord } from './validate';
 import { prepareForStorage, presentForRead, presentForEdit } from './prepare';
 import { resolvePeriod, type CycleWindows } from './periods';
 import { audit } from '@/server/audit/log';
-import { applyLookup } from '@/server/lookup/apply';
+import { applyLookup, ownerMissingFromAuthors, evidenceMissing } from '@/server/lookup/apply';
 import { unattachableFiles, linkEvidence } from './evidenceLinks';
 import { systemActor } from '@/server/lookup/system';
 import { LOOKUP_SOURCE_LABEL, type RecordVerification } from '@darp/shared/contracts';
@@ -115,6 +115,7 @@ export async function listRecords(actor: SessionUser, moduleKey: string, params:
       departmentId: records.departmentId,
       updatedAt: records.updatedAt,
       returnedRemark: records.returnedRemark,
+      verification: records.verification,
     })
     .from(records)
     .innerJoin(users, eq(users.id, records.ownerUserId))
@@ -137,6 +138,7 @@ export async function listRecords(actor: SessionUser, moduleKey: string, params:
       ownerName: r.ownerName,
       isMine: r.ownerUserId === actor.id,
       returnedRemark: r.returnedRemark,
+      needsCheck: needsCheck(r.verification as RecordVerification | null),
       updatedAt: r.updatedAt,
       data: presentForRead(m, r.data as Record<string, unknown>, {
         includeSensitive: r.ownerUserId === actor.id || actor.role === 'admin',
@@ -162,15 +164,21 @@ export async function statusCounts(actor: SessionUser, moduleKey: string) {
   return out;
 }
 
+/** Approved automatically while some details were not confirmed: DRIE/IQAC should look at it. */
+function needsCheck(v: RecordVerification | null): boolean {
+  return !!v?.autoApproved && v.reasons.length > 0;
+}
+
 /* ─────────────────────────────── read ─────────────────────────────── */
 
 const AUTHORITATIVE = new Set(['crossref', 'datacite']);
 
 /** Fields shown locked on the edit form: fetched from an authoritative register and non-empty. */
 function lockedFieldsOf(m: ModuleConfig, v: RecordVerification | null, data: Record<string, unknown>): string[] {
-  if (!v?.source || !AUTHORITATIVE.has(v.source)) return [];
+  const always = m.fields.filter((f) => f.autofill?.alwaysLocked).map((f) => f.key);
+  if (!v?.source || !AUTHORITATIVE.has(v.source)) return always;
   return m.fields
-    .filter((f) => f.autofill?.locked && (f.autofill.lockWhenEmpty || (data[f.key] !== undefined && data[f.key] !== '')))
+    .filter((f) => f.autofill?.alwaysLocked || (f.autofill?.locked && data[f.key] !== undefined && data[f.key] !== ''))
     .map((f) => f.key);
 }
 
@@ -241,13 +249,39 @@ async function recordAutoApproval(recordId: string, v: RecordVerification) {
   await db.insert(recordTransitions).values({
     recordId, fromStatus: 'submitted', toStatus: 'approved',
     actorUserId: system.id, actorRole: system.role,
-    remark: `Checked automatically against ${source}: the details match the published record and the owner is named on it.`,
+    remark: v.reasons.length === 0
+      ? `Checked automatically against ${source}: the details match the published record and the owner is named on it.`
+      : `Approved automatically on submission. ${v.reasons.length} point${v.reasons.length === 1 ? '' : 's'} for the verifying office or IQAC to check against the evidence: ${v.reasons.join(' ')}`.slice(0, 1000),
   });
   await audit({
     actor: system, action: 'record.transition', entity: 'record', entityId: recordId,
     before: { status: 'submitted' }, after: { status: 'approved' },
     meta: { automatic: true, source: v.source, identifier: v.identifier },
   });
+}
+
+/**
+ * The submit rules of a module with a lookup, and whether the submission is approved at once.
+ *  - The owner's name must be in the author list (`lookup.ownerMustBeIn`).
+ *  - Evidence is compulsory when anything could not be confirmed (`lookup.evidenceField`).
+ *  - `autoApprove: 'always'` approves every submission; 'whenChecksPass' only a fully confirmed one.
+ *  - A record the verifying office returned goes back to that office when resubmitted, never
+ *    straight to Approved again — otherwise a return could simply be undone by resubmitting.
+ */
+function decideSubmission(
+  m: ModuleConfig, data: Record<string, unknown>, looked: Awaited<ReturnType<typeof applyLookup>>,
+  ownerName: string, mode: 'draft' | 'submit', previousStatus?: RecordStatus,
+): boolean {
+  if (mode !== 'submit' || !m.lookup) return false;
+  const errors: Record<string, string> = {};
+  const owner = ownerMissingFromAuthors(m, data, ownerName);
+  if (owner) errors[owner.field] = owner.message;
+  const evidence = evidenceMissing(m, data, looked.verification);
+  if (evidence) errors[evidence.field] = evidence.message;
+  if (Object.keys(errors).length > 0) throw new ServiceError('VALIDATION', 'Some fields need attention.', errors);
+
+  if (previousStatus === 'returned') return false;
+  return m.lookup.autoApprove === 'always' || looked.eligible;
 }
 
 export async function createRecord(
@@ -270,7 +304,7 @@ export async function createRecord(
 
   await assertNoDuplicate(m, cycle.id, naturalKey, null);
 
-  const auto = mode === 'submit' && looked.eligible;
+  const auto = decideSubmission(m, v.data, looked, actor.name, mode);
   const system = auto ? await systemActor() : null;
   const verification = looked.verification ? { ...looked.verification, autoApproved: auto } : null;
   const now = new Date();
@@ -358,7 +392,7 @@ export async function updateRecord(
   const { periodYear, periodLabel } = resolvePeriod(m, v.data, cycle);
   await assertNoDuplicate(m, cycle.id, prepared.naturalKey, id);
 
-  const auto = mode === 'submit' && looked.eligible;
+  const auto = decideSubmission(m, v.data, looked, owner?.name ?? actor.name, mode, existing.status);
   const system = auto ? await systemActor() : null;
   const now = new Date();
   const nextStatus: RecordStatus = auto
@@ -453,6 +487,12 @@ export async function transitionRecord(
     throw new ServiceError('VALIDATION', 'Say why the record is being returned.', {
       remark: 'A remark is required when returning a record.',
     });
+  }
+
+  // A module with a lookup has submit rules of its own (name in the author list, evidence,
+  // automatic approval): submit through the save path so there is one set of rules, not two.
+  if (action === 'submit' && m.lookup) {
+    return updateRecord(actor, moduleKey, id, existing.data as Record<string, unknown>, 'submit');
   }
 
   // Submitting requires a complete record, not just a valid draft.

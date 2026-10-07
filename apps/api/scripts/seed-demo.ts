@@ -17,6 +17,7 @@ import { db, pool } from '../src/server/db';
 import { users, departments, cycles } from '../src/server/db/schema';
 import { hashPassword } from '../src/server/auth/password';
 import { createRecord, transitionRecord } from '../src/server/records/service';
+import { uploadEvidence } from '../src/server/evidence/service';
 import { getAllLists } from '../src/server/records/masterLists';
 import { MODULES } from '@darp/shared/modules';
 import type { FieldConfig, ModuleConfig, Role } from '@darp/shared/modules/types';
@@ -24,6 +25,9 @@ import type { SessionUser } from '../src/server/auth/session';
 
 // Demo data is generated offline: never call a publisher register while seeding.
 process.env.LOOKUP_OFFLINE = '1';
+
+/** The smallest file the evidence check accepts as a PDF. */
+const DEMO_PDF = Buffer.from('%PDF-1.4\n% DARP demo evidence\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n');
 
 const DEMO_DOMAIN = '@demo.bitmesra.ac.in';
 const DEMO_PASSWORD = 'DarpDemo!2026Pass';
@@ -451,6 +455,18 @@ async function main() {
         uniqueKeys: new Set(m.naturalKey ?? []),
       };
       const values = buildRecord(m, ctx);
+      // Modules with a lookup: the owner must be in the author list, and (offline, so nothing is
+      // confirmed) evidence is compulsory — attach a one-page demo PDF.
+      const authorsKey = m.lookup?.ownerMustBeIn;
+      if (authorsKey) values[authorsKey] = `${actor.name}, ${String(values[authorsKey] ?? '')}`.replace(/,\s*$/, '');
+      const evidenceKey = m.lookup?.evidenceField;
+      if (evidenceKey) {
+        const file = await uploadEvidence(actor, {
+          bytes: DEMO_PDF, fileName: 'demo-evidence.pdf', declaredMime: 'application/pdf',
+          fieldKey: evidenceKey, moduleKey: m.key,
+        });
+        values[evidenceKey] = file.id;
+      }
       // Every fourth record stays a draft, so the dashboards show work in progress.
       const mode = index % 4 === 0 ? 'draft' : 'submit';
       try {

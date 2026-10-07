@@ -2,7 +2,7 @@ import type { LookupFillPayload } from '@darp/shared/contracts';
 import type { SessionUser } from '@/server/auth/session';
 import { canCreateIn } from '@/server/auth/permissions';
 import { mustGetModule, activeCycle, ServiceError } from '@/server/records/service';
-import { applyLookup } from './apply';
+import { applyLookup, ownerMissingFromAuthors } from './apply';
 import { resolve } from './resolve';
 import { isLookupUnavailable } from './http';
 import { normaliseDoiInput } from './doi';
@@ -59,13 +59,21 @@ export async function lookupForForm(
     if (typeof v === 'string' && v !== '') fill[f.key] = v;
   }
   const locked = result.authoritative
-    ? m.fields.filter((f) => f.autofill?.locked && (fill[f.key] || f.autofill.lockWhenEmpty)).map((f) => f.key)
+    ? m.fields.filter((f) => f.autofill?.alwaysLocked || (f.autofill?.locked && fill[f.key])).map((f) => f.key)
     : [];
-  const notes = applied.eligible
-    ? ['Everything matches the published record. When you press "Save and submit" the record is approved straight away — no manual check is needed.']
-    : [
-      ...(applied.verification?.reasons ?? []),
-      'You can still submit: the verifying office will check it before it counts as approved.',
-    ];
+  const reasons = applied.verification?.reasons ?? [];
+  const nameMissing = ownerMissingFromAuthors(m, applied.data, actor.name);
+  const notes: string[] = [];
+  if (nameMissing) notes.push(nameMissing.message);
+  if (applied.eligible) {
+    notes.push('Everything matches the published record. When you press "Save and submit" the record is approved straight away — no evidence or manual check is needed.');
+  } else if (m.lookup.autoApprove === 'always') {
+    notes.push(...reasons.filter((r) => !r.includes('added by hand')));
+    notes.push(m.lookup.evidenceField
+      ? 'Some details could not be confirmed, so attach evidence before submitting. The record is still approved when you submit; DRIE and IQAC may check it against the evidence and return it if something is wrong.'
+      : 'The record is approved when you submit; DRIE and IQAC may check it and return it if something is wrong.');
+  } else {
+    notes.push(...reasons, 'You can still submit: the verifying office will check it before it counts as approved.');
+  }
   return { found: true, source: result.source, authoritative: result.authoritative, fill, locked, notes };
 }

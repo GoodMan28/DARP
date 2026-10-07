@@ -13,30 +13,30 @@ export function formatIssn(v: string): string {
 /** Quartile and indexing for a journal (decisions D5 and D6). */
 export async function journalFacts(
   issns: string[], year: number | null,
-): Promise<{ quartile: string; indexing: string; flags: string[] }> {
+): Promise<{ quartile: string; quartileSource: string; indexing: string; flags: string[] }> {
   const keys = [...new Set(issns.map(normIssn).filter((x): x is string => x !== null))];
-  if (keys.length === 0) return { quartile: '', indexing: '', flags: ['no-issn'] };
+  if (keys.length === 0) return { quartile: '', quartileSource: '', indexing: '', flags: ['no-issn'] };
 
   const [{ n: sjrRows } = { n: 0 }] = await db.select({ n: count() }).from(journalMetrics);
   const [{ n: listRows } = { n: 0 }] = await db.select({ n: count() }).from(journalIndexListings);
   // Nothing loaded yet: say so, rather than claim the journal is unindexed.
-  if (sjrRows === 0 && listRows === 0) return { quartile: '', indexing: '', flags: ['no-journal-lists'] };
+  if (sjrRows === 0 && listRows === 0) return { quartile: '', quartileSource: '', indexing: '', flags: ['no-journal-lists'] };
 
   const flags: string[] = [];
   const metrics = await db.select().from(journalMetrics).where(inArray(journalMetrics.issn, keys));
 
+  // An empty quartile means "not found": the form then lets the owner choose it (with evidence).
   let quartile = '';
+  let quartileSource = '';
   if (sjrRows === 0) {
     flags.push('no-sjr-data');
-  } else if (metrics.length === 0) {
-    quartile = 'Not ranked in SJR';
-  } else {
+  } else if (metrics.length > 0) {
     const target = year ?? Math.max(...metrics.map((m) => m.year));
     const notAfter = metrics.filter((m) => m.year <= target).sort((a, b) => b.year - a.year)[0];
     const best = notAfter ?? [...metrics].sort((a, b) => a.year - b.year)[0]!;
+    quartile = best.quartile ?? 'Not ranked';
     // A quartile computed from Elsevier's list says so; SCImago's own file needs no note.
-    const note = best.source === 'scopus-list' ? ' · Scopus list' : '';
-    quartile = best.quartile ? `${best.quartile} (SJR ${best.year}${note})` : `Not ranked in SJR ${best.year}`;
+    quartileSource = `SJR ${best.year}${best.source === 'scopus-list' ? ' · Scopus list' : ' · SCImago'}`;
   }
 
   const listings = await db.select({ listName: journalIndexListings.listName })
@@ -47,7 +47,7 @@ export async function journalFacts(
   const indexing = order.find((name) => inLists.has(name)) ?? '';
   if (!indexing) flags.push('not-indexed');
 
-  return { quartile, indexing, flags };
+  return { quartile, quartileSource, indexing, flags };
 }
 
 /* ───────────── loading the lists (admin screen and command-line import) ───────────── */

@@ -110,10 +110,12 @@ export async function resolveDoi(doi: string): Promise<LookupResult> {
   if (r.rawType === 'journal-article') {
     const facts = await journalFacts(r.identifiers.issn, r.values.year ? Number(r.values.year) : null);
     r.values.quartile = facts.quartile;
+    r.values.quartileSource = facts.quartileSource;
     r.values.indexing = facts.indexing;
     r.flags.push(...facts.flags);
   } else {
-    r.values.quartile = 'Not applicable (not a journal)';
+    // Not a journal article: no journal quartile to look up; the owner may choose one by hand.
+    r.values.quartile = '';
   }
   return r;
 }

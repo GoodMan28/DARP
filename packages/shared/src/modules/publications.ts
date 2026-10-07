@@ -16,8 +16,12 @@ export const publications: ModuleConfig = {
   scope: 'self',
   naturalKey: ['doi'],
   lookup: {
-    kind: 'doi', idFields: ['doi'], idLabel: 'DOI', autoApprove: true,
+    kind: 'doi', idFields: ['doi'], idLabel: 'DOI',
+    // Thousands of papers a year: approved on submission, spot-checked afterwards by DRIE/IQAC.
+    autoApprove: 'always',
     acceptTypes: ['journal-article'],
+    ownerMustBeIn: 'authors',
+    evidenceField: 'evidence',
   },
   fields: [
     { key: 'doi', label: 'Doi', type: 'doi', required: true, section: 'Paper',
@@ -36,7 +40,7 @@ export const publications: ModuleConfig = {
       maxLength: 2000, colSpan: 2, section: 'Paper',
       placeholder: 'A. K. Verma, S. Mahato, P. Ranjan',
       autofill: { from: 'authors', locked: false },
-      help: 'Filled in from the publisher\'s record. Add anyone missing (for example a name hidden behind "et al.") — but a record whose owner had to be added by hand is checked by DRIE.',
+      help: 'Filled in from the publisher\'s record. Your own name must be in this list before you can submit — add it if it is hidden (for example behind "et al."), and attach evidence.',
       exportAs: { faculty: 'Name of the author/s', drie: 'Name of the author/s' } },
 
     { key: 'journal', label: 'Name of journal', type: 'text', required: true, maxLength: 300,
@@ -45,7 +49,7 @@ export const publications: ModuleConfig = {
 
     { key: 'indexing', label: 'Indexing', type: 'select', required: true, listKey: 'indexingTypes',
       section: 'Journal', autofill: { from: 'indexing', locked: true },
-      help: 'Taken from the Scopus and Web of Science journal lists IQAC loads each year.',
+      help: 'Filled in from the Scopus list (and any Web of Science list IQAC loads). If it could not be found, choose it yourself and attach evidence.',
       exportAs: { faculty: 'Indexing', drie: 'Indexing' } },
 
     { key: 'year', label: 'Year of publication', type: 'year', required: true, min: 1960, max: 2100,
@@ -65,10 +69,13 @@ export const publications: ModuleConfig = {
       autofill: { from: 'issue', locked: true } },
     { key: 'pages', label: 'Pages / article number', type: 'text', maxLength: 40, section: 'Journal',
       autofill: { from: 'pages', locked: true } },
-    { key: 'quartile', label: 'Journal quartile (SJR)', type: 'text', maxLength: 60, section: 'Journal',
-      autofill: { from: 'quartile', locked: true, lockWhenEmpty: true },
-      placeholder: 'Filled in from the SJR list IQAC loads — never typed by hand',
-      help: 'Source: SCImago Journal Rank (scimagojr.com), the edition for the year of publication.' },
+    { key: 'quartile', label: 'Journal quartile (SJR)', type: 'select', section: 'Journal',
+      options: ['Q1', 'Q2', 'Q3', 'Q4', 'Not ranked'],
+      autofill: { from: 'quartile', locked: true },
+      help: 'Filled in from SCImago Journal Rank data. If it could not be found, choose it yourself and attach evidence.' },
+    { key: 'quartileSource', label: 'Quartile source', type: 'text', maxLength: 60, section: 'Journal',
+      autofill: { from: 'quartileSource', locked: true, alwaysLocked: true },
+      help: 'Where the quartile came from, e.g. "SJR 2023 · Scopus list". Empty when you chose it yourself.' },
 
     { key: 'bibliographic',
       label: 'Bibliographic information of publication (Chicago reference style)',
@@ -79,6 +86,10 @@ export const publications: ModuleConfig = {
         faculty: 'Bibliographic information of publication (Chicago reference style)',
         drie: 'Bibliographic information of publication (Chicago reference style)',
       } },
+
+    { key: 'evidence', label: 'Evidence (first page of the paper, or the acceptance letter)', type: 'file',
+      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence',
+      help: 'Required when anything could not be confirmed automatically — for example a name you added, or an indexing or quartile you chose yourself. DRIE and IQAC check it.' },
   ],
   listColumns: ['title', 'journal', 'quartile', 'year', 'doi'],
   defaultSort: { key: 'year', dir: 'desc' },

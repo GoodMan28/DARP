@@ -25,7 +25,7 @@ export type PiiLevel = 'none' | 'masked' | 'encrypted';
 /** Facts an external register can supply. Field configs name the one they take. */
 export type MetaKey =
   | 'doi' | 'title' | 'authors' | 'containerTitle' | 'issn' | 'year' | 'volume' | 'issue' | 'pages'
-  | 'publisher' | 'workType' | 'quartile' | 'indexing' | 'citation'
+  | 'publisher' | 'workType' | 'quartile' | 'quartileSource' | 'indexing' | 'citation'
   | 'bookType' | 'bookTitle' | 'chapterTitle' | 'isbn';
 
 /** Which register a module's records are fetched from. */
@@ -37,10 +37,21 @@ export interface LookupConfig {
   idFields: string[];
   /** Label of the identifier box on the form, e.g. 'DOI'. */
   idLabel: string;
-  /** Approve without a human when every automatic check passes (server/lookup/apply.ts). */
-  autoApprove: boolean;
-  /** Crossref work types that may be approved automatically. Anything else goes to review. */
+  /**
+   * When a submitted record is approved without a human (server/lookup/apply.ts):
+   *  - 'always'          every submission is approved at once. Whatever could not be confirmed
+   *                      becomes a "point to check" that the verifying office and IQAC see, and
+   *                      they may return the approved record. A returned record, resubmitted,
+   *                      goes to the verifying office instead (no second automatic approval).
+   *  - 'whenChecksPass'  approved only when every automatic check passes; otherwise reviewed.
+   */
+  autoApprove: 'always' | 'whenChecksPass';
+  /** Crossref work types that count as confirmed. Anything else becomes a point to check. */
   acceptTypes: string[];
+  /** The owner's name must appear in this field (the author list) before the record can be submitted. */
+  ownerMustBeIn?: string;
+  /** This file field becomes required on submit whenever any detail could not be confirmed. */
+  evidenceField?: string;
 }
 
 export interface FieldConfig {
@@ -75,10 +86,10 @@ export interface FieldConfig {
     from: MetaKey;
     locked: boolean;
     /**
-     * Stay locked even when the fetched value is empty. For derived figures such as the SJR
-     * quartile, which have no meaning when typed by hand.
+     * Never typed by hand, even when nothing was fetched — for a field that states where a value
+     * came from (e.g. "SJR 2023 · Scopus list"), where a typed value would be a false claim.
      */
-    lockWhenEmpty?: boolean;
+    alwaysLocked?: boolean;
   };
   /** Server-side normalisation that needs other fields of the record. */
   normalise?: 'patentNumber';

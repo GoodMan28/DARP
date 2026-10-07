@@ -186,7 +186,7 @@ export interface FormFieldDef {
   maxSizeMB: number | null;
   protected: boolean;
   /** Filled from an external register; `locked` fields cannot be edited after a lookup. */
-  autofill: { locked: boolean } | null;
+  autofill: { locked: boolean; alwaysLocked: boolean } | null;
 }
 
 /** GET /api/modules/:moduleKey/schema — the module's shape plus the caller's standing in it. */
@@ -220,6 +220,8 @@ export interface RecordListRow {
   returnedRemark: string | null;
   updatedAt: string;
   data: Record<string, unknown>;
+  /** Approved automatically, but with details that could not be confirmed: worth a look. */
+  needsCheck: boolean;
 }
 
 /** GET /api/modules/:moduleKey/records */

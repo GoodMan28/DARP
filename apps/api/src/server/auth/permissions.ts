@@ -38,6 +38,11 @@ export function canVerify(actor: SessionUser, m: ModuleConfig): boolean {
   return actor.role === 'admin' || m.verifierRoles.includes(actor.role);
 }
 
+/** Modules approved on submission are checked afterwards, so an approved record can be returned. */
+export function returnsAfterApproval(m: ModuleConfig): boolean {
+  return m.lookup?.autoApprove === 'always';
+}
+
 export function canApprove(actor: SessionUser): boolean {
   return actor.role === 'admin';
 }
@@ -99,7 +104,10 @@ export function canTransition(
       }
       return { allowed: true, next: 'verified' };
     case 'return':
-      if (!(r.status === 'submitted' || r.status === 'verified')) {
+      // Where submissions are approved automatically, checking happens afterwards: the verifying
+      // office and IQAC may send an approved record back to its owner.
+      if (!(r.status === 'submitted' || r.status === 'verified'
+        || (r.status === 'approved' && returnsAfterApproval(m)))) {
         return { allowed: false, next: null, reason: 'Only a submitted or verified record can be returned.' };
       }
       if (!canVerify(actor, m)) {

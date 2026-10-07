@@ -15,7 +15,7 @@ export const books: ModuleConfig = {
   scope: 'self',
   naturalKey: ['isbn', 'bookTitle', 'chapterTitle'],
   lookup: {
-    kind: 'book', idFields: ['doi', 'isbn'], idLabel: 'DOI or ISBN', autoApprove: true,
+    kind: 'book', idFields: ['doi', 'isbn'], idLabel: 'DOI or ISBN', autoApprove: 'whenChecksPass',
     acceptTypes: ['book-chapter', 'book-part', 'book-section', 'reference-entry', 'book', 'edited-book', 'monograph', 'reference-book'],
   },
   fields: [

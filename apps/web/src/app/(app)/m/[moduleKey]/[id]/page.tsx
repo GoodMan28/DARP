@@ -68,7 +68,10 @@ export default async function RecordPage({ params }: PageProps) {
    */
   const rail: RailAction[] = [];
   if (record.status === 'submitted' && mayVerify) rail.push('verify');
-  if ((record.status === 'submitted' || record.status === 'verified') && mayVerify) rail.push('return');
+  // Approved-on-submission modules are checked afterwards: the office and IQAC may return an approved record.
+  const returnable = record.status === 'submitted' || record.status === 'verified'
+    || (record.status === 'approved' && m.lookup?.autoApprove === 'always');
+  if (returnable && mayVerify) rail.push('return');
   if (record.status === 'verified' && isAdmin) rail.push('approve');
   if (record.status === 'approved' && isAdmin) rail.push('unlock');
 
@@ -130,11 +133,19 @@ export default async function RecordPage({ params }: PageProps) {
 
         <aside className="space-y-4">
           {record.verification ? (
-            record.verification.autoApproved ? (
+            record.verification.autoApproved && record.verification.reasons.length === 0 ? (
               <Notice tone="success" title="Checked automatically">
                 Matched the published record
                 {record.verification.source ? ` at ${LOOKUP_SOURCE_LABEL[record.verification.source]}` : ''} on{' '}
                 {formatDateTime(record.verification.checkedAt)}. No manual verification was needed.
+              </Notice>
+            ) : record.verification.autoApproved ? (
+              <Notice tone="warning" title="Approved automatically — points to check">
+                Approved on submission. These details could not be confirmed automatically; check them against
+                the evidence, and use “Return to owner” if something is wrong.
+                <ul className="mt-1 list-disc pl-5">
+                  {record.verification.reasons.map((r) => <li key={r}>{r}</li>)}
+                </ul>
               </Notice>
             ) : record.verification.reasons.length > 0 ? (
               <Notice tone="info" title="Why the verifying office checks this record">

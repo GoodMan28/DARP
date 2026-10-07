@@ -211,9 +211,9 @@ export function RecordForm({
                     help={f.help}
                     error={errors[f.key]}
                     htmlFor={`i-${f.key}`}
-                    hint={lockedKeys.has(f.key) ? 'Fetched · locked' : f.protected ? 'Protected' : undefined}
+                    hint={f.autofill?.alwaysLocked ? 'Filled automatically' : lockedKeys.has(f.key) ? 'Fetched · locked' : f.protected ? 'Protected' : undefined}
                   >
-                    {renderInput(f, values[f.key], (v) => set(f.key, v), !!readOnly || lockedKeys.has(f.key), !!errors[f.key], { moduleKey, recordId })}
+                    {renderInput(f, values[f.key], (v) => set(f.key, v), !!readOnly || lockedKeys.has(f.key) || !!f.autofill?.alwaysLocked, !!errors[f.key], { moduleKey, recordId })}
                   </Field>
                 </div>
               ))}

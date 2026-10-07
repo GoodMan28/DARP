@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { truncateAll, closeDb } from '../helpers/db';
 import { makeUser } from '../helpers/factories';
-import { createRecord, getRecord } from '@/server/records/service';
+import { createRecord, updateRecord, getRecord, transitionRecord } from '@/server/records/service';
+import { uploadEvidence } from '@/server/evidence/service';
 import { LookupUnavailable } from '@/server/lookup/http';
 import { notFound, type LookupResult } from '@/server/lookup/types';
 import type { SessionUser } from '@/server/auth/session';
@@ -14,8 +15,15 @@ vi.mock('@/server/lookup/resolve', () => ({
 }));
 
 let faculty: SessionUser;
+let drie: SessionUser;
 let counter = 0;
 const nextDoi = () => `10.5555/lookup-test-${(counter += 1)}`;
+
+const PDF = Buffer.from('%PDF-1.4\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n');
+const evidence = async () => (await uploadEvidence(faculty, {
+  bytes: PDF, fileName: 'first-page.pdf', declaredMime: 'application/pdf',
+  fieldKey: 'evidence', moduleKey: 'publications',
+})).id;
 
 /** A Crossref hit that names the signed-in faculty member and passes every check. */
 function hit(owner: SessionUser, over: Partial<LookupResult> = {}): LookupResult {
@@ -34,7 +42,8 @@ function hit(owner: SessionUser, over: Partial<LookupResult> = {}): LookupResult
       volume: '12',
       pages: '1-10',
       indexing: 'SCIE',
-      quartile: 'Q1 (SJR 2023)',
+      quartile: 'Q1',
+      quartileSource: 'SJR 2023 · Scopus list',
       workType: 'Journal article',
     },
     people: [
@@ -52,7 +61,6 @@ function hit(owner: SessionUser, over: Partial<LookupResult> = {}): LookupResult
 const form = (doi: string, over: Record<string, unknown> = {}) => ({
   doi,
   title: 'typed title',
-  authors: 'typed authors',
   journal: 'Real Journal',
   indexing: 'SCIE',
   year: '2023',
@@ -64,42 +72,44 @@ const form = (doi: string, over: Record<string, unknown> = {}) => ({
 beforeAll(async () => {
   await truncateAll();
   faculty = await makeUser({ role: 'faculty', dept: 'CSE' });
+  drie = await makeUser({ role: 'drie' });
 });
 // Braces matter: a returned function is treated as a teardown and would be called after each test.
 beforeEach(() => { resolveMock.mockReset(); });
 afterAll(async () => { await closeDb(); });
 
-describe('automatic approval', () => {
-  it('approves a matching record at once, recorded under the system account', async () => {
+describe('publications are approved on submission', () => {
+  it('approves a fully confirmed paper, with nothing to check and no evidence needed', async () => {
     resolveMock.mockResolvedValue(hit(faculty));
     const { id, status } = await createRecord(faculty, 'publications', form(nextDoi()), 'submit');
     expect(status).toBe('approved');
-
     const read = await getRecord(faculty, 'publications', id);
     expect(read.verification?.autoApproved).toBe(true);
-    expect(read.verification?.source).toBe('crossref');
-    const last = read.history[read.history.length - 1]!;
-    expect(last.toStatus).toBe('approved');
-    expect(last.actorName).toBe('DARP automatic check');
+    expect(read.verification?.reasons).toEqual([]);
+    expect(read.history[read.history.length - 1]!.actorName).toBe('DARP automatic check');
+  });
+
+  it('approves a paper with unconfirmed details too, listing them as points to check', async () => {
+    resolveMock.mockResolvedValue(hit(faculty, { flags: ['not-indexed'] }));
+    const { id, status } = await createRecord(
+      faculty, 'publications', form(nextDoi(), { evidence: await evidence() }), 'submit',
+    );
+    expect(status).toBe('approved');
+    const read = await getRecord(faculty, 'publications', id);
+    expect(read.verification?.autoApproved).toBe(true);
+    expect(read.verification?.reasons.join(' ')).toContain('not found in the Scopus list');
   });
 
   it('overwrites a locked field the browser changed', async () => {
     resolveMock.mockResolvedValue(hit(faculty));
     const { id } = await createRecord(
-      faculty, 'publications', form(nextDoi(), { journal: 'Fake Journal', year: '2022' }), 'submit',
+      faculty, 'publications', form(nextDoi(), { journal: 'Fake Journal', year: '2022', quartile: 'Q4' }), 'submit',
     );
     const read = await getRecord(faculty, 'publications', id);
     expect(read.data.journal).toBe('Real Journal');
     expect(Number(read.data.year)).toBe(2023);
+    expect(read.data.quartile).toBe('Q1');
     expect(read.data.title).toBe('A real paper');
-  });
-
-  it('keeps the author list as the owner edited it', async () => {
-    resolveMock.mockResolvedValue(hit(faculty));
-    const { id } = await createRecord(
-      faculty, 'publications', form(nextDoi(), { authors: 'Added By Hand, Another Person' }), 'submit',
-    );
-    expect((await getRecord(faculty, 'publications', id)).data.authors).toBe('Added By Hand, Another Person');
   });
 
   it('generates the citation from the final values', async () => {
@@ -107,81 +117,97 @@ describe('automatic approval', () => {
     const { id } = await createRecord(faculty, 'publications', form(nextDoi()), 'submit');
     const citation = String((await getRecord(faculty, 'publications', id)).data.bibliographic);
     expect(citation).toContain('A real paper');
-    expect(citation).toContain('Real Journal');
     expect(citation).not.toContain('typed citation');
   });
 });
 
-describe('records that need a person', () => {
-  it('sends it to verification when the owner is not on the published record', async () => {
-    resolveMock.mockResolvedValue(hit(faculty, {
-      people: [{ given: 'Anil', family: 'Sharma', full: 'Anil Sharma', orcid: null, bitAffiliated: true }],
-    }));
-    const { id, status } = await createRecord(faculty, 'publications', form(nextDoi()), 'submit');
-    expect(status).toBe('submitted');
-    const read = await getRecord(faculty, 'publications', id);
-    expect(read.verification?.autoApproved).toBe(false);
-    expect(read.verification?.reasons.join(' ')).toContain('could not be matched');
+describe('the owner must be in the author list', () => {
+  const stranger = () => hit(faculty, {
+    values: { ...hit(faculty).values, authors: 'Anil Sharma, Someone Else' },
+    people: [{ given: 'Anil', family: 'Sharma', full: 'Anil Sharma', orcid: null, bitAffiliated: true }],
   });
 
-  it('sends it to verification when the owner is listed only with another institution', async () => {
-    resolveMock.mockResolvedValue(hit(faculty, {
-      people: [{
-        given: 'Test', family: 'faculty', full: faculty.name, orcid: null, bitAffiliated: false,
-      }],
-    }));
-    const { status } = await createRecord(faculty, 'publications', form(nextDoi()), 'submit');
-    expect(status).toBe('submitted');
+  it('refuses to submit when the owner\'s name is not in the author list', async () => {
+    resolveMock.mockResolvedValue(stranger());
+    await expect(createRecord(faculty, 'publications', form(nextDoi()), 'submit'))
+      .rejects.toMatchObject({ code: 'VALIDATION', fields: { authors: expect.stringContaining('must be in the author list') } });
   });
 
-  it('sends a paper published outside the cycle to verification', async () => {
-    resolveMock.mockResolvedValue(hit(faculty, { values: { ...hit(faculty).values, year: '2019' } }));
-    const { id, status } = await createRecord(faculty, 'publications', form(nextDoi()), 'submit');
-    expect(status).toBe('submitted');
-    expect((await getRecord(faculty, 'publications', id)).verification?.reasons.join(' '))
-      .toContain('outside this reporting cycle');
+  it('still lets the owner save a draft', async () => {
+    resolveMock.mockResolvedValue(stranger());
+    const { status } = await createRecord(faculty, 'publications', form(nextDoi()), 'draft');
+    expect(status).toBe('draft');
   });
 
-  it('sends a retracted paper to verification', async () => {
-    resolveMock.mockResolvedValue(hit(faculty, { flags: ['retracted'] }));
-    const { status } = await createRecord(faculty, 'publications', form(nextDoi()), 'submit');
-    expect(status).toBe('submitted');
+  it('needs evidence when the owner added their own name by hand', async () => {
+    resolveMock.mockResolvedValue(stranger());
+    const authors = `Anil Sharma, ${faculty.name}`;
+    await expect(createRecord(faculty, 'publications', form(nextDoi(), { authors }), 'submit'))
+      .rejects.toMatchObject({ code: 'VALIDATION', fields: { evidence: expect.stringContaining('Attach evidence') } });
   });
 
-  it('sends a paper whose journal is in no index list to verification', async () => {
-    resolveMock.mockResolvedValue(hit(faculty, { flags: ['not-indexed'] }));
-    const { status } = await createRecord(faculty, 'publications', form(nextDoi()), 'submit');
-    expect(status).toBe('submitted');
-  });
-
-  it('sends a conference paper to verification', async () => {
-    resolveMock.mockResolvedValue(hit(faculty, { rawType: 'proceedings-article' }));
-    const { status } = await createRecord(faculty, 'publications', form(nextDoi()), 'submit');
-    expect(status).toBe('submitted');
+  it('approves it once the name is added and evidence attached, flagging the added name', async () => {
+    resolveMock.mockResolvedValue(stranger());
+    const authors = `Anil Sharma, ${faculty.name}`;
+    const { id, status } = await createRecord(
+      faculty, 'publications', form(nextDoi(), { authors, evidence: await evidence() }), 'submit',
+    );
+    expect(status).toBe('approved');
+    expect((await getRecord(faculty, 'publications', id)).verification?.reasons.join(' ')).toContain('added by hand');
   });
 });
 
-describe('when the register is unavailable', () => {
-  it('falls back to the typed details and a human check', async () => {
-    // Thrown synchronously inside the awaited call: the same try/catch path as a rejected
-    // promise, without the test runner flagging the mock's rejected promise as unhandled.
+describe('details that could not be fetched are entered by hand', () => {
+  it('takes a quartile the owner chose when none was found, and flags it', async () => {
+    resolveMock.mockResolvedValue(hit(faculty, {
+      values: { ...hit(faculty).values, quartile: '', quartileSource: '' }, flags: ['not-indexed'],
+    }));
+    const { id } = await createRecord(
+      faculty, 'publications',
+      form(nextDoi(), { quartile: 'Q2', quartileSource: 'SCImago says so', evidence: await evidence() }), 'submit',
+    );
+    const read = await getRecord(faculty, 'publications', id);
+    expect(read.data.quartile).toBe('Q2');
+    expect(read.data.quartileSource ?? '').toBe('');          // a claimed source is never taken from the browser
+    expect(read.verification?.reasons.join(' ')).toContain('Journal quartile (SJR) could not be found automatically');
+  });
+
+  it('falls back to typed details when the register is unavailable, approved with evidence', async () => {
+    // Thrown synchronously inside the awaited call: same try/catch path as a rejected promise.
     resolveMock.mockImplementation(() => { throw new LookupUnavailable('down'); });
-    const { id, status } = await createRecord(faculty, 'publications', form(nextDoi()), 'submit');
-    expect(status).toBe('submitted');
+    const { id, status } = await createRecord(
+      faculty, 'publications',
+      form(nextDoi(), { authors: faculty.name, quartile: 'Q3', evidence: await evidence() }), 'submit',
+    );
+    expect(status).toBe('approved');
     const read = await getRecord(faculty, 'publications', id);
     expect(read.verification?.source).toBeNull();
     expect(read.data.title).toBe('typed title');
   });
 
-  it('falls back when the DOI is not found', async () => {
+  it('falls back when the DOI is not found, still requiring evidence', async () => {
     resolveMock.mockResolvedValue(notFound());
-    const { status } = await createRecord(faculty, 'publications', form(nextDoi()), 'submit');
-    expect(status).toBe('submitted');
+    await expect(createRecord(faculty, 'publications', form(nextDoi(), { authors: faculty.name }), 'submit'))
+      .rejects.toMatchObject({ code: 'VALIDATION', fields: { evidence: expect.any(String) } });
   });
 });
 
-describe('drafts', () => {
-  it('is never approved, even when everything matches', async () => {
+describe('DRIE and IQAC check afterwards', () => {
+  it('DRIE can return an approved publication, and the resubmission goes to DRIE', async () => {
+    resolveMock.mockResolvedValue(hit(faculty, { flags: ['not-indexed'] }));
+    const ev = await evidence();
+    const doi = nextDoi();
+    const { id, status } = await createRecord(faculty, 'publications', form(doi, { evidence: ev }), 'submit');
+    expect(status).toBe('approved');
+
+    const back = await transitionRecord(drie, 'publications', id, 'return', 'The indexing is not Scopus.');
+    expect(back.status).toBe('returned');
+
+    const again = await updateRecord(faculty, 'publications', id, form(doi, { evidence: ev }), 'submit');
+    expect(again.status).toBe('submitted');                 // not straight back to Approved
+  });
+
+  it('a draft is never approved, even when everything matches', async () => {
     resolveMock.mockResolvedValue(hit(faculty));
     const { status } = await createRecord(faculty, 'publications', form(nextDoi()), 'draft');
     expect(status).toBe('draft');

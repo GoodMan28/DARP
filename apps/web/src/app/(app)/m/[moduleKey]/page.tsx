@@ -281,7 +281,17 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
                     <Td className="whitespace-nowrap font-mono text-2xs tabular-nums text-ink-muted">
                       {row.periodLabel}
                     </Td>
-                    <Td><StatePill status={row.status} /></Td>
+                    <Td>
+                      <StatePill status={row.status} />
+                      {row.needsCheck ? (
+                        <span
+                          className="ml-1.5 inline-flex rounded-sm border border-warning-100 bg-warning-50 px-1.5 py-0.5 text-2xs font-semibold text-warning-700"
+                          title="Approved automatically; some details could not be confirmed. Open it to see what to check."
+                        >
+                          Check
+                        </span>
+                      ) : null}
+                    </Td>
                     {showOwner ? (
                       <Td className="whitespace-nowrap text-ink-muted">
                         {row.isMine ? 'You' : displayValue(row.ownerName)}
