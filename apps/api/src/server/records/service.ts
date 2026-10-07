@@ -507,8 +507,10 @@ export async function transitionRecord(
   await db.update(records).set({
     status: decision.next,
     submittedAt: decision.next === 'submitted' ? now : existing.submittedAt,
-    verifiedAt: decision.next === 'verified' ? now : existing.verifiedAt,
-    verifiedBy: decision.next === 'verified' ? actor.id : existing.verifiedBy,
+    // A verification that is final (Publications) moves straight to approved: it is still a
+    // verification, and the database requires a verified record before an approved one.
+    verifiedAt: decision.next === 'verified' || action === 'verify' ? now : existing.verifiedAt,
+    verifiedBy: decision.next === 'verified' || action === 'verify' ? actor.id : existing.verifiedBy,
     approvedAt: decision.next === 'approved' ? now : null,
     approvedBy: decision.next === 'approved' ? actor.id : null,
     returnedRemark: decision.next === 'returned' ? remark!.trim().slice(0, 1000) : null,

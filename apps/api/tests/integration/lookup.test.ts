@@ -205,6 +205,13 @@ describe('DRIE and IQAC check afterwards', () => {
 
     const again = await updateRecord(faculty, 'publications', id, form(doi, { evidence: ev }), 'submit');
     expect(again.status).toBe('submitted');                 // not straight back to Approved
+
+    // DRIE's check is final for publications: Verify goes straight to Approved, no IQAC step.
+    const verified = await transitionRecord(drie, 'publications', id, 'verify');
+    expect(verified.status).toBe('approved');
+    const read = await getRecord(faculty, 'publications', id);
+    const last = read.history[read.history.length - 1]!;
+    expect(last).toMatchObject({ fromStatus: 'submitted', toStatus: 'approved', actorRole: 'drie' });
   });
 
   it('a draft is never approved, even when everything matches', async () => {

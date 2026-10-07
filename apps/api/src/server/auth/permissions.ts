@@ -102,7 +102,10 @@ export function canTransition(
       if (!canVerify(actor, m)) {
         return { allowed: false, next: null, reason: 'Your role cannot verify this module.' };
       }
-      return { allowed: true, next: 'verified' };
+      // Where submissions are approved automatically (Publications), a record only reaches the
+      // office after being returned and resubmitted; the office's check is then final, so IQAC
+      // never has to approve publications. IQAC can still return an approved one.
+      return { allowed: true, next: returnsAfterApproval(m) ? 'approved' : 'verified' };
     case 'return':
       // Where submissions are approved automatically, checking happens afterwards: the verifying
       // office and IQAC may send an approved record back to its owner.

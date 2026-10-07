@@ -161,7 +161,7 @@ export default async function RecordPage({ params }: PageProps) {
             <div className="space-y-3 p-3">
               <StatePill status={record.status} />
               {rail.length > 0 ? (
-                <ActionRail moduleKey={m.key} recordId={record.id} actions={rail} />
+                <ActionRail moduleKey={m.key} recordId={record.id} actions={rail} verifyIsFinal={m.lookup?.autoApprove === 'always'} />
               ) : (
                 <p className="text-xs text-ink-muted">
                   No workflow action is available to you on this record right now.
