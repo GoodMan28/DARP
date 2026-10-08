@@ -94,8 +94,8 @@ export const books: ModuleConfig = {
       } },
 
     { key: 'evidence', label: 'Attach documents', type: 'file',
-      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence',
-      help: 'A link that opens directly to the book/chapter, or the first page as a PDF.',
+      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence', required: true,
+      help: 'Required for every entry: the first page of the book, chapter or paper as a PDF or image. DRIE checks it against the details above.',
       exportAs: {
         faculty: 'Attach documents (link that opens directly to book/book chapter or 1st page of book/book chapter in pdf)',
         drie: 'Attach documents (link that opens directly to book/book chapter or 1st page of book/book chapter in pdf)',

@@ -90,8 +90,9 @@ export interface FieldConfig {
   /** Column header text in each original workbook sheet, used by the exporter. */
   exportAs?: Partial<Record<WorkbookKey, string>>;
   /**
-   * Filled from the fetched record. `locked: true` means the owner cannot change it once a lookup
-   * succeeded: the server overwrites it with the fetched value on every save.
+   * Filled from the fetched record. `locked: true` shows it locked after a lookup; the owner may
+   * still change it (after a warning), and the server records every change against the publisher's
+   * value for the verifying office and IQAC to see.
    */
   autofill?: {
     from: MetaKey;
@@ -101,6 +102,11 @@ export interface FieldConfig {
      * came from (e.g. "SJR 2023 · Scopus list"), where a typed value would be a false claim.
      */
     alwaysLocked?: boolean;
+    /**
+     * For an `alwaysLocked` field that says where another field's value came from (quartileSource
+     * describes quartile): when the owner changes or types that field, this one says so instead.
+     */
+    describes?: string;
   };
   /** Server-side normalisation that needs other fields of the record. */
   normalise?: 'patentNumber';

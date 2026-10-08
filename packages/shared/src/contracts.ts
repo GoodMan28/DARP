@@ -185,8 +185,12 @@ export interface FormFieldDef {
   accept: string[] | null;
   maxSizeMB: number | null;
   protected: boolean;
-  /** Filled from an external register; `locked` fields cannot be edited after a lookup. */
-  autofill: { locked: boolean; alwaysLocked: boolean } | null;
+  /**
+   * Filled from an external register. `locked` fields are shown locked after a lookup, with a
+   * Change button; `alwaysLocked` (set by the system) and `generated` (the citation, rebuilt from
+   * the other fields) can never be changed.
+   */
+  autofill: { locked: boolean; alwaysLocked: boolean; generated: boolean } | null;
 }
 
 /** GET /api/modules/:moduleKey/schema — the module's shape plus the caller's standing in it. */
@@ -274,8 +278,20 @@ export interface RecordVerification {
   identifier: string | null;
   checkedAt: string;
   autoApproved: boolean;
-  /** Why it was NOT approved automatically. Empty when it was. */
+  /** What the verifying office and IQAC should check. Empty when every check passed. */
   reasons: string[];
+  /**
+   * Fields the owner changed from the publisher's record, or typed because nothing was found —
+   * worked out by the server by comparing the saved values with the record it fetched, so they
+   * cannot be hidden. Fields not listed came from the publisher unchanged.
+   */
+  fields?: Record<string, FieldProvenance>;
+}
+
+export interface FieldProvenance {
+  origin: 'changed' | 'typed';
+  /** The publisher's value; '' when nothing was found. */
+  fetched: string;
 }
 
 /** POST /api/lookup/:moduleKey */

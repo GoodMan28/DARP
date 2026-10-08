@@ -456,16 +456,18 @@ async function main() {
       };
       const values = buildRecord(m, ctx);
       // Modules with a lookup: the owner must be in the author list, and (offline, so nothing is
-      // confirmed) evidence is compulsory — attach a one-page demo PDF.
+      // confirmed) evidence is compulsory — attach a one-page demo PDF. So does any required file.
       const authorsKey = m.lookup?.ownerMustBeIn;
       if (authorsKey) values[authorsKey] = `${actor.name}, ${String(values[authorsKey] ?? '')}`.replace(/,\s*$/, '');
-      const evidenceKey = m.lookup?.evidenceField;
-      if (evidenceKey) {
+      const fileKeys = m.fields
+        .filter((f) => f.type === 'file' && (f.required || f.key === m.lookup?.evidenceField))
+        .map((f) => f.key);
+      for (const key of fileKeys) {
         const file = await uploadEvidence(actor, {
           bytes: DEMO_PDF, fileName: 'demo-evidence.pdf', declaredMime: 'application/pdf',
-          fieldKey: evidenceKey, moduleKey: m.key,
+          fieldKey: key, moduleKey: m.key,
         });
-        values[evidenceKey] = file.id;
+        values[key] = file.id;
       }
       // Every fourth record stays a draft, so the dashboards show work in progress.
       const mode = index % 4 === 0 ? 'draft' : 'submit';

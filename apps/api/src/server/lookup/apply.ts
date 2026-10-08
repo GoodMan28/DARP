@@ -1,6 +1,6 @@
 import type { ModuleConfig } from '@darp/shared/modules/types';
 import { getModule } from '@darp/shared/modules';
-import { LOOKUP_SOURCE_LABEL, type RecordVerification } from '@darp/shared/contracts';
+import { LOOKUP_SOURCE_LABEL, type RecordVerification, type FieldProvenance } from '@darp/shared/contracts';
 import {
   isInsideCycle, cycleYears, periodSourceField, yearOfPeriod, type CycleWindows,
 } from '@/server/records/periods';
@@ -40,7 +40,7 @@ export function reasonForFlag(flag: string, year: string): string | null {
 }
 
 export interface Applied {
-  /** The input with locked fields overwritten and the citation rebuilt. */
+  /** The input with system fields set, blanks filled from the publisher and the citation rebuilt. */
   data: Record<string, unknown>;
   /** null for modules without a lookup. `autoApproved` is always false here; the service sets it. */
   verification: RecordVerification | null;
@@ -48,33 +48,56 @@ export interface Applied {
   eligible: boolean;
   /** The work belongs in another module and cannot be submitted in this one. */
   misplaced: Misplaced | null;
+  /**
+   * The publisher's values by field key (what the register said, before any change). The cycle
+   * check reads the year from here, so changing the year cannot bring a paper into the cycle.
+   */
+  fetched: Record<string, string>;
 }
 
 const filled = (v: unknown) => v !== undefined && v !== null && v !== '';
+const text = (v: unknown) => (v === undefined || v === null ? '' : String(v));
+/** Equal for this purpose: the same text, ignoring case, spacing and punctuation spacing. */
+const same = (a: string, b: string) => a.toLowerCase().replace(/\s+/g, ' ').trim() === b.toLowerCase().replace(/\s+/g, ' ').trim();
+
+/** A long value (an author list) shortened for a sentence. */
+const clip = (s: string) => (s.length > 120 ? `${s.slice(0, 117)}…` : s);
 
 /** System-only fields (e.g. where the quartile came from) are never taken from the browser. */
 function clearSystemFields(m: ModuleConfig, data: Record<string, unknown>) {
   for (const f of m.fields) if (f.autofill?.alwaysLocked) data[f.key] = '';
 }
 
+/** Fields the owner may change or type: filled from the register, but not by the system or the citation builder. */
+const ownerFields = (m: ModuleConfig, except: string | null) => m.fields.filter((f) => (
+  f.autofill && !f.autofill.alwaysLocked && f.autofill.from !== 'citation' && f.key !== except
+));
+
 export async function applyLookup(
   m: ModuleConfig,
   input: Record<string, unknown>,
   ctx: { ownerName: string; cycle: CycleWindows },
 ): Promise<Applied> {
-  if (!m.lookup) return { data: input, verification: null, eligible: false, misplaced: null };
+  if (!m.lookup) return { data: input, verification: null, eligible: false, misplaced: null, fetched: {} };
 
   const data: Record<string, unknown> = { ...input };
   const checkedAt = new Date().toISOString();
-  const raw = m.lookup.idFields.map((k) => String(data[k] ?? '').trim()).find(Boolean) ?? '';
+  const idKey = m.lookup.idFields.find((k) => text(data[k]).trim() !== '') ?? null;
+  const raw = idKey ? text(data[idKey]).trim() : '';
 
   const manual = (reason: string): Applied => {
     clearSystemFields(m, data);
+    // Nothing was fetched: every detail the owner filled in was typed by hand.
+    const fields: Record<string, FieldProvenance> = {};
+    for (const f of ownerFields(m, idKey)) if (filled(data[f.key])) fields[f.key] = { origin: 'typed', fetched: '' };
     return {
       data,
       eligible: false,
       misplaced: null,
-      verification: { source: null, identifier: raw || null, checkedAt, autoApproved: false, reasons: [reason] },
+      fetched: {},
+      verification: {
+        source: null, identifier: raw || null, checkedAt, autoApproved: false, reasons: [reason], fields,
+      },
     };
   };
 
@@ -92,22 +115,43 @@ export async function applyLookup(
   if (!r.found) return manual(`This ${m.lookup.idLabel} was not found in the publisher registers, so every detail was typed by hand.`);
 
   const reasons: string[] = [];
+  const fields: Record<string, FieldProvenance> = {};
+  const fetchedByKey: Record<string, string> = {};
 
-  for (const f of m.fields) {
-    if (!f.autofill || f.autofill.from === 'citation') continue;
-    const fetched = r.values[f.autofill.from] ?? '';
-    if (f.autofill.alwaysLocked) {
-      data[f.key] = r.authoritative ? fetched : '';
-    } else if (f.autofill.locked && r.authoritative) {
-      if (fetched) {
-        data[f.key] = f.maxLength ? fetched.slice(0, f.maxLength) : fetched;
-      } else if (filled(data[f.key])) {
-        // Not in the published record or the journal lists: the owner entered it by hand.
-        reasons.push(`${f.label} could not be found automatically and was entered by hand.`);
-      }
-    } else if (fetched && !filled(data[f.key])) {
-      data[f.key] = f.maxLength ? fetched.slice(0, f.maxLength) : fetched;
+  // Compare what was saved with what the publisher registered. A blank is filled from the
+  // publisher; a different value is the owner's, kept and recorded with the publisher's value.
+  for (const f of ownerFields(m, idKey)) {
+    const fetched = (r.values[f.autofill!.from] ?? '').slice(0, f.maxLength ?? undefined);
+    const typed = text(data[f.key]);
+    if (fetched) fetchedByKey[f.key] = fetched;
+    if (!r.authoritative) {
+      // Suggestions (Open Library), not the publisher's record: they only fill blanks.
+      if (fetched && !typed) data[f.key] = fetched;
+      continue;
     }
+    if (fetched && (!typed || same(typed, fetched))) {
+      data[f.key] = fetched;
+    } else if (fetched) {
+      fields[f.key] = { origin: 'changed', fetched };
+      reasons.push(`${f.label} was changed by the faculty member: the publisher's record says "${clip(fetched)}", the record says "${clip(typed)}".`);
+    } else if (typed) {
+      fields[f.key] = { origin: 'typed', fetched: '' };
+      reasons.push(`${f.label} could not be found automatically and was entered by hand.`);
+    }
+  }
+
+  // System fields come from the register only. One that says where another field came from
+  // (the quartile's source) says instead that the owner chose or changed that field.
+  for (const f of m.fields) {
+    if (!f.autofill?.alwaysLocked) continue;
+    const fetched = r.authoritative ? (r.values[f.autofill.from] ?? '') : '';
+    const described = f.autofill.describes ? fields[f.autofill.describes] : undefined;
+    data[f.key] = !described
+      ? fetched
+      : described.origin === 'typed'
+        ? 'Chosen by the faculty member'
+        : `Changed by the faculty member; ${fetched || 'the lists'} gave ${described.fetched}`;
+    data[f.key] = text(data[f.key]).slice(0, f.maxLength ?? undefined);
   }
 
   const citation = m.fields.find((f) => f.autofill?.from === 'citation');
@@ -136,16 +180,19 @@ export async function applyLookup(
     reasons.push(`It was published in ${year}, outside this reporting cycle.`);
   }
 
+  const fetched = r.authoritative ? fetchedByKey : {};
   return {
     data,
-    eligible: reasons.length === 0 && !misplaced && outsideCycle(m, data, ctx.cycle) === null,
+    eligible: reasons.length === 0 && !misplaced && outsideCycle(m, data, ctx.cycle, fetched) === null,
     misplaced,
+    fetched,
     verification: {
       source: r.source,
       identifier: r.values.doi || raw,
       checkedAt,
       autoApproved: false,
       reasons: [...new Set(reasons)],
+      fields,
     },
   };
 }
@@ -218,20 +265,26 @@ export function workTypeNote(m: ModuleConfig, r: LookupResult): string | null {
  * from the final values, so it covers fetched and hand-typed years alike.
  */
 export function outsideCycle(
-  m: ModuleConfig, data: Record<string, unknown>, cycle: CycleWindows,
+  m: ModuleConfig, data: Record<string, unknown>, cycle: CycleWindows, fetched: Record<string, string> = {},
 ): { field: string; message: string } | null {
   if (!m.lookup?.refuseOutsideCycle) return null;
   const src = periodSourceField(m);
-  const raw = src ? data[src.key] : undefined;
-  if (!src || raw === undefined || raw === null || raw === '') return null;
+  if (!src) return null;
+  // The publisher's year decides, when there is one: changing the year cannot move a paper into the cycle.
+  const fromPublisher = fetched[src.key] ?? '';
+  const raw = fromPublisher || data[src.key];
+  if (raw === undefined || raw === null || raw === '') return null;
   const year = src.kind === 'year'
     ? Number(String(raw))
     : (Number.isNaN(new Date(String(raw)).getTime()) ? NaN : yearOfPeriod(new Date(String(raw)), m.periodType));
   if (!Number.isInteger(year) || isInsideCycle(m, year, cycle)) return null;
   const { from, to } = cycleYears(m, cycle);
+  const changed = fromPublisher && String(data[src.key] ?? '') !== fromPublisher;
   return {
     field: src.key,
-    message: `This was published in ${year}. This reporting cycle covers ${from}–${to}, so it cannot be submitted here.`,
+    message: changed
+      ? `The publisher's record dates this ${year}. This reporting cycle covers ${from}–${to}, so it cannot be submitted here — changing the year does not change that.`
+      : `This was published in ${year}. This reporting cycle covers ${from}–${to}, so it cannot be submitted here.`,
   };
 }
 

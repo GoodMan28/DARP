@@ -85,9 +85,9 @@ export const publications: ModuleConfig = {
       options: ['Q1', 'Q2', 'Q3', 'Q4', 'Not ranked'],
       autofill: { from: 'quartile', locked: true },
       help: 'Filled in from SCImago Journal Rank data. If it could not be found, choose it yourself and attach evidence.' },
-    { key: 'quartileSource', label: 'Quartile source', type: 'text', maxLength: 60, section: 'Journal',
-      autofill: { from: 'quartileSource', locked: true, alwaysLocked: true },
-      help: 'Where the quartile came from, e.g. "SJR 2023 · Scopus list". Empty when you chose it yourself.' },
+    { key: 'quartileSource', label: 'Quartile source', type: 'text', maxLength: 90, section: 'Journal',
+      autofill: { from: 'quartileSource', locked: true, alwaysLocked: true, describes: 'quartile' },
+      help: 'Where the quartile came from, e.g. "SJR 2025 · SCImago". Says so when you chose or changed it yourself.' },
 
     { key: 'bibliographic',
       label: 'Bibliographic information of publication (Chicago reference style)',
@@ -101,7 +101,8 @@ export const publications: ModuleConfig = {
 
     { key: 'evidence', label: 'Evidence (first page of the paper, or the acceptance letter)', type: 'file',
       accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence',
-      help: 'Required when anything could not be confirmed automatically — for example a name you added, or an indexing or quartile you chose yourself. DRIE and IQAC check it.' },
+      required: true,
+      help: 'Required for every paper. DRIE and IQAC check it against the details above — especially anything you changed or typed yourself.' },
   ],
   listColumns: ['title', 'journal', 'quartile', 'year', 'doi'],
   defaultSort: { key: 'year', dir: 'desc' },

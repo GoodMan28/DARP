@@ -76,6 +76,14 @@ export default async function RecordPage({ params }: PageProps) {
   if (record.status === 'approved' && isAdmin) rail.push('unlock');
 
   const { fields } = schema.data;
+  // What the owner changed from the publisher's record or typed by hand, in form order.
+  const provenance = record.verification?.fields ?? {};
+  const changes = fields.filter((f) => provenance[f.key]).map((f) => ({
+    key: f.key,
+    label: f.label,
+    fetched: provenance[f.key]!.fetched,
+    value: String(record.data[f.key] ?? ''),
+  }));
   const primary = m.listColumns[0];
   const heading = primary && record.data[primary] ? String(record.data[primary]) : `${m.name} record`;
 
@@ -119,6 +127,33 @@ export default async function RecordPage({ params }: PageProps) {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="min-w-0">
+          {changes.length > 0 ? (
+            <Card padded={false} className="mb-4">
+              <CardHeader
+                title="Changed or typed by the faculty member"
+                subtitle="Compared by the server with the publisher's record when the record was saved. Check these against the evidence."
+              />
+              <Table>
+                <caption className="sr-only">Fields changed from the publisher&apos;s record or typed by hand</caption>
+                <thead>
+                  <tr>
+                    <Th>Field</Th>
+                    <Th>Publisher&apos;s record</Th>
+                    <Th>Faculty&apos;s value</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {changes.map((c) => (
+                    <tr key={c.key}>
+                      <Td className="text-xs font-semibold">{c.label}</Td>
+                      <Td className="text-xs text-ink-muted">{c.fetched || <em>Not found — typed by hand</em>}</Td>
+                      <Td className="text-xs">{c.value || <em>(empty)</em>}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </Card>
+          ) : null}
           <RecordForm
             moduleKey={m.key}
             fields={fields}
@@ -126,6 +161,7 @@ export default async function RecordPage({ params }: PageProps) {
             initialValues={editable ? (record.editValues ?? {}) : record.data}
             lookup={schema.data.lookup}
             initialLocked={record.lockedFields}
+            initialProvenance={record.verification?.fields}
             locked={lockedStrip(m, user, record.periodLabel, record.ownerName)}
             readOnly={!editable}
           />

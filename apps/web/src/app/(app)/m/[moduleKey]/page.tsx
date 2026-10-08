@@ -51,14 +51,15 @@ function isStatus(v: string): v is RecordStatus {
 
 /** A query string that keeps the current filters and changes only what is passed. */
 function buildQuery(
-  base: { q: string; status: string; year: string; page: number },
-  next: Partial<{ q: string; status: string; year: string; page: number }>,
+  base: { q: string; status: string; year: string; page: number; check: boolean },
+  next: Partial<{ q: string; status: string; year: string; page: number; check: boolean }>,
 ): string {
   const merged = { ...base, ...next };
   const p = new URLSearchParams();
   if (merged.q) p.set('q', merged.q);
   if (merged.status) p.set('status', merged.status);
   if (merged.year) p.set('year', merged.year);
+  if (merged.check) p.set('check', '1');
   if (merged.page > 1) p.set('page', String(merged.page));
   const s = p.toString();
   return s ? `?${s}` : '';
@@ -95,11 +96,14 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
   const pageParam = Number(one(sp.page));
   const page = Number.isInteger(pageParam) && pageParam > 1 ? pageParam : 1;
   const saved = one(sp.saved) === '1';
+  // Only records with points to check: a module whose records are checked against the publisher.
+  const check = !!m.lookup && one(sp.check) === '1';
 
   const listQuery = new URLSearchParams({ page: String(page), pageSize: '20' });
   if (q) listQuery.set('q', q);
   if (status) listQuery.set('status', status);
   if (yearNum) listQuery.set('year', String(yearNum));
+  if (check) listQuery.set('check', '1');
 
   // A role that may not open this module gets the 404 page from either request.
   const [schema, listed] = await Promise.all([
@@ -133,11 +137,11 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
   const declaredNil = mayCreate && schema.data.declaredNil;
   const managedLink = m.managedAt && m.ownerRoles.includes(user.role) ? m.managedAt : null;
 
-  const base = { q, status, year, page };
+  const base = { q, status, year, page, check };
   const pageCount = Math.max(1, Math.ceil(list.total / list.pageSize));
   const from = list.total === 0 ? 0 : (list.page - 1) * list.pageSize + 1;
   const to = Math.min(list.page * list.pageSize, list.total);
-  const filtered = !!(q || status || year);
+  const filtered = !!(q || status || year || check);
   const showOwner = list.rows.some((r) => !r.isMine);
 
   const columns = m.listColumns.map((key) => {
@@ -193,6 +197,22 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
               </li>
             );
           })}
+          {m.lookup ? (
+            <li>
+              <a
+                href={`/m/${m.key}${buildQuery(base, { check: !check, page: 1 })}`}
+                aria-current={check ? 'true' : undefined}
+                title="Records with details the owner changed or typed, or that could not be confirmed automatically"
+                className={cx(
+                  'inline-flex min-h-9 items-center gap-1.5 rounded-sm border px-2.5 py-1 text-xs font-semibold no-underline',
+                  'border-warning-100 bg-warning-50 text-warning-700',
+                  check && 'ring-1 ring-primary',
+                )}
+              >
+                Points to check only
+              </a>
+            </li>
+          ) : null}
         </ul>
       </div>
 

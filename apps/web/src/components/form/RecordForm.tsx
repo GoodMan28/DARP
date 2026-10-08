@@ -5,7 +5,9 @@ import { apiFetch, apiJson } from '@/lib/csrf-client';
 import {
   Field, Input, Select, Textarea, Checkbox, FileInput, Button, LinkButton, Card, Notice,
 } from '@/components/ui';
-import { LOOKUP_SOURCE_LABEL, type FormFieldDef, type LookupFillPayload } from '@darp/shared/contracts';
+import {
+  LOOKUP_SOURCE_LABEL, type FieldProvenance, type FormFieldDef, type LookupFillPayload,
+} from '@darp/shared/contracts';
 
 export type { FormFieldDef } from '@darp/shared/contracts';
 
@@ -22,13 +24,41 @@ interface Props {
   initialLocked?: string[];
   /** An identifier handed over from another module's form ("Add it under …"): fetched on opening. */
   handedOver?: string;
+  /** A saved record: the fields its owner changed from the publisher's record or typed by hand. */
+  initialProvenance?: Record<string, FieldProvenance>;
 }
+
+/** The same text for this purpose: case and spacing aside (the server compares the same way). */
+const sameText = (a: unknown, b: string) => (
+  String(a ?? '').toLowerCase().replace(/\s+/g, ' ').trim() === b.toLowerCase().replace(/\s+/g, ' ').trim()
+);
 
 export function RecordForm({
   moduleKey, fields, recordId, initialValues, locked, readOnly, lookup, initialLocked, handedOver,
+  initialProvenance,
 }: Props) {
   const [values, setValues] = useState<Record<string, unknown>>(initialValues ?? {});
   const [lockedKeys, setLockedKeys] = useState<Set<string>>(() => new Set(initialLocked ?? []));
+  /*
+   * The publisher's value of each fetched field, so a change can be shown beside it and undone.
+   * For a saved record: the locked fields hold it, and a changed field's is kept on the record.
+   */
+  const [fetchedValues, setFetchedValues] = useState<Record<string, string>>(() => {
+    const out: Record<string, string> = {};
+    for (const f of fields) {
+      if (!f.autofill || f.autofill.alwaysLocked || f.autofill.generated) continue;
+      const p = initialProvenance?.[f.key];
+      if (p?.origin === 'changed') out[f.key] = p.fetched;
+      else if (!p && (initialLocked ?? []).includes(f.key)) out[f.key] = String(initialValues?.[f.key] ?? '');
+    }
+    return out;
+  });
+  /** A lookup has filled this form (now or when it was saved): unfetched fields were typed by hand. */
+  const [looked, setLooked] = useState<boolean>(
+    () => Object.keys(initialProvenance ?? {}).length > 0 || (initialLocked ?? []).some((k) => fields.find((f) => f.key === k)?.autofill?.locked),
+  );
+  /** The field whose Change warning is open. */
+  const [confirming, setConfirming] = useState<string | null>(null);
   const [identifier, setIdentifier] = useState<string>(
     () => handedOver ?? (lookup?.idFields.map((k) => String(initialValues?.[k] ?? '')).find(Boolean)) ?? '',
   );
@@ -97,6 +127,17 @@ export function RecordForm({
     const p = res.data;
     setValues((v) => ({ ...v, ...p.fill }));
     setLockedKeys(new Set(p.locked));
+    // Only the publisher's own record counts as "fetched": suggestions are not something to change from.
+    const fetchedNow: Record<string, string> = {};
+    if (p.found && p.authoritative) {
+      for (const f of fields) {
+        if (!f.autofill || f.autofill.alwaysLocked || f.autofill.generated || lookup.idFields.includes(f.key)) continue;
+        if (p.fill[f.key]) fetchedNow[f.key] = p.fill[f.key]!;
+      }
+    }
+    setFetchedValues(fetchedNow);
+    setLooked(p.found && p.authoritative);
+    setConfirming(null);
     setDirty(true);
     const source = p.source ? LOOKUP_SOURCE_LABEL[p.source] : '';
     setLookupNote(
@@ -190,12 +231,18 @@ export function RecordForm({
               <Field
                 label={lookup.idLabel}
                 htmlFor="lookup-identifier"
-                help="Paste it and press Fetch details. Fields marked “Fetched · locked” come from the publisher's record and cannot be changed."
+                help="Paste it and press Fetch details. Fields marked “From the publisher's record” are filled in for you; if one is wrong, press Change beside it — DRIE and IQAC will see what you changed."
               >
                 <Input
                   id="lookup-identifier"
                   value={identifier}
-                  onChange={(e) => { setIdentifier(e.target.value); setLockedKeys(new Set()); }}
+                  onChange={(e) => {
+                    setIdentifier(e.target.value);
+                    setLockedKeys(new Set());
+                    setFetchedValues({});
+                    setLooked(false);
+                    setConfirming(null);
+                  }}
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void fetchDetails(); } }}
                 />
               </Field>
@@ -232,20 +279,95 @@ export function RecordForm({
           <Card key={section} className="mb-4" padded={false}>
             <h2 className="border-b border-line px-4 py-2.5 text-sm font-semibold">{section}</h2>
             <div className="grid gap-4 p-4 sm:grid-cols-2">
-              {shown.map((f) => (
-                <div key={f.key} className={f.colSpan === 2 ? 'sm:col-span-2' : ''} id={`f-${f.key}`}>
-                  <Field
-                    label={f.label}
-                    required={f.required}
-                    help={f.help}
-                    error={errors[f.key]}
-                    htmlFor={`i-${f.key}`}
-                    hint={f.autofill?.alwaysLocked ? 'Filled automatically' : lockedKeys.has(f.key) ? 'Fetched · locked' : f.protected ? 'Protected' : undefined}
+              {shown.map((f) => {
+                const system = !!f.autofill?.alwaysLocked || !!f.autofill?.generated;
+                const isId = !!lookup?.idFields.includes(f.key);
+                const isLocked = lockedKeys.has(f.key);
+                const fetched = fetchedValues[f.key];
+                const changed = fetched !== undefined && !isLocked && !sameText(values[f.key], fetched);
+                const typed = looked && !!f.autofill && !system && !isId && fetched === undefined
+                  && values[f.key] !== undefined && values[f.key] !== '';
+                const mayChange = isLocked && !readOnly && !system && !isId;
+                const hint = f.autofill?.alwaysLocked ? 'Filled automatically'
+                  : f.autofill?.generated && isLocked ? 'Generated from the details'
+                    : isLocked ? 'From the publisher’s record'
+                      : changed ? 'Changed — DRIE and IQAC will see this'
+                        : typed ? 'Entered by hand — DRIE and IQAC will see this'
+                          : f.protected ? 'Protected' : undefined;
+                return (
+                  <div
+                    key={f.key}
+                    className={`${f.colSpan === 2 ? 'sm:col-span-2' : ''} ${changed || typed ? 'rounded-sm border border-warning-100 bg-warning-50 p-2' : ''}`}
+                    id={`f-${f.key}`}
                   >
-                    {renderInput(f, values[f.key], (v) => set(f.key, v), !!readOnly || lockedKeys.has(f.key) || !!f.autofill?.alwaysLocked, !!errors[f.key], { moduleKey, recordId })}
-                  </Field>
-                </div>
-              ))}
+                    <Field
+                      label={f.label}
+                      required={f.required}
+                      help={f.help}
+                      error={errors[f.key]}
+                      htmlFor={`i-${f.key}`}
+                      hint={hint}
+                    >
+                      {renderInput(f, values[f.key], (v) => set(f.key, v), !!readOnly || isLocked || !!f.autofill?.alwaysLocked, !!errors[f.key], { moduleKey, recordId })}
+                      {mayChange && confirming !== f.key ? (
+                        <button
+                          type="button"
+                          className="mt-1 text-xs font-semibold text-brand-700 underline"
+                          onClick={() => setConfirming(f.key)}
+                        >
+                          Change
+                        </button>
+                      ) : null}
+                      {mayChange && confirming === f.key ? (
+                        <Notice tone="warning" title="Change a detail from the publisher's record?" className="mt-2">
+                          DRIE and IQAC will see that you changed this, along with the value from the publisher&apos;s
+                          record. Attach evidence that shows the correct value.
+                          <span className="mt-2 flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              onClick={() => {
+                                setLockedKeys((s) => { const next = new Set(s); next.delete(f.key); return next; });
+                                setConfirming(null);
+                              }}
+                            >
+                              Change it
+                            </Button>
+                            <Button type="button" variant="ghost" onClick={() => setConfirming(null)}>
+                              Keep the publisher&apos;s value
+                            </Button>
+                          </span>
+                        </Notice>
+                      ) : null}
+                      {changed ? (
+                        <p className="mt-1 text-xs text-warning-700">
+                          Publisher&apos;s record: <strong>{fetched || '(empty)'}</strong>
+                          {!readOnly ? (
+                            <>
+                              {' · '}
+                              <button
+                                type="button"
+                                className="font-semibold underline"
+                                onClick={() => {
+                                  set(f.key, fetched);
+                                  if (f.autofill?.locked) setLockedKeys((s) => new Set(s).add(f.key));
+                                }}
+                              >
+                                Undo
+                              </button>
+                            </>
+                          ) : null}
+                        </p>
+                      ) : null}
+                      {typed && !readOnly ? (
+                        <p className="mt-1 text-xs text-warning-700">
+                          Not found in the publisher&apos;s record or the journal lists. Attach evidence for it.
+                        </p>
+                      ) : null}
+                    </Field>
+                  </div>
+                );
+              })}
             </div>
           </Card>
         );

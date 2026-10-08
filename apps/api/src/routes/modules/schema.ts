@@ -60,7 +60,9 @@ export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async 
         maxSizeMB: f.maxSizeMB ?? null,
         // The browser is told a field is protected, but never why or how.
         protected: f.pii === 'encrypted' || !!f.sensitive,
-        autofill: f.autofill ? { locked: f.autofill.locked, alwaysLocked: !!f.autofill.alwaysLocked } : null,
+        autofill: f.autofill
+          ? { locked: f.autofill.locked, alwaysLocked: !!f.autofill.alwaysLocked, generated: f.autofill.from === 'citation' }
+          : null,
       })),
     });
   } catch (e) {

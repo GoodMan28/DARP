@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { truncateAll, closeDb } from '../helpers/db';
 import { makeUser } from '../helpers/factories';
-import { createRecord, updateRecord, getRecord, transitionRecord } from '@/server/records/service';
+import { createRecord, updateRecord, getRecord, transitionRecord, listRecords } from '@/server/records/service';
 import { uploadEvidence } from '@/server/evidence/service';
 import { LookupUnavailable } from '@/server/lookup/http';
 import { notFound, type LookupResult } from '@/server/lookup/types';
@@ -60,7 +60,7 @@ function hit(owner: SessionUser, over: Partial<LookupResult> = {}): LookupResult
 /** What the browser sends: an identifier plus whatever the faculty member typed. */
 const form = (doi: string, over: Record<string, unknown> = {}) => ({
   doi,
-  title: 'typed title',
+  title: 'A real paper',            // as the publisher has it: a different title would be a change
   journal: 'Real Journal',
   indexing: 'SCIE',
   year: '2023',
@@ -79,9 +79,9 @@ beforeEach(() => { resolveMock.mockReset(); });
 afterAll(async () => { await closeDb(); });
 
 describe('publications are approved on submission', () => {
-  it('approves a fully confirmed paper, with nothing to check and no evidence needed', async () => {
+  it('approves a fully confirmed paper, with nothing to check', async () => {
     resolveMock.mockResolvedValue(hit(faculty));
-    const { id, status } = await createRecord(faculty, 'publications', form(nextDoi()), 'submit');
+    const { id, status } = await createRecord(faculty, 'publications', form(nextDoi(), { evidence: await evidence() }), 'submit');
     expect(status).toBe('approved');
     const read = await getRecord(faculty, 'publications', id);
     expect(read.verification?.autoApproved).toBe(true);
@@ -100,21 +100,15 @@ describe('publications are approved on submission', () => {
     expect(read.verification?.reasons.join(' ')).toContain('not found in the Scopus list');
   });
 
-  it('overwrites a locked field the browser changed', async () => {
+  it('needs evidence on every paper, even when everything matches', async () => {
     resolveMock.mockResolvedValue(hit(faculty));
-    const { id } = await createRecord(
-      faculty, 'publications', form(nextDoi(), { journal: 'Fake Journal', year: '2022', quartile: 'Q4' }), 'submit',
-    );
-    const read = await getRecord(faculty, 'publications', id);
-    expect(read.data.journal).toBe('Real Journal');
-    expect(Number(read.data.year)).toBe(2023);
-    expect(read.data.quartile).toBe('Q1');
-    expect(read.data.title).toBe('A real paper');
+    await expect(createRecord(faculty, 'publications', form(nextDoi()), 'submit'))
+      .rejects.toMatchObject({ code: 'VALIDATION', fields: { evidence: expect.stringContaining('required') } });
   });
 
   it('generates the citation from the final values', async () => {
     resolveMock.mockResolvedValue(hit(faculty));
-    const { id } = await createRecord(faculty, 'publications', form(nextDoi()), 'submit');
+    const { id } = await createRecord(faculty, 'publications', form(nextDoi(), { evidence: await evidence() }), 'submit');
     const citation = String((await getRecord(faculty, 'publications', id)).data.bibliographic);
     expect(citation).toContain('A real paper');
     expect(citation).not.toContain('typed citation');
@@ -143,7 +137,7 @@ describe('the owner must be in the author list', () => {
     resolveMock.mockResolvedValue(stranger());
     const authors = `Anil Sharma, ${faculty.name}`;
     await expect(createRecord(faculty, 'publications', form(nextDoi(), { authors }), 'submit'))
-      .rejects.toMatchObject({ code: 'VALIDATION', fields: { evidence: expect.stringContaining('Attach evidence') } });
+      .rejects.toMatchObject({ code: 'VALIDATION', fields: { evidence: expect.any(String) } });
   });
 
   it('approves it once the name is added and evidence attached, flagging the added name', async () => {
@@ -168,7 +162,7 @@ describe('details that could not be fetched are entered by hand', () => {
     );
     const read = await getRecord(faculty, 'publications', id);
     expect(read.data.quartile).toBe('Q2');
-    expect(read.data.quartileSource ?? '').toBe('');          // a claimed source is never taken from the browser
+    expect(read.data.quartileSource).toBe('Chosen by the faculty member');   // never the claimed source
     expect(read.verification?.reasons.join(' ')).toContain('Journal quartile (SJR) could not be found automatically');
   });
 
@@ -182,7 +176,7 @@ describe('details that could not be fetched are entered by hand', () => {
     expect(status).toBe('approved');
     const read = await getRecord(faculty, 'publications', id);
     expect(read.verification?.source).toBeNull();
-    expect(read.data.title).toBe('typed title');
+    expect(read.data.title).toBe('A real paper');
   });
 
   it('falls back when the DOI is not found, still requiring evidence', async () => {
@@ -197,7 +191,7 @@ describe('papers from outside the reporting cycle', () => {
 
   it('refuses to submit them, saying only that', async () => {
     resolveMock.mockResolvedValue(old());
-    await expect(createRecord(faculty, 'publications', form(nextDoi()), 'submit')).rejects.toMatchObject({
+    await expect(createRecord(faculty, 'publications', form(nextDoi(), { year: '2019' }), 'submit')).rejects.toMatchObject({
       code: 'VALIDATION',
       message: expect.stringContaining('published in 2019'),
       fields: { year: expect.stringContaining('covers 2022–2024') },
@@ -215,6 +209,58 @@ describe('papers from outside the reporting cycle', () => {
     await expect(createRecord(
       faculty, 'publications', form(nextDoi(), { authors: faculty.name, year: '2018', evidence: await evidence() }), 'submit',
     )).rejects.toMatchObject({ code: 'VALIDATION', fields: { year: expect.stringContaining('2018') } });
+  });
+});
+
+describe('the owner may change a fetched detail; DRIE and IQAC see the change', () => {
+  it('keeps the changed value, records the publisher\x27s, and makes it a point to check', async () => {
+    resolveMock.mockResolvedValue(hit(faculty));
+    const { id, status } = await createRecord(
+      faculty, 'publications',
+      form(nextDoi(), { title: 'A real paper', journal: 'Real Journal of Things', quartile: 'Q1', evidence: await evidence() }), 'submit',
+    );
+    expect(status).toBe('approved');                     // still approved on submission
+    const read = await getRecord(drie, 'publications', id);
+    expect(read.data.journal).toBe('Real Journal of Things');
+    expect(read.verification?.fields).toEqual({ journal: { origin: 'changed', fetched: 'Real Journal' } });
+    expect(read.verification?.reasons.join(' ')).toContain('Name of journal was changed by the faculty member');
+    expect(read.lockedFields).not.toContain('journal');  // shown open on the form, with the publisher's value
+    expect(read.lockedFields).toContain('issn');
+  });
+
+  it('says on the quartile source that the faculty member changed the quartile', async () => {
+    resolveMock.mockResolvedValue(hit(faculty));
+    const { id } = await createRecord(
+      faculty, 'publications', form(nextDoi(), { quartile: 'Q2', evidence: await evidence() }), 'submit',
+    );
+    const read = await getRecord(faculty, 'publications', id);
+    expect(read.data.quartile).toBe('Q2');
+    expect(read.data.quartileSource).toBe('Changed by the faculty member; SJR 2023 · Scopus list gave Q1');
+  });
+
+  it('does not treat a difference in case or spacing as a change', async () => {
+    resolveMock.mockResolvedValue(hit(faculty));
+    const { id } = await createRecord(
+      faculty, 'publications', form(nextDoi(), { title: 'a  REAL paper', evidence: await evidence() }), 'submit',
+    );
+    const read = await getRecord(faculty, 'publications', id);
+    expect(read.data.title).toBe('A real paper');
+    expect(read.verification?.fields).toEqual({});
+  });
+
+  it('cannot bring a paper into the cycle by changing its year', async () => {
+    resolveMock.mockResolvedValue(hit(faculty, { values: { ...hit(faculty).values, year: '2019' } }));
+    await expect(createRecord(
+      faculty, 'publications', form(nextDoi(), { year: '2023', evidence: await evidence() }), 'submit',
+    )).rejects.toMatchObject({ code: 'VALIDATION', message: expect.stringContaining('changing the year does not change that') });
+  });
+
+  it('lists records with points to check for DRIE', async () => {
+    const list = await listRecords(drie, 'publications', { check: true, pageSize: 100 });
+    expect(list.rows.length).toBeGreaterThan(0);
+    expect(list.rows.every((r) => r.needsCheck)).toBe(true);
+    const all = await listRecords(drie, 'publications', { pageSize: 100 });
+    expect(all.total).toBeGreaterThan(list.total);       // the fully matching papers are left out
   });
 });
 

@@ -74,7 +74,7 @@ export async function lookupForForm(
 
   const yearHint = yearNote(result);
   // Out of the cycle: say that — after explaining what the DOI is, if it is not a single paper.
-  const outside = outsideCycle(m, applied.data, cycle);
+  const outside = outsideCycle(m, applied.data, cycle, applied.fetched);
   if (outside) {
     const typeNote = workTypeNote(m, result);
     const notes = [typeNote, yearHint, outside.message].filter((n): n is string => !!n);
@@ -85,8 +85,15 @@ export async function lookupForForm(
   const nameMissing = ownerMissingFromAuthors(m, applied.data, actor.name);
   const notes: string[] = yearHint ? [yearHint] : [];
   if (nameMissing) notes.push(nameMissing.message);
-  if (applied.eligible) {
+  // Evidence on every record (the module's evidence field is required), or only when something is unconfirmed.
+  const evidenceAlways = !!m.fields.find((f) => f.key === m.lookup?.evidenceField)?.required;
+  if (applied.eligible && m.lookup.autoApprove === 'always' && evidenceAlways) {
+    notes.push('Everything matches the published record. Attach the evidence and press "Save and submit": the record is approved straight away.');
+  } else if (applied.eligible) {
     notes.push('Everything matches the published record. When you press "Save and submit" the record is approved straight away — no evidence or manual check is needed.');
+  } else if (m.lookup.autoApprove === 'always' && evidenceAlways) {
+    notes.push(...reasons.filter((r) => !r.includes('added by hand')));
+    notes.push('Attach the evidence and submit: the record is approved when you submit. DRIE and IQAC see the points above and may check them against the evidence and return the record.');
   } else if (m.lookup.autoApprove === 'always') {
     const shown = reasons.filter((r) => !r.includes('added by hand'));
     notes.push(...shown);
