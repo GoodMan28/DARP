@@ -29,6 +29,8 @@ beforeAll(() => {
     if (url.includes('api.crossref.org/works/10.1109/access.2023.3237542')) return json(fixture('crossref-ieee-access.json'));
     if (url.includes('api.crossref.org/works/10.1007/978-981-19-0475-2_1')) return json(fixture('crossref-chapter.json'));
     if (url.includes('api.crossref.org/works?filter=isbn:')) return json(fixture('crossref-book-by-isbn.json'));
+    if (url.includes('api.crossref.org/works/10.1109/cvpr.2016.90')) return json(fixture('crossref-proceedings.json'));
+    if (url.includes('api.crossref.org/works?filter=type:proceedings,prefix:10.1109')) return json(fixture('crossref-proceedings-volume.json'));
     return new Response('', { status: 404 });   // OpenAlex and everything else
   });
 });
@@ -63,10 +65,23 @@ describe('fromCrossref', () => {
     expect(r.flags).toContain('retracted');
   });
 
-  it('flags conference proceedings', () => {
+  it('reads a conference paper and the name of its conference', () => {
     const r = fromCrossref(work('crossref-proceedings.json'));
     expect(r.rawType).toBe('proceedings-article');
-    expect(r.flags).toContain('proceedings');
+    expect(r.values.workType).toBe('Conference paper');
+    expect(r.values.eventName).toContain('Computer Vision and Pattern Recognition');
+    expect(r.flags).toEqual([]);
+  });
+});
+
+describe('resolveBook, conference papers', () => {
+  it('fills the proceedings volume and its ISBN, which IEEE registers separately', async () => {
+    const r = await resolveBook('10.1109/cvpr.2016.90');
+    expect(r.values.bookType).toBe('Conference paper');
+    expect(r.values.bookTitle).toBe('2016 IEEE Conference on Computer Vision and Pattern Recognition (CVPR)');
+    expect(r.values.chapterTitle).not.toBe('');
+    expect(r.values.isbn).toBe('9781467388511');
+    expect(r.flags).toEqual([]);
   });
 });
 

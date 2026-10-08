@@ -86,7 +86,6 @@ export function fromCrossref(w: CrossrefWork): LookupResult {
   const flags: string[] = [];
   const updates = [...(w['update-to'] ?? []), ...(w['updated-by'] ?? [])];
   if (updates.some((u) => RETRACTION.has(String(u.type ?? '').toLowerCase()))) flags.push('retracted');
-  if (w.event) flags.push('proceedings');
 
   return {
     found: true,
@@ -106,6 +105,7 @@ export function fromCrossref(w: CrossrefWork): LookupResult {
       pages: clean(w.page ?? w['article-number']),
       publisher: clean(w.publisher),
       workType: WORK_TYPE_LABEL[w.type ?? ''] ?? (w.type ?? ''),
+      eventName: clean(w.event?.name),
     },
     people,
     identifiers: { issn: issnAll, isbn: isbnsOf(w) },

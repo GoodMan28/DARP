@@ -289,6 +289,8 @@ export interface LookupFillPayload {
   locked: string[];
   /** plain-language notes for the person filling in */
   notes: string[];
+  /** The work belongs in another module: its key and name, for an "Add it there" link. */
+  moveTo?: { moduleKey: string; name: string } | null;
 }
 
 export const LOOKUP_SOURCE_LABEL: Record<LookupSource, string> = {

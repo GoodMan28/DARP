@@ -273,6 +273,10 @@ function decideSubmission(
   ownerName: string, mode: 'draft' | 'submit', cycle: CycleWindows, previousStatus?: RecordStatus,
 ): boolean {
   if (mode !== 'submit' || !m.lookup) return false;
+  // A conference paper in Publications, a preprint anywhere: refused, and nothing else is said.
+  if (looked.misplaced) {
+    throw new ServiceError('VALIDATION', looked.misplaced.message, { [looked.misplaced.field]: looked.misplaced.message });
+  }
   // A record from outside the cycle is refused on its own, with nothing else to confuse the message.
   const outside = outsideCycle(m, data, cycle);
   if (outside) throw new ServiceError('VALIDATION', outside.message, { [outside.field]: outside.message });

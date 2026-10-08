@@ -26,7 +26,7 @@ export type PiiLevel = 'none' | 'masked' | 'encrypted';
 export type MetaKey =
   | 'doi' | 'title' | 'authors' | 'containerTitle' | 'issn' | 'year' | 'onlineYear' | 'volume' | 'issue' | 'pages'
   | 'publisher' | 'workType' | 'quartile' | 'quartileSource' | 'indexing' | 'citation'
-  | 'bookType' | 'bookTitle' | 'chapterTitle' | 'isbn';
+  | 'bookType' | 'bookTitle' | 'chapterTitle' | 'isbn' | 'eventName';
 
 /** Which register a module's records are fetched from. */
 export type LookupKind = 'doi' | 'book';
@@ -48,6 +48,12 @@ export interface LookupConfig {
   autoApprove: 'always' | 'whenChecksPass';
   /** Crossref work types that count as confirmed. Anything else becomes a point to check. */
   acceptTypes: string[];
+  /**
+   * Work types that do not belong in this module and cannot be submitted here: they go to the
+   * module named (the form offers to open it with the DOI filled in), or nowhere (null) — for
+   * example a preprint, which has not been peer reviewed.
+   */
+  elsewhere?: Array<{ types: string[]; moduleKey: string | null }>;
   /** The owner's name must appear in this field (the author list) before the record can be submitted. */
   ownerMustBeIn?: string;
   /** This file field becomes required on submit whenever any detail could not be confirmed. */

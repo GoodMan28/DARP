@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiFetch, apiJson } from '@/lib/csrf-client';
 import {
-  Field, Input, Select, Textarea, Checkbox, FileInput, Button, Card, Notice,
+  Field, Input, Select, Textarea, Checkbox, FileInput, Button, LinkButton, Card, Notice,
 } from '@/components/ui';
 import { LOOKUP_SOURCE_LABEL, type FormFieldDef, type LookupFillPayload } from '@darp/shared/contracts';
 
@@ -20,25 +20,38 @@ interface Props {
   lookup?: { kind: string; idFields: string[]; idLabel: string } | null;
   /** Fields locked when the form opens (an existing auto-checked record). */
   initialLocked?: string[];
+  /** An identifier handed over from another module's form ("Add it under …"): fetched on opening. */
+  handedOver?: string;
 }
 
 export function RecordForm({
-  moduleKey, fields, recordId, initialValues, locked, readOnly, lookup, initialLocked,
+  moduleKey, fields, recordId, initialValues, locked, readOnly, lookup, initialLocked, handedOver,
 }: Props) {
   const [values, setValues] = useState<Record<string, unknown>>(initialValues ?? {});
   const [lockedKeys, setLockedKeys] = useState<Set<string>>(() => new Set(initialLocked ?? []));
   const [identifier, setIdentifier] = useState<string>(
-    () => (lookup?.idFields.map((k) => String(initialValues?.[k] ?? '')).find(Boolean)) ?? '',
+    () => handedOver ?? (lookup?.idFields.map((k) => String(initialValues?.[k] ?? '')).find(Boolean)) ?? '',
   );
   const [fetching, setFetching] = useState(false);
-  const [lookupNote, setLookupNote] = useState<
-    { tone: 'success' | 'info' | 'warning'; title: string; notes: string[] } | null
-  >(null);
+  const [lookupNote, setLookupNote] = useState<{
+    tone: 'success' | 'info' | 'warning'; title: string; notes: string[];
+    moveTo?: LookupFillPayload['moveTo'];
+  } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const errorSummary = useRef<HTMLDivElement>(null);
+
+  /* An identifier handed over from another module's form is fetched straight away. */
+  const handedOverFetched = useRef(false);
+  useEffect(() => {
+    if (handedOver && !handedOverFetched.current) {
+      handedOverFetched.current = true;
+      void fetchDetails();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handedOver]);
 
   /* Warn before losing typed data. */
   useEffect(() => {
@@ -87,7 +100,14 @@ export function RecordForm({
     setDirty(true);
     const source = p.source ? LOOKUP_SOURCE_LABEL[p.source] : '';
     setLookupNote(
-      !p.found
+      p.moveTo !== undefined
+        ? {
+          tone: 'warning',
+          title: p.moveTo ? `This belongs under ${p.moveTo.name}` : 'This cannot be entered',
+          notes: p.notes,
+          moveTo: p.moveTo,
+        }
+        : !p.found
         ? { tone: 'warning', title: 'No published record found', notes: p.notes }
         : p.authoritative
           ? { tone: 'success', title: `Details fetched from ${source}`, notes: p.notes }
@@ -190,6 +210,15 @@ export function RecordForm({
                 <ul className="mt-1 list-disc pl-5">
                   {lookupNote.notes.map((n) => <li key={n}>{n}</li>)}
                 </ul>
+              ) : null}
+              {lookupNote.moveTo ? (
+                <LinkButton
+                  href={`/m/${lookupNote.moveTo.moduleKey}/new?id=${encodeURIComponent(identifier.trim())}`}
+                  variant="secondary"
+                  className="mt-2"
+                >
+                  Add it under {lookupNote.moveTo.name}
+                </LinkButton>
               ) : null}
             </Notice>
           ) : null}

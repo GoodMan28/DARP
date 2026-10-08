@@ -13,6 +13,8 @@ export const dynamic = 'force-dynamic';
 
 interface PageProps {
   params: Promise<{ moduleKey: string }>;
+  /** ?id=<DOI or ISBN>, handed over by another module's form ("Add it under …"). */
+  searchParams: Promise<{ id?: string }>;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -21,8 +23,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return { title: m ? `Add ${m.name} record · DARP` : 'Add record · DARP' };
 }
 
-export default async function NewRecordPage({ params }: PageProps) {
+export default async function NewRecordPage({ params, searchParams }: PageProps) {
   const { moduleKey } = await params;
+  const handedOver = (await searchParams).id?.trim().slice(0, 300) || undefined;
 
   const m = getModule(moduleKey);
   if (!m) notFound();
@@ -92,6 +95,7 @@ export default async function NewRecordPage({ params }: PageProps) {
         fields={fields}
         lookup={schema.data.lookup}
         locked={lockedStrip(m, user, periodLabel)}
+        handedOver={schema.data.lookup ? handedOver : undefined}
       />
     </>,
   );

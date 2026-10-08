@@ -8,7 +8,7 @@ export const books: ModuleConfig = {
   periodType: 'CY',
   naacRef: '3.4',
   bodies: ['NAAC'],
-  description: 'Books and chapters in edited volumes published during the cycle.',
+  description: 'Books, chapters in edited volumes, and papers in conference proceedings published during the cycle.',
   ownerRoles: ['faculty'],
   verifierRoles: ['drie'],
   viewRoles: ['hod', 'drie', 'admin'],
@@ -16,7 +16,12 @@ export const books: ModuleConfig = {
   naturalKey: ['isbn', 'bookTitle', 'chapterTitle'],
   lookup: {
     kind: 'book', idFields: ['doi', 'isbn'], idLabel: 'DOI or ISBN', autoApprove: 'whenChecksPass',
-    acceptTypes: ['book-chapter', 'book-part', 'book-section', 'reference-entry', 'book', 'edited-book', 'monograph', 'reference-book'],
+    acceptTypes: ['book-chapter', 'book-part', 'book-section', 'reference-entry', 'book', 'edited-book', 'monograph', 'reference-book',
+      'proceedings-article'],
+    elsewhere: [
+      { types: ['journal-article'], moduleKey: 'publications' },
+      { types: ['posted-content'], moduleKey: null },
+    ],
   },
   fields: [
     { key: 'doi', label: 'DOI', type: 'doi', section: 'Publication',
@@ -24,13 +29,20 @@ export const books: ModuleConfig = {
       autofill: { from: 'doi', locked: true } },
 
     { key: 'publicationType', label: 'This entry is a', type: 'select', required: true,
-      options: ['Book', 'Book chapter'], section: 'Publication',
+      options: ['Book', 'Book chapter', 'Conference paper'], section: 'Publication',
       autofill: { from: 'bookType', locked: true },
-      help: 'Books and chapters are counted separately on your profile.' },
+      help: 'Books and chapters are counted separately on your profile; conference papers go to the NAAC sheet. Springer registers conference papers (LNCS, CCIS, …) as book chapters: change the type if yours was a conference paper.' },
+
+    { key: 'conferenceName', label: 'Name of the conference', type: 'text', maxLength: 300,
+      colSpan: 2, section: 'Publication',
+      showIf: { field: 'publicationType', in: ['Conference paper'] },
+      autofill: { from: 'eventName', locked: true },
+      help: 'Filled in when the publisher registered it; otherwise type it as on the proceedings.' },
 
     { key: 'bookTitle', label: 'Title of the book published', type: 'text', required: true,
       maxLength: 400, colSpan: 2, section: 'Publication',
       autofill: { from: 'bookTitle', locked: true },
+      help: 'For a chapter, the book it is in; for a conference paper, the title of the proceedings volume.',
       exportAs: { faculty: 'Title of the book published', drie: 'Title of the book published' } },
 
     { key: 'authors', label: 'Name of the author/s or editor/s', type: 'text', maxLength: 2000,
@@ -41,8 +53,9 @@ export const books: ModuleConfig = {
 
     { key: 'chapterTitle', label: 'Title of the chapters published', type: 'text',
       maxLength: 400, colSpan: 2, section: 'Publication',
-      showIf: { field: 'publicationType', in: ['Book chapter'] },
+      showIf: { field: 'publicationType', in: ['Book chapter', 'Conference paper'] },
       autofill: { from: 'chapterTitle', locked: true },
+      help: 'For a conference paper, the title of the paper.',
       exportAs: { faculty: 'Title of the chapters  published', drie: 'Title of the chapters  published' } },
 
     { key: 'year', label: 'Year of publication', type: 'year', required: true, min: 1960, max: 2100,

@@ -218,6 +218,53 @@ describe('papers from outside the reporting cycle', () => {
   });
 });
 
+describe('works that belong elsewhere', () => {
+  const typed = (rawType: string, workType: string) => hit(faculty, {
+    rawType, values: { ...hit(faculty).values, workType },
+  });
+
+  it('refuses a conference paper in Publications and points to Books & Chapters', async () => {
+    resolveMock.mockResolvedValue(typed('proceedings-article', 'Conference paper'));
+    await expect(createRecord(faculty, 'publications', form(nextDoi()), 'submit')).rejects.toMatchObject({
+      code: 'VALIDATION',
+      message: expect.stringContaining('Add it under Books & Chapters'),
+      fields: { doi: expect.stringContaining('conference paper') },
+    });
+  });
+
+  it('refuses a preprint anywhere', async () => {
+    resolveMock.mockResolvedValue(typed('posted-content', 'Preprint'));
+    await expect(createRecord(faculty, 'publications', form(nextDoi()), 'submit'))
+      .rejects.toMatchObject({ code: 'VALIDATION', message: expect.stringContaining('peer review') });
+  });
+
+  it('accepts a conference paper in Books & Chapters', async () => {
+    const doi = nextDoi();
+    resolveMock.mockResolvedValue(hit(faculty, {
+      rawType: 'proceedings-article',
+      values: {
+        doi, title: 'A conference paper', authors: `${faculty.name}, Someone Else`, year: '2023',
+        workType: 'Conference paper', bookType: 'Conference paper', chapterTitle: 'A conference paper',
+        bookTitle: '2023 International Conference on Testing', isbn: '9781509064717', publisher: 'IEEE',
+        eventName: '2023 International Conference on Testing (ICT)',
+      },
+      identifiers: { issn: [], isbn: ['9781509064717'] },
+    }));
+    const { id } = await createRecord(faculty, 'books', {
+      doi, publicationType: 'Conference paper', sameAffiliation: 'Yes', bookTitle: 'x', year: '2023',
+      isbn: '9781509064717', publisher: 'x', bibliographic: 'x',
+      evidence: (await uploadEvidence(faculty, {
+        bytes: PDF, fileName: 'first-page.pdf', declaredMime: 'application/pdf', fieldKey: 'evidence', moduleKey: 'books',
+      })).id,
+    }, 'submit');
+    const read = await getRecord(faculty, 'books', id);
+    expect(read.data).toMatchObject({
+      publicationType: 'Conference paper', chapterTitle: 'A conference paper',
+      conferenceName: '2023 International Conference on Testing (ICT)',
+    });
+  });
+});
+
 describe('DRIE and IQAC check afterwards', () => {
   it('DRIE can return an approved publication, and the resubmission goes to DRIE', async () => {
     resolveMock.mockResolvedValue(hit(faculty, { flags: ['not-indexed'] }));

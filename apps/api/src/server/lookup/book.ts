@@ -28,22 +28,44 @@ async function bookByIsbn(isbns: string[]): Promise<CrossrefWork | null> {
   return null;
 }
 
-function bookResult(w: CrossrefWork, parent: CrossrefWork | null, isChapter: boolean): LookupResult {
+/** Normalised for comparing titles: lower case, letters and digits only. */
+const titleKey = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+/**
+ * The proceedings volume a conference paper is in. IEEE registers the paper without the volume's
+ * ISBN, but the volume itself (type "proceedings") with it: find it by its exact title and the
+ * publisher's DOI prefix.
+ */
+async function proceedingsVolume(paper: CrossrefWork): Promise<CrossrefWork | null> {
+  const title = clean(paper['container-title']?.[0]);
+  const prefix = paper.DOI.split('/')[0] ?? '';
+  if (!title || !prefix) return null;
+  const res = (await getJson(
+    `https://api.crossref.org/works?filter=type:proceedings,prefix:${encodeURIComponent(prefix)}&query.bibliographic=${encodeURIComponent(title)}&rows=3&select=DOI,type,title,ISBN,publisher&mailto=${encodeURIComponent(MAILTO)}`,
+  )) as { message?: { items?: CrossrefWork[] } } | null;
+  return res?.message?.items?.find((i) => titleKey(clean(i.title?.[0])) === titleKey(title)) ?? null;
+}
+
+type Kind = 'book' | 'chapter' | 'conference';
+
+function bookResult(w: CrossrefWork, parent: CrossrefWork | null, kind: Kind): LookupResult {
   const r = fromCrossref(w);
-  const book = isChapter ? parent : w;
+  const isPart = kind !== 'book';
+  const book = isPart ? parent : w;
   const containers = w['container-title'] ?? [];
   // A chapter's container-title is often [series, book]: the LAST entry is the book.
   r.values.bookTitle = book ? clean(book.title?.[0]) : clean(containers[containers.length - 1]);
-  r.values.chapterTitle = isChapter ? clean(w.title?.[0]) : '';
-  r.values.bookType = isChapter ? 'Book chapter' : 'Book';
+  r.values.chapterTitle = isPart ? clean(w.title?.[0]) : '';
+  r.values.bookType = kind === 'conference' ? 'Conference paper' : kind === 'chapter' ? 'Book chapter' : 'Book';
   r.values.isbn = (book ? isbnsOf(book) : [])[0] ?? isbnsOf(w)[0] ?? '';
   r.values.publisher = clean((book ?? w).publisher);
-  if (!isChapter && (w.author ?? []).length === 0) {
+  if (!isPart && (w.author ?? []).length === 0) {
     const editors: Person[] = (w.editor ?? []).map(toPerson);
     r.people = editors;
     r.values.authors = editors.map((p) => `${p.full} (ed.)`).join(', ');
   }
-  if (isChapter && !parent) r.flags.push('parent-book-not-found');
+  // A conference paper's volume title is in its own record; only a missing ISBN is left to type.
+  if (kind === 'chapter' && !parent) r.flags.push('parent-book-not-found');
   return r;
 }
 
@@ -91,17 +113,21 @@ export async function resolveBook(raw: string): Promise<LookupResult> {
     const type = w.type ?? '';
     const isChapter = CHAPTER_TYPES.has(type)
       || (type === 'other' && /\.ch\d+$/i.test(w.DOI) && isbnsOf(w).length > 0);   // Wiley
+    if (type === 'proceedings-article') {
+      const volume = isbnsOf(w).length > 0 ? null : await proceedingsVolume(w);
+      return bookResult(w, volume, 'conference');
+    }
     if (!isChapter && !BOOK_TYPES.has(type)) {
       const r = fromCrossref(w);
       r.flags.push('not-a-book');
       return r;
     }
     const parent = isChapter ? await bookByIsbn(isbnsOf(w)) : null;
-    return bookResult(w, parent, isChapter);
+    return bookResult(w, parent, isChapter ? 'chapter' : 'book');
   }
   const isbn = isbn13(raw);
   if (!isbn) return notFound();
   const book = await bookByIsbn([isbn]);
-  if (book) return bookResult(book, null, false);
+  if (book) return bookResult(book, null, 'book');
   return (await openLibrary(isbn)) ?? notFound();
 }

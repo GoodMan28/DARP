@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { workTypeNote, yearNote } from '@/server/lookup/apply';
+import { workTypeNote, yearNote, misplacedWork } from '@/server/lookup/apply';
 import { notFound, type LookupResult } from '@/server/lookup/types';
 import { MODULES } from '@darp/shared/modules';
 
@@ -43,5 +43,31 @@ describe('yearNote', () => {
   it('says nothing when the years agree or one is unknown', () => {
     expect(yearNote(dated('2023', '2023'))).toBeNull();
     expect(yearNote(dated('2023', ''))).toBeNull();
+  });
+});
+
+describe('misplacedWork', () => {
+  it('sends a conference paper or a chapter from Publications to Books & Chapters', () => {
+    const conf = misplacedWork(pubs, work('proceedings-article', 'Conference paper'));
+    expect(conf).toMatchObject({ field: 'doi', moveTo: 'books' });
+    expect(conf?.message).toContain('This DOI is a conference paper, not a journal article');
+    expect(misplacedWork(pubs, work('book-chapter', 'Book chapter'))?.moveTo).toBe('books');
+  });
+
+  it('explains a whole volume first, then offers Books & Chapters for a book the owner wrote', () => {
+    const note = misplacedWork(pubs, work('book', 'Book'))?.message ?? '';
+    expect(note).toContain('whole book or conference proceedings volume');
+    expect(note).toContain('If it is a book you wrote or edited, add it under Books & Chapters');
+  });
+
+  it('refuses a preprint everywhere, with nowhere to move it', () => {
+    expect(misplacedWork(pubs, work('posted-content', 'Preprint'))).toMatchObject({ moveTo: null });
+    expect(misplacedWork(books, work('posted-content', 'Preprint'))?.message).toContain('peer review');
+  });
+
+  it('sends a journal article from Books & Chapters to Publications, and keeps what belongs', () => {
+    expect(misplacedWork(books, work('journal-article', 'Journal article'))?.moveTo).toBe('publications');
+    expect(misplacedWork(pubs, work('journal-article', 'Journal article'))).toBeNull();
+    expect(misplacedWork(books, work('proceedings-article', 'Conference paper'))).toBeNull();
   });
 });

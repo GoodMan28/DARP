@@ -8,6 +8,7 @@ import { isLookupUnavailable } from './http';
 import { normaliseDoiInput } from './doi';
 import { isbn13 } from './isbn';
 import type { LookupResult } from './types';
+import { getModule } from '@darp/shared/modules';
 
 /** Which of the module's identifier fields this input belongs in, judged by the field's type. */
 function fieldFor(m: ReturnType<typeof mustGetModule>, identifier: string) {
@@ -61,6 +62,16 @@ export async function lookupForForm(
   const locked = result.authoritative
     ? m.fields.filter((f) => f.autofill?.alwaysLocked || (f.autofill?.locked && fill[f.key])).map((f) => f.key)
     : [];
+  // In the wrong module (or a preprint): that is the whole story — say only that, and where it goes.
+  if (applied.misplaced) {
+    const target = applied.misplaced.moveTo ? getModule(applied.misplaced.moveTo) : undefined;
+    return {
+      found: true, source: result.source, authoritative: result.authoritative, fill, locked,
+      notes: [applied.misplaced.message],
+      moveTo: target ? { moduleKey: target.key, name: target.name } : null,
+    };
+  }
+
   const yearHint = yearNote(result);
   // Out of the cycle: say that — after explaining what the DOI is, if it is not a single paper.
   const outside = outsideCycle(m, applied.data, cycle);

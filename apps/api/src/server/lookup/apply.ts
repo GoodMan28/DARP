@@ -1,4 +1,5 @@
 import type { ModuleConfig } from '@darp/shared/modules/types';
+import { getModule } from '@darp/shared/modules';
 import { LOOKUP_SOURCE_LABEL, type RecordVerification } from '@darp/shared/contracts';
 import {
   isInsideCycle, cycleYears, periodSourceField, yearOfPeriod, type CycleWindows,
@@ -16,7 +17,6 @@ import type { LookupResult } from './types';
  */
 const FLAG_REASON: Record<string, string> = {
   retracted: 'The publisher has retracted this work.',
-  proceedings: 'This DOI belongs to conference proceedings.',
   'not-indexed': 'The journal was not found in the Scopus list or in any Web of Science list IQAC has loaded.',
   'no-journal-lists': 'The journal lists (Scopus, SJR) were not available, so indexing and quartile could not be checked.',
   'no-issn': 'The publisher has not registered an ISSN for this journal.',
@@ -46,6 +46,8 @@ export interface Applied {
   verification: RecordVerification | null;
   /** Every automatic check passed: nothing for anyone to check. */
   eligible: boolean;
+  /** The work belongs in another module and cannot be submitted in this one. */
+  misplaced: Misplaced | null;
 }
 
 const filled = (v: unknown) => v !== undefined && v !== null && v !== '';
@@ -60,7 +62,7 @@ export async function applyLookup(
   input: Record<string, unknown>,
   ctx: { ownerName: string; cycle: CycleWindows },
 ): Promise<Applied> {
-  if (!m.lookup) return { data: input, verification: null, eligible: false };
+  if (!m.lookup) return { data: input, verification: null, eligible: false, misplaced: null };
 
   const data: Record<string, unknown> = { ...input };
   const checkedAt = new Date().toISOString();
@@ -71,6 +73,7 @@ export async function applyLookup(
     return {
       data,
       eligible: false,
+      misplaced: null,
       verification: { source: null, identifier: raw || null, checkedAt, autoApproved: false, reasons: [reason] },
     };
   };
@@ -113,7 +116,8 @@ export async function applyLookup(
   if (!r.authoritative) {
     reasons.push(`The details are suggestions from ${r.source ? LOOKUP_SOURCE_LABEL[r.source] : 'an unofficial source'}, not the publisher's own record.`);
   }
-  const typeNote = workTypeNote(m, r);
+  const misplaced = misplacedWork(m, r);
+  const typeNote = misplaced ? null : workTypeNote(m, r);
   if (typeNote) reasons.push(typeNote);
   for (const flag of r.flags) {
     const reason = reasonForFlag(flag, r.values.year ?? '');
@@ -134,7 +138,8 @@ export async function applyLookup(
 
   return {
     data,
-    eligible: reasons.length === 0 && outsideCycle(m, data, ctx.cycle) === null,
+    eligible: reasons.length === 0 && !misplaced && outsideCycle(m, data, ctx.cycle) === null,
+    misplaced,
     verification: {
       source: r.source,
       identifier: r.values.doi || raw,
@@ -142,6 +147,37 @@ export async function applyLookup(
       autoApproved: false,
       reasons: [...new Set(reasons)],
     },
+  };
+}
+
+/** A work that belongs in another module (or in none), refused on submit: lookup.elsewhere. */
+export interface Misplaced {
+  /** The identifier field, to show the error against. */
+  field: string;
+  message: string;
+  /** The module to enter it in instead, or null when it cannot be entered anywhere (a preprint). */
+  moveTo: string | null;
+}
+
+export function misplacedWork(m: ModuleConfig, r: LookupResult): Misplaced | null {
+  if (!m.lookup?.elsewhere || !r.found || !r.authoritative) return null;
+  const rule = m.lookup.elsewhere.find((e) => e.types.includes(r.rawType ?? ''));
+  if (!rule) return null;
+  const field = m.lookup.idFields[0] ?? 'doi';
+  const what = (r.values.workType || r.rawType || 'work').toLowerCase();
+  if (!rule.moduleKey) {
+    return {
+      field, moveTo: null,
+      message: `This DOI is a ${what}: it has not been through peer review, so it cannot be entered. Enter the work once a journal or conference has published it.`,
+    };
+  }
+  const target = getModule(rule.moduleKey)?.name ?? rule.moduleKey;
+  const accepted = m.lookup.acceptTypes.map((t) => t.replace(/-/g, ' ')).join(' / ');
+  // The usual mistake with a whole volume is pasting the volume's DOI instead of the paper's own.
+  const volume = WHOLE_VOLUME_TYPES.has(r.rawType ?? '') ? `${workTypeNote(m, r) ?? ''} ` : '';
+  return {
+    field, moveTo: rule.moduleKey,
+    message: `${volume}This DOI is a ${what}, not a ${accepted}, so it cannot be submitted here. ${volume ? 'If it is a book you wrote or edited, add' : 'Add'} it under ${target} instead.`,
   };
 }
 
