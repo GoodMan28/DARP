@@ -5,6 +5,7 @@ import {
   createRecord, updateRecord, getRecord, listRecords, transitionRecord, deleteRecord,
   setNilDeclaration, getNilDeclaration, statusCounts,
 } from '@/server/records/service';
+import { departmentCompletion, verificationQueue } from '@/server/rollups/completion';
 import type { SessionUser } from '@/server/auth/session';
 
 let faculty: SessionUser;
@@ -87,6 +88,26 @@ describe('create and read', () => {
     const { id } = await createRecord(faculty, 'publications', paper('10.1016/c-list'), 'draft');
     expect((await listRecords(hod, 'publications', { pageSize: 100 })).rows.map((r) => r.id)).toContain(id);
     expect((await listRecords(otherHod, 'publications', { pageSize: 100 })).rows.map((r) => r.id)).not.toContain(id);
+  });
+
+  it("counts only the HOD's own department on the dashboard and the status chips", async () => {
+    await createRecord(faculty, 'publications', paper('10.1016/c-count'), 'draft');
+    const all = await statusCounts(admin, 'publications');
+    const cse = await statusCounts(hod, 'publications');
+    const me = await statusCounts(otherHod, 'publications');
+    expect(cse.draft).toBeGreaterThan(0);
+    expect(cse.draft).toBe(all.draft);                 // every record so far is CSE's
+    expect(Object.values(me).every((n) => n === 0)).toBe(true);
+
+    const [cseRow, ...rest] = await departmentCompletion(hod);
+    expect(rest).toHaveLength(0);
+    expect(cseRow!.departmentCode).toBe('CSE');
+    const adminCse = (await departmentCompletion(admin)).find((d) => d.departmentCode === 'CSE');
+    expect(cseRow!.records).toBe(adminCse!.records);
+    const meRows = await departmentCompletion(otherHod);
+    expect(meRows.map((d) => d.departmentCode)).toEqual(['ME']);
+    expect(meRows[0]!.records).toBe(0);
+    expect(await verificationQueue(hod)).toEqual([]);  // a HOD verifies nothing
   });
 
   it('does not let an unrelated office read a module it neither owns nor verifies', async () => {
