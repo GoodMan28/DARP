@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   COUNTERS, DECLARED_COUNTERS, ALL_COUNTER_KEYS, computeCounters,
-  COUNTED_STATUSES, EXPORTABLE_STATUSES,
+  COUNTED_STATUSES, EXPORTABLE_STATUSES, withCycleYears,
   type CountableRecord, type CycleBounds,
 } from '@/server/rollups/counters';
 import { MODULE_LIST, getModule } from '@darp/shared/modules';
@@ -116,5 +116,23 @@ describe('computation', () => {
   it('gives every counter a zero when the person has entered nothing', () => {
     const out = computeCounters([], bounds, pt);
     expect(Object.values(out).every((v) => v === 0)).toBe(true);
+  });
+});
+
+describe('counter labels follow the active cycle', () => {
+  it('fills the years of the cycle IQAC set, instead of fixed ones', () => {
+    const cycle4 = { CY: [2022, 2024], FY: [2022, 2024], AY: [2022, 2024] } as CycleBounds;
+    const cycle5 = { CY: [2025, 2029], FY: [2025, 2029], AY: [2025, 2029] } as CycleBounds;
+    expect(withCycleYears('Publications {CY}', cycle4)).toBe('Publications 2022–2024');
+    expect(withCycleYears('Consultancy projects, {FY}', cycle4)).toBe('Consultancy projects, FY 2022-25');
+    expect(withCycleYears('UG students guided, {AY}', cycle5)).toBe('UG students guided, AY 2025-30');
+    expect(withCycleYears('Visited a foreign university in {lastAY}?', cycle5)).toBe('Visited a foreign university in AY 2029-30?');
+    expect(withCycleYears('Papers presented, {lastCY}', cycle5)).toBe('Papers presented, CY 2029');
+  });
+
+  it('leaves no year written into the catalogue', () => {
+    for (const label of [...COUNTERS.map((c) => c.label), ...DECLARED_COUNTERS.map((c) => c.label)]) {
+      expect(label, label).not.toMatch(/20\d\d/);
+    }
   });
 });

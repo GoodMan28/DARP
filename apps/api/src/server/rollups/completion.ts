@@ -10,7 +10,7 @@ import { yearOfPeriod, type CycleWindows } from '@/server/records/periods';
 import {
   COUNTERS, DECLARED_COUNTERS, COUNTER_MODULE_KEYS, COUNTED_STATUSES,
   computeCounters,
-  type CountableRecord, type CycleBounds,
+  type CountableRecord, type CycleBounds, withCycleYears,
 } from './counters';
 import type {
   ComputedCounter, DeclaredCounter, CounterValues,
@@ -102,7 +102,7 @@ export async function counterValuesFor(actor: SessionUser, userId: string): Prom
     userId,
     computed: COUNTERS.map((c) => ({
       key: c.key,
-      label: c.label,
+      label: withCycleYears(c.label, bounds),
       value: computed[c.key] ?? 0,
       format: c.format,
       window: c.window,
@@ -110,7 +110,7 @@ export async function counterValuesFor(actor: SessionUser, userId: string): Prom
       moduleName: mustGetModule(c.moduleKey).name,
       baseline: c.window === 'sinceJoining' ? (baselines[c.key] ?? 0) : 0,
     })),
-    declared: DECLARED_COUNTERS.map((c) => ({ ...c, value: baselines[c.key] ?? 0 })),
+    declared: DECLARED_COUNTERS.map((c) => ({ ...c, label: withCycleYears(c.label, bounds), value: baselines[c.key] ?? 0 })),
   };
 }
 
