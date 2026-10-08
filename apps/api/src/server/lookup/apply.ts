@@ -98,9 +98,8 @@ export async function applyLookup(
   if (!r.authoritative) {
     reasons.push(`The details are suggestions from ${r.source ? LOOKUP_SOURCE_LABEL[r.source] : 'an unofficial source'}, not the publisher's own record.`);
   }
-  if (!m.lookup.acceptTypes.includes(r.rawType ?? '')) {
-    reasons.push(`It is registered as "${r.values.workType || r.rawType || 'unknown'}", not as a ${m.lookup.acceptTypes.join(' / ').replace(/-/g, ' ')}.`);
-  }
+  const typeNote = workTypeNote(m, r);
+  if (typeNote) reasons.push(typeNote);
   for (const flag of r.flags) {
     const reason = FLAG_REASON[flag];
     if (reason) reasons.push(reason);
@@ -129,6 +128,26 @@ export async function applyLookup(
       reasons: [...new Set(reasons)],
     },
   };
+}
+
+/** Crossref types that identify a whole volume (a book, proceedings, a series), not one work in it. */
+const WHOLE_VOLUME_TYPES = new Set([
+  'book', 'edited-book', 'monograph', 'reference-book', 'proceedings', 'book-set', 'book-series', 'book-track',
+]);
+
+/**
+ * Explains, in plain words, a fetched work whose type the module does not take. The common mistake
+ * is pasting the DOI of a whole proceedings volume or book instead of the paper's own DOI (which is
+ * usually the volume's DOI with a number added) — say exactly that.
+ */
+export function workTypeNote(m: ModuleConfig, r: LookupResult): string | null {
+  if (!m.lookup || !r.found || m.lookup.acceptTypes.includes(r.rawType ?? '')) return null;
+  const wholeVolumeIsWrong = !m.lookup.acceptTypes.some((t) => WHOLE_VOLUME_TYPES.has(t));
+  if (wholeVolumeIsWrong && WHOLE_VOLUME_TYPES.has(r.rawType ?? '')) {
+    const doi = r.values.doi ?? '';
+    return `This DOI is for a whole book or conference proceedings volume, not for a single paper — that is why there are no authors or journal to fill in. If your paper is in this volume, use your paper's own DOI instead${doi ? ` (it is usually this one with a number added, e.g. ${doi}_6)` : ''}.`;
+  }
+  return `It is registered as "${r.values.workType || r.rawType || 'unknown'}", not as a ${m.lookup.acceptTypes.join(' / ').replace(/-/g, ' ')}.`;
 }
 
 /**
