@@ -56,6 +56,7 @@ export const publications: ModuleConfig = {
 
     { key: 'year', label: 'Year of publication', type: 'year', required: true, min: 1960, max: 2100,
       section: 'Journal', autofill: { from: 'year', locked: true },
+      help: 'The year of the journal issue the paper appeared in. A paper published online earlier still counts in its issue year; one not yet in an issue counts in the year it appeared online.',
       exportAs: {
         faculty: 'Year of publication (starting from latest calendar year 2024, 2023, 2022)',
         drie: 'Year of publication',

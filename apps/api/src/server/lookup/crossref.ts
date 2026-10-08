@@ -72,7 +72,10 @@ export function isbnsOf(w: CrossrefWork): string[] {
   return [...new Set(raw.map(isbn13).filter((x): x is string => x !== null))];
 }
 
-/** Crossref work → LookupResult. The reporting year is the print year when there is one. */
+/**
+ * Crossref work → LookupResult. The reporting year is the year of the issue (print) the work appeared
+ * in; a work not yet in an issue counts in the year it was first published (online).
+ */
 export function fromCrossref(w: CrossrefWork): LookupResult {
   const people = (w.author ?? []).map(toPerson);
   const year = yearOf(w['published-print']) ?? yearOf(w['journal-issue']?.['published-print']) ?? yearOf(w.issued);
@@ -97,6 +100,7 @@ export function fromCrossref(w: CrossrefWork): LookupResult {
       containerTitle: clean(w['container-title']?.[0]),
       issn: issnMain ? formatIssn(issnMain) : '',
       year: year ? String(year) : '',
+      onlineYear: String(yearOf(w['published-online']) ?? ''),
       volume: clean(w.volume),
       issue: clean(w.issue),
       pages: clean(w.page ?? w['article-number']),

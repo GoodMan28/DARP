@@ -17,7 +17,7 @@ export function lookupKey(kind: LookupKind, raw: string): string | null {
  * answers cached under an older version are then simply not found, instead of being served in a
  * format the forms no longer accept.
  */
-const CACHE_VERSION = 'v2';
+const CACHE_VERSION = 'v3';
 
 /** Cache first; otherwise ask the register and remember the answer. Throws LookupUnavailable. */
 export async function resolve(kind: LookupKind, raw: string): Promise<LookupResult> {

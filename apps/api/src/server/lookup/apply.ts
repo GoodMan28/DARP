@@ -130,6 +130,17 @@ export async function applyLookup(
   };
 }
 
+/**
+ * When a work appeared online in one year and in an issue in another, says which year counts — the
+ * issue year — so the owner is not surprised that it differs from the date on the publisher's page.
+ */
+export function yearNote(r: LookupResult): string | null {
+  const year = r.values.year ?? '';
+  const online = r.values.onlineYear ?? '';
+  if (!year || !online || year === online) return null;
+  return `It was published online in ${online} and in an issue in ${year}. The issue year, ${year}, is the year that counts.`;
+}
+
 /** Crossref types that identify a whole volume (a book, proceedings, a series), not one work in it. */
 const WHOLE_VOLUME_TYPES = new Set([
   'book', 'edited-book', 'monograph', 'reference-book', 'proceedings', 'book-set', 'book-series', 'book-track',

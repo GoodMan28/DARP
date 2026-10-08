@@ -24,7 +24,7 @@ export type PiiLevel = 'none' | 'masked' | 'encrypted';
 
 /** Facts an external register can supply. Field configs name the one they take. */
 export type MetaKey =
-  | 'doi' | 'title' | 'authors' | 'containerTitle' | 'issn' | 'year' | 'volume' | 'issue' | 'pages'
+  | 'doi' | 'title' | 'authors' | 'containerTitle' | 'issn' | 'year' | 'onlineYear' | 'volume' | 'issue' | 'pages'
   | 'publisher' | 'workType' | 'quartile' | 'quartileSource' | 'indexing' | 'citation'
   | 'bookType' | 'bookTitle' | 'chapterTitle' | 'isbn';
 

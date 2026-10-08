@@ -2,7 +2,7 @@ import type { LookupFillPayload } from '@darp/shared/contracts';
 import type { SessionUser } from '@/server/auth/session';
 import { canCreateIn } from '@/server/auth/permissions';
 import { mustGetModule, activeCycle, ServiceError } from '@/server/records/service';
-import { applyLookup, ownerMissingFromAuthors, outsideCycle, workTypeNote } from './apply';
+import { applyLookup, ownerMissingFromAuthors, outsideCycle, workTypeNote, yearNote } from './apply';
 import { resolve } from './resolve';
 import { isLookupUnavailable } from './http';
 import { normaliseDoiInput } from './doi';
@@ -61,18 +61,18 @@ export async function lookupForForm(
   const locked = result.authoritative
     ? m.fields.filter((f) => f.autofill?.alwaysLocked || (f.autofill?.locked && fill[f.key])).map((f) => f.key)
     : [];
-  // Out of the cycle: that is the whole story — say only that.
+  const yearHint = yearNote(result);
   // Out of the cycle: say that — after explaining what the DOI is, if it is not a single paper.
   const outside = outsideCycle(m, applied.data, cycle);
   if (outside) {
     const typeNote = workTypeNote(m, result);
-    const notes = typeNote ? [typeNote, outside.message] : [outside.message];
+    const notes = [typeNote, yearHint, outside.message].filter((n): n is string => !!n);
     return { found: true, source: result.source, authoritative: result.authoritative, fill, locked, notes };
   }
 
   const reasons = applied.verification?.reasons ?? [];
   const nameMissing = ownerMissingFromAuthors(m, applied.data, actor.name);
-  const notes: string[] = [];
+  const notes: string[] = yearHint ? [yearHint] : [];
   if (nameMissing) notes.push(nameMissing.message);
   if (applied.eligible) {
     notes.push('Everything matches the published record. When you press "Save and submit" the record is approved straight away — no evidence or manual check is needed.');

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { workTypeNote } from '@/server/lookup/apply';
+import { workTypeNote, yearNote } from '@/server/lookup/apply';
 import { notFound, type LookupResult } from '@/server/lookup/types';
 import { MODULES } from '@darp/shared/modules';
 
@@ -25,5 +25,23 @@ describe('workTypeNote', () => {
   it('says nothing for an accepted type, or where whole books are what the module takes', () => {
     expect(workTypeNote(pubs, work('journal-article', 'Journal article'))).toBeNull();
     expect(workTypeNote(books, work('book', 'Book'))).toBeNull();
+  });
+});
+
+describe('yearNote', () => {
+  const dated = (year: string, onlineYear: string): LookupResult => ({
+    ...notFound(), found: true, source: 'crossref', authoritative: true, rawType: 'journal-article',
+    values: { year, onlineYear },
+  });
+
+  it('says the issue year counts when the paper was online in an earlier year', () => {
+    expect(yearNote(dated('2022', '2021'))).toBe(
+      'It was published online in 2021 and in an issue in 2022. The issue year, 2022, is the year that counts.',
+    );
+  });
+
+  it('says nothing when the years agree or one is unknown', () => {
+    expect(yearNote(dated('2023', '2023'))).toBeNull();
+    expect(yearNote(dated('2023', ''))).toBeNull();
   });
 });

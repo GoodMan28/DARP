@@ -47,6 +47,7 @@ export const books: ModuleConfig = {
 
     { key: 'year', label: 'Year of publication', type: 'year', required: true, min: 1960, max: 2100,
       section: 'Publication', autofill: { from: 'year', locked: true },
+      help: 'The year the book or proceedings volume was published (its print year). A chapter that appeared online earlier still counts in that year.',
       exportAs: {
         faculty: 'Year of publication (Data for calendar years 2024, 2023, 2022)',
         drie: 'Year of publication',
