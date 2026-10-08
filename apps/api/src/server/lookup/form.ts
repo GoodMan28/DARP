@@ -2,7 +2,10 @@ import type { LookupFillPayload } from '@darp/shared/contracts';
 import type { SessionUser } from '@/server/auth/session';
 import { canCreateIn } from '@/server/auth/permissions';
 import { mustGetModule, activeCycle, ServiceError } from '@/server/records/service';
-import { applyLookup, ownerMissingFromAuthors, outsideCycle, workTypeNote, yearNote } from './apply';
+import {
+  applyLookup, ownerMissingFromAuthors, outsideCycle, workTypeNote, yearNote, WHOLE_VOLUME_TYPES,
+} from './apply';
+import { namesMatch } from './names';
 import { resolve } from './resolve';
 import { isLookupUnavailable } from './http';
 import { normaliseDoiInput } from './doi';
@@ -81,38 +84,52 @@ export async function lookupForForm(
     return { found: true, source: result.source, authoritative: result.authoritative, fill, locked, notes, blocked: true };
   }
 
-  const reasons = applied.verification?.reasons ?? [];
+  // "…the name was added by hand" describes a saved record; at this point nothing was added yet.
+  const reasons = (applied.verification?.reasons ?? []).filter((r) => !r.includes('added by hand'));
   const nameMissing = ownerMissingFromAuthors(m, applied.data, actor.name);
   const notes: string[] = yearHint ? [yearHint] : [];
-  if (nameMissing) notes.push(nameMissing.message);
+  if (nameMissing) {
+    notes.push(nameMissing.message);
+  } else if (!result.people.some((p) => namesMatch(actor.name, p))) {
+    // A whole book's record names its editors only: the usual mistake is a chapter author pasting the book.
+    notes.push(WHOLE_VOLUME_TYPES.has(result.rawType ?? '') && m.lookup.kind === 'book'
+      ? 'Your name is not among the authors or editors of this book. If you wrote a chapter in it, or a paper in these proceedings, paste the DOI of that chapter or paper instead.'
+      : 'Your name is not in the author list the publisher registered. Add it if you are an author or editor; the record is then checked against your evidence.');
+  }
   // A choice the lists could not answer (the quartile of a journal with no SJR value): say so, or
   // "everything matches" would hide an empty field the owner may need to fill.
+  let mustType = false;
   for (const f of m.fields) {
     if (f.type === 'select' && f.autofill?.locked && !f.autofill.alwaysLocked && !fill[f.key]) {
       notes.push(`${f.label} was not found automatically. Choose it yourself if it applies — DRIE and IQAC will see that you chose it.`);
+    } else if (f.required && f.autofill && !f.autofill.alwaysLocked && f.autofill.from !== 'citation' && !fill[f.key]) {
+      // E.g. the ISBN of AIP proceedings, which the publisher does not register with the paper.
+      mustType = true;
+      notes.push(`${f.label} is not in the publisher's record. Type it from the ${m.lookup.kind === 'book' ? 'book or proceedings' : 'paper'} — DRIE and IQAC will see that you typed it.`);
     }
   }
-  // Evidence on every record (the module's evidence field is required), or only when something is unconfirmed.
-  const evidenceAlways = !!m.fields.find((f) => f.key === m.lookup?.evidenceField)?.required;
-  if (applied.eligible && m.lookup.autoApprove === 'always' && evidenceAlways) {
+  // Evidence on every record (a required file field), or only when something is unconfirmed.
+  const evidenceAlways = m.fields.some((f) => f.type === 'file' && f.required);
+  // A detail still to be typed is not confirmed, so the record cannot be approved without a check.
+  const eligible = applied.eligible && !mustType;
+  if (eligible && evidenceAlways) {
     notes.push('Everything matches the published record. Attach the evidence and press "Save and submit": the record is approved straight away.');
-  } else if (applied.eligible) {
+  } else if (eligible) {
     notes.push('Everything matches the published record. When you press "Save and submit" the record is approved straight away — no evidence or manual check is needed.');
   } else if (m.lookup.autoApprove === 'always' && evidenceAlways) {
-    notes.push(...reasons.filter((r) => !r.includes('added by hand')));
+    notes.push(...reasons);
     notes.push('Attach the evidence and submit: the record is approved when you submit. DRIE and IQAC see the points above and may check them against the evidence and return the record.');
   } else if (m.lookup.autoApprove === 'always') {
-    const shown = reasons.filter((r) => !r.includes('added by hand'));
-    notes.push(...shown);
+    notes.push(...reasons);
     if (m.lookup.evidenceField) {
-      notes.push(shown.length > 0
+      notes.push(reasons.length > 0
         ? 'Because of the point above, attach evidence before submitting. The record is still approved when you submit; DRIE and IQAC may check it against the evidence and return it if something is wrong.'
         : 'Because your name had to be added by hand, attach evidence before submitting. The record is still approved when you submit; DRIE and IQAC may check it against the evidence.');
     } else {
       notes.push('The record is approved when you submit; DRIE and IQAC may check it and return it if something is wrong.');
     }
   } else {
-    notes.push(...reasons, 'You can still submit: the verifying office will check it before it counts as approved.');
+    notes.push(...reasons, `You can still submit: the verifying office will check it before it counts as approved.${evidenceAlways ? ' Attach the evidence first.' : ''}`);
   }
   return { found: true, source: result.source, authoritative: result.authoritative, fill, locked, notes };
 }

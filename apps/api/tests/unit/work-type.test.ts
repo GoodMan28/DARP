@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { workTypeNote, yearNote, misplacedWork } from '@/server/lookup/apply';
+import { buildCitation } from '@/server/lookup/citation';
 import { notFound, type LookupResult } from '@/server/lookup/types';
 import { MODULES } from '@darp/shared/modules';
 
@@ -69,5 +70,25 @@ describe('misplacedWork', () => {
     expect(misplacedWork(books, work('journal-article', 'Journal article'))?.moveTo).toBe('publications');
     expect(misplacedWork(pubs, work('journal-article', 'Journal article'))).toBeNull();
     expect(misplacedWork(books, work('proceedings-article', 'Conference paper'))).toBeNull();
+  });
+});
+
+describe('misplacedWork in Books & Chapters', () => {
+  it('names the journal article and Publications, without listing every type Books & Chapters takes', () => {
+    const note = misplacedWork(books, work('journal-article', 'Journal article'))?.message;
+    expect(note).toBe('This DOI is a journal article, so it cannot be submitted here. Add it under Publications instead.');
+  });
+});
+
+describe('buildCitation', () => {
+  it('starts with the title when the publisher registered no authors or editors', () => {
+    // The real case: ISBN 9780323911962 (Elsevier, 2022) has no editors in Crossref.
+    const r: LookupResult = { ...work('edited-book', 'Book'), values: { doi: '10.1016/c2020-0-04085-5' } };
+    const data = { bookTitle: 'AI and Mental Health', year: '2022', publisher: 'Elsevier', authors: '' };
+    expect(buildCitation(books, data, r)).toBe('AI and Mental Health. 2022. Elsevier. https://doi.org/10.1016/c2020-0-04085-5.');
+    expect(buildCitation(books, { ...data, chapterTitle: 'A chapter', pages: '1-9' }, r))
+      .toBe('"A chapter." 2022. In AI and Mental Health, 1-9. Elsevier. https://doi.org/10.1016/c2020-0-04085-5.');
+    expect(buildCitation(books, { ...data, authors: 'A. Writer' }, r))
+      .toBe('A. Writer. 2022. AI and Mental Health. Elsevier. https://doi.org/10.1016/c2020-0-04085-5.');
   });
 });

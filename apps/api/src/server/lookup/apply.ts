@@ -219,12 +219,13 @@ export function misplacedWork(m: ModuleConfig, r: LookupResult): Misplaced | nul
     };
   }
   const target = getModule(rule.moduleKey)?.name ?? rule.moduleKey;
-  const accepted = m.lookup.acceptTypes.map((t) => t.replace(/-/g, ' ')).join(' / ');
+  // A short list of accepted types is worth naming; Books & Chapters' nine are not.
+  const accepted = m.lookup.acceptTypes.length <= 2 ? m.lookup.acceptTypes.map((t) => t.replace(/-/g, ' ')).join(' or ') : '';
   // The usual mistake with a whole volume is pasting the volume's DOI instead of the paper's own.
   const volume = WHOLE_VOLUME_TYPES.has(r.rawType ?? '') ? `${workTypeNote(m, r) ?? ''} ` : '';
   return {
     field, moveTo: rule.moduleKey,
-    message: `${volume}This DOI is a ${what}, not a ${accepted}, so it cannot be submitted here. ${volume ? 'If it is a book you wrote or edited, add' : 'Add'} it under ${target} instead.`,
+    message: `${volume}This DOI is a ${what}${accepted ? `, not a ${accepted},` : ','} so it cannot be submitted here. ${volume ? 'If it is a book you wrote or edited, add' : 'Add'} it under ${target} instead.`,
   };
 }
 
@@ -240,7 +241,7 @@ export function yearNote(r: LookupResult): string | null {
 }
 
 /** Crossref types that identify a whole volume (a book, proceedings, a series), not one work in it. */
-const WHOLE_VOLUME_TYPES = new Set([
+export const WHOLE_VOLUME_TYPES = new Set([
   'book', 'edited-book', 'monograph', 'reference-book', 'proceedings', 'book-set', 'book-series', 'book-track',
 ]);
 

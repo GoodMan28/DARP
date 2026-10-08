@@ -195,6 +195,35 @@ describe('what the form says after Fetch details', () => {
     expect(res.locked).not.toContain('quartile');
   });
 
+  it('asks for evidence in Books & Chapters even when everything matches', async () => {
+    const doi = nextDoi();
+    resolveMock.mockResolvedValue(hit(faculty, {
+      rawType: 'book-chapter',
+      values: {
+        doi, authors: `${faculty.name}, Someone Else`, year: '2023', workType: 'Book chapter', bookType: 'Book chapter',
+        chapterTitle: 'A chapter', bookTitle: 'A book', isbn: '9781509064717', publisher: 'Springer',
+      },
+      identifiers: { issn: [], isbn: ['9781509064717'] },
+    }));
+    const res = await lookupForForm(faculty, 'books', doi);
+    expect(res.notes.at(-1)).toContain('Attach the evidence and press "Save and submit"');
+  });
+
+  it('says which required detail the publisher did not register, and does not call it a full match', async () => {
+    const doi = nextDoi();
+    resolveMock.mockResolvedValue(hit(faculty, {
+      rawType: 'proceedings-article',
+      values: {
+        doi, authors: faculty.name, year: '2024', workType: 'Conference paper', bookType: 'Conference paper',
+        chapterTitle: 'A paper', bookTitle: 'Proceedings of a conference', publisher: 'AIP Publishing',
+      },
+      identifiers: { issn: [], isbn: [] },
+    }));
+    const notes = (await lookupForForm(faculty, 'books', doi)).notes.join(' ');
+    expect(notes).toContain("ISBN number is not in the publisher's record");
+    expect(notes).not.toContain('Everything matches');
+  });
+
   it('offers Books & Chapters for a conference paper', async () => {
     resolveMock.mockResolvedValue(hit(faculty, { rawType: 'proceedings-article', values: { ...hit(faculty).values, workType: 'Conference paper' } }));
     const res = await lookupForForm(faculty, 'publications', nextDoi());
