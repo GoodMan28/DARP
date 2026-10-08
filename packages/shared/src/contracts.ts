@@ -8,7 +8,7 @@
  * would break a page fails `npm run typecheck` instead of failing in the browser.
  */
 import type {
-  ModuleConfig, PeriodType, RecordStatus, Role,
+  ModuleConfig, PeriodType, RecordStatus, Role, LookupKind,
 } from './modules/_types';
 
 /** What a value looks like after `JSON.stringify` → `JSON.parse`. */
@@ -185,6 +185,12 @@ export interface FormFieldDef {
   accept: string[] | null;
   maxSizeMB: number | null;
   protected: boolean;
+  /**
+   * Filled from an external register. `locked` fields are shown locked after a lookup, with a
+   * Change button; `alwaysLocked` (set by the system) and `generated` (the citation, rebuilt from
+   * the other fields) can never be changed.
+   */
+  autofill: { locked: boolean; alwaysLocked: boolean; generated: boolean } | null;
 }
 
 /** GET /api/modules/:moduleKey/schema — the module's shape plus the caller's standing in it. */
@@ -203,6 +209,8 @@ export interface ModuleSchemaPayload {
   periods: PeriodOption[];
   counts: StatusCounts;
   declaredNil: boolean;
+  /** Present when the module fetches its facts from a register (DOI / ISBN). */
+  lookup: { kind: LookupKind; idFields: string[]; idLabel: string } | null;
   fields: FormFieldDef[];
 }
 
@@ -216,6 +224,8 @@ export interface RecordListRow {
   returnedRemark: string | null;
   updatedAt: string;
   data: Record<string, unknown>;
+  /** Approved automatically, but with details that could not be confirmed: worth a look. */
+  needsCheck: boolean;
 }
 
 /** GET /api/modules/:moduleKey/records */
@@ -245,10 +255,66 @@ export interface RecordDetail {
   updatedAt: string;
   ownerUserId: string;
   ownerName: string;
+  /** The record's own department (not the viewer's); null for an institute-wide record. */
+  departmentName: string | null;
   isMine: boolean;
   canEdit: boolean;
   data: Record<string, unknown>;
   /** Raw values for the form — present only for someone who may edit. */
   editValues: Record<string, unknown> | null;
   history: RecordHistoryEntry[];
+  /** How the record was checked; null for records entered before automatic checks existed. */
+  verification: RecordVerification | null;
+  /** Fields the edit form must show as locked. */
+  lockedFields: string[];
 }
+
+/* ── automatic lookup (DOI / ISBN) ─────────────────────────────────── */
+
+export type LookupSource = 'crossref' | 'datacite' | 'openlibrary';
+
+/** Stored on a record (records.verification) and returned with it. */
+export interface RecordVerification {
+  /** null = the details were typed by hand. */
+  source: LookupSource | null;
+  identifier: string | null;
+  checkedAt: string;
+  autoApproved: boolean;
+  /** What the verifying office and IQAC should check. Empty when every check passed. */
+  reasons: string[];
+  /**
+   * Fields the owner changed from the publisher's record, or typed because nothing was found —
+   * worked out by the server by comparing the saved values with the record it fetched, so they
+   * cannot be hidden. Fields not listed came from the publisher unchanged.
+   */
+  fields?: Record<string, FieldProvenance>;
+}
+
+export interface FieldProvenance {
+  origin: 'changed' | 'typed';
+  /** The publisher's value; '' when nothing was found. */
+  fetched: string;
+}
+
+/** POST /api/lookup/:moduleKey */
+export interface LookupFillPayload {
+  found: boolean;
+  source: LookupSource | null;
+  authoritative: boolean;
+  /** field key → value to put in the form */
+  fill: Record<string, string>;
+  /** field keys the form must show as locked */
+  locked: string[];
+  /** plain-language notes for the person filling in */
+  notes: string[];
+  /** Fetched, but it cannot be submitted in this module whatever is changed (e.g. outside the cycle). */
+  blocked?: boolean;
+  /** The work belongs in another module: its key and name, for an "Add it there" link. */
+  moveTo?: { moduleKey: string; name: string } | null;
+}
+
+export const LOOKUP_SOURCE_LABEL: Record<LookupSource, string> = {
+  crossref: 'Crossref',
+  datacite: 'DataCite',
+  openlibrary: 'Open Library',
+};

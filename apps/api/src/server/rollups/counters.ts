@@ -44,85 +44,85 @@ export const COUNTERS: CounterDef[] = [
   /* ── Publications ─────────────────────────────────────────── */
   ...both({
     keyBase: 'publications.count', moduleKey: 'publications', metric: 'count', format: 'number',
-    label: 'Publications 2022–2024', labelSince: 'Publications since joining BIT',
+    label: 'Publications {CY}', labelSince: 'Publications since joining BIT',
   }),
 
   /* ── Patents ──────────────────────────────────────────────── */
   ...both({
     keyBase: 'patents.count.published', moduleKey: 'patents', metric: 'count', format: 'number',
     filter: { field: 'status', in: ['Published'] },
-    label: 'Patents published 2022–2024', labelSince: 'Patents published since joining BIT',
+    label: 'Patents published {CY}', labelSince: 'Patents published since joining BIT',
   }),
   ...both({
     keyBase: 'patents.count.granted', moduleKey: 'patents', metric: 'count', format: 'number',
     filter: { field: 'status', in: ['Awarded/Granted'] },
-    label: 'Patents granted 2022–2024', labelSince: 'Patents granted since joining BIT',
+    label: 'Patents granted {CY}', labelSince: 'Patents granted since joining BIT',
   }),
 
   /* ── Books and chapters ───────────────────────────────────── */
   ...both({
     keyBase: 'books.count.book', moduleKey: 'books', metric: 'count', format: 'number',
     filter: { field: 'publicationType', in: ['Book'] },
-    label: 'Books published 2022–2024', labelSince: 'Books published since joining BIT',
+    label: 'Books published {CY}', labelSince: 'Books published since joining BIT',
   }),
   ...both({
     keyBase: 'books.count.chapter', moduleKey: 'books', metric: 'count', format: 'number',
     filter: { field: 'publicationType', in: ['Book chapter'] },
-    label: 'Book chapters 2022–2024', labelSince: 'Book chapters since joining BIT',
+    label: 'Book chapters {CY}', labelSince: 'Book chapters since joining BIT',
   }),
 
   /* ── Funds and grants ─────────────────────────────────────── */
   ...both({
     keyBase: 'grants.count.pi', moduleKey: 'grants', metric: 'count', format: 'number',
     filter: { field: 'role', in: ['PI'] },
-    label: 'Research projects as PI, FY 2022-25', labelSince: 'Research projects as PI since joining BIT',
+    label: 'Research projects as PI, {FY}', labelSince: 'Research projects as PI since joining BIT',
   }),
   ...both({
     keyBase: 'grants.sum.pi', moduleKey: 'grants', metric: 'sum', sumField: 'amount', format: 'money',
     filter: { field: 'role', in: ['PI'] },
-    label: 'Sanctioned amount as PI, FY 2022-25', labelSince: 'Sanctioned amount as PI since joining BIT',
+    label: 'Sanctioned amount as PI, {FY}', labelSince: 'Sanctioned amount as PI since joining BIT',
   }),
   ...both({
     keyBase: 'grants.count.copi', moduleKey: 'grants', metric: 'count', format: 'number',
     filter: { field: 'role', in: ['Co-PI'] },
-    label: 'Research projects as Co-PI, FY 2022-25', labelSince: 'Research projects as Co-PI since joining BIT',
+    label: 'Research projects as Co-PI, {FY}', labelSince: 'Research projects as Co-PI since joining BIT',
   }),
   ...both({
     keyBase: 'grants.sum.copi', moduleKey: 'grants', metric: 'sum', sumField: 'amount', format: 'money',
     filter: { field: 'role', in: ['Co-PI'] },
-    label: 'Sanctioned amount as Co-PI, FY 2022-25', labelSince: 'Sanctioned amount as Co-PI since joining BIT',
+    label: 'Sanctioned amount as Co-PI, {FY}', labelSince: 'Sanctioned amount as Co-PI since joining BIT',
   }),
 
   /* ── Consultancy and corporate training ───────────────────── */
   ...both({
     keyBase: 'consultancy.count.consultancy', moduleKey: 'consultancy', metric: 'count', format: 'number',
     filter: { field: 'recordType', in: ['Consultancy'] },
-    label: 'Consultancy projects, FY 2022-25', labelSince: 'Consultancy projects since joining BIT',
+    label: 'Consultancy projects, {FY}', labelSince: 'Consultancy projects since joining BIT',
   }),
   ...both({
     keyBase: 'consultancy.sum.consultancy', moduleKey: 'consultancy', metric: 'sum', sumField: 'revenue', format: 'money',
     filter: { field: 'recordType', in: ['Consultancy'] },
-    label: 'Consultancy revenue, FY 2022-25', labelSince: 'Consultancy revenue since joining BIT',
+    label: 'Consultancy revenue, {FY}', labelSince: 'Consultancy revenue since joining BIT',
   }),
   ...both({
     keyBase: 'consultancy.count.training', moduleKey: 'consultancy', metric: 'count', format: 'number',
     filter: { field: 'recordType', in: ['Corporate training'] },
-    label: 'Corporate training programmes, FY 2022-25', labelSince: 'Corporate training programmes since joining BIT',
+    label: 'Corporate training programmes, {FY}', labelSince: 'Corporate training programmes since joining BIT',
   }),
   ...both({
     keyBase: 'consultancy.sum.training', moduleKey: 'consultancy', metric: 'sum', sumField: 'revenue', format: 'money',
     filter: { field: 'recordType', in: ['Corporate training'] },
-    label: 'Corporate training revenue, FY 2022-25', labelSince: 'Corporate training revenue since joining BIT',
+    label: 'Corporate training revenue, {FY}', labelSince: 'Corporate training revenue since joining BIT',
   }),
 
   /* ── Fellowships ──────────────────────────────────────────── */
   ...both({
     keyBase: 'fellowships.count', moduleKey: 'fellowships', metric: 'count', format: 'number',
-    label: 'Fellowships / travel grants, FY 2022-25', labelSince: 'Fellowships / travel grants since joining BIT',
+    label: 'Fellowships / travel grants, {FY}', labelSince: 'Fellowships / travel grants since joining BIT',
   }),
   ...both({
     keyBase: 'fellowships.sum', moduleKey: 'fellowships', metric: 'sum', sumField: 'amount', format: 'money',
-    label: 'Fellowship amount, FY 2022-25', labelSince: 'Fellowship amount since joining BIT',
+    label: 'Fellowship amount, {FY}', labelSince: 'Fellowship amount since joining BIT',
   }),
 
   /* ── Seed money (no "cycle" row exists in the sheet) ──────── */
@@ -134,41 +134,41 @@ export const COUNTERS: CounterDef[] = [
   /* ── Awards ───────────────────────────────────────────────── */
   ...both({
     keyBase: 'awards.count', moduleKey: 'awards', metric: 'count', format: 'number',
-    label: 'Awards from state/national/international agencies, 2022–2024',
+    label: 'Awards from state/national/international agencies, {CY}',
     labelSince: 'Awards from state/national/international agencies since joining BIT',
   }),
   ...both({
     keyBase: 'riawards.count', moduleKey: 'riawards', metric: 'count', format: 'number',
-    label: 'Research & innovation awards 2022–2024',
+    label: 'Research & innovation awards {CY}',
     labelSince: 'Research & innovation awards since joining BIT',
   }),
   ...both({
     keyBase: 'extawards.count', moduleKey: 'extawards', metric: 'count', format: 'number',
-    label: 'Extension-activity awards 2022–2024',
+    label: 'Extension-activity awards {CY}',
     labelSince: 'Extension-activity awards since joining BIT',
   }),
 
   /* ── Financial support (the sheet has only the window rows) ─ */
   C({
-    key: 'finsupport.count.cycle', label: 'Times financial support received, FY 2022-25',
+    key: 'finsupport.count.cycle', label: 'Times financial support received, {FY}',
     moduleKey: 'finsupport', metric: 'count', window: 'cycle', format: 'number',
   }),
   C({
-    key: 'finsupport.sum.cycle', label: 'Amount of financial support received, FY 2022-25',
+    key: 'finsupport.sum.cycle', label: 'Amount of financial support received, {FY}',
     moduleKey: 'finsupport', metric: 'sum', sumField: 'amount', window: 'cycle', format: 'money',
   }),
 
   /* ── FDPs attended ────────────────────────────────────────── */
   ...both({
     keyBase: 'fdpattended.count', moduleKey: 'fdpattended', metric: 'count', format: 'number',
-    label: 'FDPs / MDPs / refreshers attended 2022–2024',
+    label: 'FDPs / MDPs / refreshers attended {CY}',
     labelSince: 'FDPs / MDPs / refreshers attended since joining BIT',
   }),
 
   /* ── E-content ────────────────────────────────────────────── */
   ...both({
     keyBase: 'econtent.count', moduleKey: 'econtent', metric: 'count', format: 'number',
-    label: 'E-content modules developed, AY 2022-25',
+    label: 'E-content modules developed, {AY}',
     labelSince: 'E-content modules developed since joining BIT',
   }),
 
@@ -176,17 +176,17 @@ export const COUNTERS: CounterDef[] = [
   ...both({
     keyBase: 'studentsguided.count.ug', moduleKey: 'studentsguided', metric: 'count', format: 'number',
     filter: { field: 'level', in: ['UG'] },
-    label: 'UG students guided, AY 2022-25', labelSince: 'UG students guided since joining BIT',
+    label: 'UG students guided, {AY}', labelSince: 'UG students guided since joining BIT',
   }),
   ...both({
     keyBase: 'studentsguided.count.pg', moduleKey: 'studentsguided', metric: 'count', format: 'number',
     filter: { field: 'level', in: ['PG'] },
-    label: 'PG students guided, AY 2022-25', labelSince: 'PG students guided since joining BIT',
+    label: 'PG students guided, {AY}', labelSince: 'PG students guided since joining BIT',
   }),
   ...both({
     keyBase: 'studentsguided.count.phd', moduleKey: 'studentsguided', metric: 'count', format: 'number',
     filter: { field: 'level', in: ['PHD'] },
-    label: 'Ph.D. students guided, AY 2022-25', labelSince: 'Ph.D. students guided since joining BIT',
+    label: 'Ph.D. students guided, {AY}', labelSince: 'Ph.D. students guided since joining BIT',
   }),
 ];
 
@@ -197,17 +197,17 @@ export const COUNTERS: CounterDef[] = [
 
 export const DECLARED_COUNTERS: DeclaredCounterDef[] = [
   { key: 'manual.seminars.national.sinceJoining', label: 'National seminars attended since joining BIT', help: 'Seminars, conferences and workshops are told apart by the name of the programme.', format: 'number' },
-  { key: 'manual.seminars.national.cycle', label: 'National seminars attended, AY 2024-25', help: '', format: 'number' },
+  { key: 'manual.seminars.national.cycle', label: 'National seminars attended, {lastAY}', help: '', format: 'number' },
   { key: 'manual.seminars.international.sinceJoining', label: 'International seminars attended since joining BIT', help: '', format: 'number' },
-  { key: 'manual.seminars.international.cycle', label: 'International seminars attended, AY 2024-25', help: '', format: 'number' },
+  { key: 'manual.seminars.international.cycle', label: 'International seminars attended, {lastAY}', help: '', format: 'number' },
   { key: 'manual.workshops.attended.sinceJoining', label: 'Workshops and conferences attended since joining BIT', help: '', format: 'number' },
-  { key: 'manual.workshops.attended.cycle', label: 'Workshops and conferences attended, AY 2024-25', help: '', format: 'number' },
+  { key: 'manual.workshops.attended.cycle', label: 'Workshops and conferences attended, {lastAY}', help: '', format: 'number' },
   { key: 'manual.foreignVisits.count.sinceJoining', label: 'Foreign universities visited since joining BIT', help: '', format: 'number' },
-  { key: 'manual.foreignVisits.lastYear', label: 'Visited a foreign university in AY 2024-25?', help: '', format: 'yesno' },
+  { key: 'manual.foreignVisits.lastYear', label: 'Visited a foreign university in {lastAY}?', help: '', format: 'yesno' },
   { key: 'manual.papersPresented.national.sinceJoining', label: 'Papers presented at national conferences since joining BIT', help: 'Conference presentations, not journal papers.', format: 'number' },
-  { key: 'manual.papersPresented.national.cycle', label: 'Papers presented at national conferences, CY 2024', help: '', format: 'number' },
+  { key: 'manual.papersPresented.national.cycle', label: 'Papers presented at national conferences, {lastCY}', help: '', format: 'number' },
   { key: 'manual.papersPresented.international.sinceJoining', label: 'Papers presented at international conferences since joining BIT', help: '', format: 'number' },
-  { key: 'manual.papersPresented.international.cycle', label: 'Papers presented at international conferences, CY 2024', help: '', format: 'number' },
+  { key: 'manual.papersPresented.international.cycle', label: 'Papers presented at international conferences, {lastCY}', help: '', format: 'number' },
   { key: 'manual.collaborators.active', label: 'Total number of active research collaborators', help: '', format: 'number' },
 ];
 
@@ -237,6 +237,21 @@ export interface CycleBounds {
   CY: [number, number];
   FY: [number, number];
   AY: [number, number];
+}
+
+/**
+ * Labels name the cycle's years through placeholders, filled from the cycle IQAC has made active
+ * (Administration → Reporting cycle), so no year is written into the catalogue:
+ *   {CY} 2022–2024 · {FY} FY 2022-25 · {AY} AY 2022-25 · {lastAY} AY 2024-25 · {lastCY} CY 2024
+ */
+export function withCycleYears(label: string, b: CycleBounds): string {
+  const yy = (y: number) => String(y % 100).padStart(2, '0');
+  return label
+    .replace(/\{CY\}/g, `${b.CY[0]}–${b.CY[1]}`)
+    .replace(/\{FY\}/g, `FY ${b.FY[0]}-${yy(b.FY[1] + 1)}`)
+    .replace(/\{AY\}/g, `AY ${b.AY[0]}-${yy(b.AY[1] + 1)}`)
+    .replace(/\{lastAY\}/g, `AY ${b.AY[1]}-${yy(b.AY[1] + 1)}`)
+    .replace(/\{lastCY\}/g, `CY ${b.CY[1]}`);
 }
 
 function matchesFilter(def: CounterDef, data: Record<string, unknown>): boolean {

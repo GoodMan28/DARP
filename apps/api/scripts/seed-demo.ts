@@ -17,10 +17,17 @@ import { db, pool } from '../src/server/db';
 import { users, departments, cycles } from '../src/server/db/schema';
 import { hashPassword } from '../src/server/auth/password';
 import { createRecord, transitionRecord } from '../src/server/records/service';
+import { uploadEvidence } from '../src/server/evidence/service';
 import { getAllLists } from '../src/server/records/masterLists';
 import { MODULES } from '@darp/shared/modules';
 import type { FieldConfig, ModuleConfig, Role } from '@darp/shared/modules/types';
 import type { SessionUser } from '../src/server/auth/session';
+
+// Demo data is generated offline: never call a publisher register while seeding.
+process.env.LOOKUP_OFFLINE = '1';
+
+/** The smallest file the evidence check accepts as a PDF. */
+const DEMO_PDF = Buffer.from('%PDF-1.4\n% DARP demo evidence\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n');
 
 const DEMO_DOMAIN = '@demo.bitmesra.ac.in';
 const DEMO_PASSWORD = 'DarpDemo!2026Pass';
@@ -185,8 +192,11 @@ function valueFor(f: FieldConfig, ctx: GenContext): unknown {
       return `10.${1000 + (ctx.index % 8999)}/darp.demo.${ctx.index}`;
     case 'issn':
       return `${1000 + Math.floor(rng() * 8999)}-${100 + Math.floor(rng() * 899)}X`;
-    case 'isbn':
-      return `978${String(Math.floor(rng() * 1000000000)).padStart(9, '0')}1`;
+    case 'isbn': {
+      const core = `978${String(Math.floor(rng() * 1e9)).padStart(9, '0')}`;
+      const sum = [...core].reduce((a, ch, i) => a + Number(ch) * (i % 2 === 0 ? 1 : 3), 0);
+      return core + String((10 - (sum % 10)) % 10);
+    }
     case 'email':
       return `${ctx.person.key}.demo@bitmesra.ac.in`;
     case 'phone':
@@ -236,6 +246,17 @@ function valueFor(f: FieldConfig, ctx: GenContext): unknown {
     default: {
       // text — choose by what the column is actually asking for
       const salt = unique ? ` ${ctx.index}` : '';
+      if (f.normalise === 'patentNumber') {
+        // Kolkata office (3), ordinary application (1): YYYY 3 1 NNNNNN, unique per record.
+        return `${2021 + (ctx.index % 4)}31${String(100000 + ctx.index).padStart(6, '0')}`;
+      }
+      // Short bibliographic fields: plausible values that fit their maxLength.
+      if (label === 'volume' || label === 'issue') return String(1 + Math.floor(rng() * 40));
+      if (label.startsWith('pages')) {
+        const first = 1 + Math.floor(rng() * 400);
+        return `${first}-${first + 8 + Math.floor(rng() * 20)}`;
+      }
+      if (label.includes('quartile')) return pick(['Q1 (SJR 2023)', 'Q2 (SJR 2023)', 'Q3 (SJR 2022)', 'Q4 (SJR 2024)'], rng);
       if (label.includes('roll') || label.includes('registration') || label.includes('enrol')
         || label.includes('code') || label.includes('application')) {
         return `BIT/${2020 + (ctx.index % 5)}/${1000 + ctx.index}`;
@@ -293,7 +314,9 @@ function buildRecord(m: ModuleConfig, ctx: GenContext): Record<string, unknown> 
     }
     if (f.type === 'file') continue;                     // nothing to upload in a seed
     if (!f.required && ctx.rng() < 0.25) continue;        // leave some optional fields blank
-    values[f.key] = valueFor(f, ctx);
+    const v = valueFor(f, ctx);
+    // Never let a generated value break a field's own length rule.
+    values[f.key] = typeof v === 'string' && f.maxLength ? v.slice(0, f.maxLength) : v;
   }
   return values;
 }
@@ -432,6 +455,20 @@ async function main() {
         uniqueKeys: new Set(m.naturalKey ?? []),
       };
       const values = buildRecord(m, ctx);
+      // Modules with a lookup: the owner must be in the author list, and (offline, so nothing is
+      // confirmed) evidence is compulsory — attach a one-page demo PDF. So does any required file.
+      const authorsKey = m.lookup?.ownerMustBeIn;
+      if (authorsKey) values[authorsKey] = `${actor.name}, ${String(values[authorsKey] ?? '')}`.replace(/,\s*$/, '');
+      const fileKeys = m.fields
+        .filter((f) => f.type === 'file' && (f.required || f.key === m.lookup?.evidenceField))
+        .map((f) => f.key);
+      for (const key of fileKeys) {
+        const file = await uploadEvidence(actor, {
+          bytes: DEMO_PDF, fileName: 'demo-evidence.pdf', declaredMime: 'application/pdf',
+          fieldKey: key, moduleKey: m.key,
+        });
+        values[key] = file.id;
+      }
       // Every fourth record stays a draft, so the dashboards show work in progress.
       const mode = index % 4 === 0 ? 'draft' : 'submit';
       try {

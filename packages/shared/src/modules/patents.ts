@@ -32,7 +32,8 @@ export const patents: ModuleConfig = {
       exportAs: { drie: 'Patent Filed Date (DD/MM/YYYY)' } },
 
     { key: 'applicationNo', label: 'Patent Application Number / Patent Grant Number', type: 'text',
-      required: true, maxLength: 80, section: 'Patent',
+      required: true, maxLength: 80, section: 'Patent', normalise: 'patentNumber',
+      help: 'Indian numbers: 202331012345, 935/KOL/2013, or the 6-digit patent number. Choose the country first.',
       exportAs: {
         faculty: 'Patent Application Number / Patent Grant Number',
         drie: 'Patent Application Number / Patent Grant Number',

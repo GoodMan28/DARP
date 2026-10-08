@@ -22,13 +22,16 @@ export function scopeFilter(actor: SessionUser, m: ModuleConfig, cycleId: string
 
   if (actor.role === 'admin') return base;
 
-  // The owning office sees every record of the modules it owns or verifies.
-  if (m.verifierRoles.includes(actor.role) || m.viewRoles.includes(actor.role)) return base;
-
+  // A head of department reads their own department only — even in modules that name 'hod' as a
+  // viewer, where "view" means "in their scope" (as canReadRecord has it). This must come before
+  // the office rule below, or every HOD would list every department's records.
   if (actor.role === 'hod') {
     if (!actor.departmentId) return and(base, eq(records.id, MATCHES_NOTHING))!;
     return and(base, eq(records.departmentId, actor.departmentId))!;
   }
+
+  // The owning office sees every record of the modules it owns or verifies.
+  if (m.verifierRoles.includes(actor.role) || m.viewRoles.includes(actor.role)) return base;
 
   if (actor.role === 'faculty') return and(base, eq(records.ownerUserId, actor.id))!;
 

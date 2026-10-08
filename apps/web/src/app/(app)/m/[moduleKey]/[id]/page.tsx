@@ -7,9 +7,10 @@ import {
 import { IconArrowBack, IconLock } from '@/components/shell/Icon';
 import { RecordForm } from '@/components/form/RecordForm';
 import { ActionRail, type RailAction } from '@/components/records/ActionRail';
+import { DeleteRecord } from '@/components/records/DeleteRecord';
 import { lockedStrip } from '@/components/records/form-fields';
 import { requireMe, loadPageData } from '@/lib/api.server';
-import type { ModuleSchemaPayload, RecordDetail } from '@darp/shared/contracts';
+import { LOOKUP_SOURCE_LABEL, type ModuleSchemaPayload, type RecordDetail } from '@darp/shared/contracts';
 import { getModule } from '@darp/shared/modules';
 import { formatDateTime, STATUS_LABEL } from '@darp/shared/format';
 import { ROLE_LABEL } from '@darp/shared/roles';
@@ -59,6 +60,8 @@ export default async function RecordPage({ params }: PageProps) {
   const record = loaded.data;
   const editable = record.canEdit && record.editValues !== null;
   const mayVerify = schema.data.canVerify;
+  // The owner's own draft or returned record: they correct and resubmit it, or delete it.
+  const ownOpen = editable && record.isMine && (record.status === 'draft' || record.status === 'returned');
   const isAdmin = user.role === 'admin';
 
   /*
@@ -68,11 +71,22 @@ export default async function RecordPage({ params }: PageProps) {
    */
   const rail: RailAction[] = [];
   if (record.status === 'submitted' && mayVerify) rail.push('verify');
-  if ((record.status === 'submitted' || record.status === 'verified') && mayVerify) rail.push('return');
+  // Approved-on-submission modules are checked afterwards: the office and IQAC may return an approved record.
+  const returnable = record.status === 'submitted' || record.status === 'verified'
+    || (record.status === 'approved' && m.lookup?.autoApprove === 'always');
+  if (returnable && mayVerify) rail.push('return');
   if (record.status === 'verified' && isAdmin) rail.push('approve');
   if (record.status === 'approved' && isAdmin) rail.push('unlock');
 
   const { fields } = schema.data;
+  // What the owner changed from the publisher's record or typed by hand, in form order.
+  const provenance = record.verification?.fields ?? {};
+  const changes = fields.filter((f) => provenance[f.key]).map((f) => ({
+    key: f.key,
+    label: f.label,
+    fetched: provenance[f.key]!.fetched,
+    value: String(record.data[f.key] ?? ''),
+  }));
   const primary = m.listColumns[0];
   const heading = primary && record.data[primary] ? String(record.data[primary]) : `${m.name} record`;
 
@@ -116,28 +130,88 @@ export default async function RecordPage({ params }: PageProps) {
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="min-w-0">
+          {changes.length > 0 ? (
+            <Card padded={false} className="mb-4">
+              <CardHeader
+                title="Changed or typed by the faculty member"
+                subtitle="Compared by the server with the publisher's record when the record was saved. Check these against the evidence."
+              />
+              <Table>
+                <caption className="sr-only">Fields changed from the publisher&apos;s record or typed by hand</caption>
+                <thead>
+                  <tr>
+                    <Th>Field</Th>
+                    <Th>Publisher&apos;s record</Th>
+                    <Th>Faculty&apos;s value</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {changes.map((c) => (
+                    <tr key={c.key}>
+                      <Td className="text-xs font-semibold">{c.label}</Td>
+                      <Td className="text-xs text-ink-muted">{c.fetched || <em>Not found — typed by hand</em>}</Td>
+                      <Td className="text-xs">{c.value || <em>(empty)</em>}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </Card>
+          ) : null}
           <RecordForm
             moduleKey={m.key}
             fields={fields}
             recordId={record.id}
             initialValues={editable ? (record.editValues ?? {}) : record.data}
-            locked={lockedStrip(m, user, record.periodLabel, record.ownerName)}
+            lookup={schema.data.lookup}
+            initialLocked={record.lockedFields}
+            initialProvenance={record.verification?.fields}
+            locked={lockedStrip(m, user, record.periodLabel, record.ownerName, record)}
             readOnly={!editable}
           />
         </div>
 
         <aside className="space-y-4">
+          {/* The automatic check's verdict describes an approval; once returned or resubmitted it no longer applies. */}
+          {record.verification && !(record.verification.autoApproved && record.status !== 'approved') ? (
+            record.verification.autoApproved && record.verification.reasons.length === 0 ? (
+              <Notice tone="success" title="Checked automatically">
+                Matched the published record
+                {record.verification.source ? ` at ${LOOKUP_SOURCE_LABEL[record.verification.source]}` : ''} on{' '}
+                {formatDateTime(record.verification.checkedAt)}. No manual verification was needed.
+              </Notice>
+            ) : record.verification.autoApproved ? (
+              <Notice tone="warning" title="Approved automatically — points to check">
+                Approved on submission. These details could not be confirmed automatically; check them against
+                the evidence, and use “Return to owner” if something is wrong.
+                <ul className="mt-1 list-disc pl-5">
+                  {record.verification.reasons.map((r) => <li key={r}>{r}</li>)}
+                </ul>
+              </Notice>
+            ) : record.verification.reasons.length > 0 ? (
+              <Notice tone="info" title="Why the verifying office checks this record">
+                <ul className="mt-1 list-disc pl-5">
+                  {record.verification.reasons.map((r) => <li key={r}>{r}</li>)}
+                </ul>
+              </Notice>
+            ) : null
+          ) : null}
+
           <Card padded={false}>
             <CardHeader title="Status" subtitle={`Last updated ${formatDateTime(record.updatedAt)}`} />
             <div className="space-y-3 p-3">
               <StatePill status={record.status} />
               {rail.length > 0 ? (
-                <ActionRail moduleKey={m.key} recordId={record.id} actions={rail} />
+                <ActionRail moduleKey={m.key} recordId={record.id} actions={rail} verifyIsFinal={m.lookup?.autoApprove === 'always'} />
+              ) : ownOpen ? (
+                <p className="text-xs text-ink-muted">
+                  Correct the fields and press “Save and submit” below the form.
+                </p>
               ) : (
                 <p className="text-xs text-ink-muted">
                   No workflow action is available to you on this record right now.
                 </p>
               )}
+              {ownOpen ? <DeleteRecord moduleKey={m.key} recordId={record.id} /> : null}
             </div>
           </Card>
 

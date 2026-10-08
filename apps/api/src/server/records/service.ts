@@ -1,6 +1,6 @@
-import { and, asc, desc, eq, isNull, sql, count } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, sql, count } from 'drizzle-orm';
 import { db } from '@/server/db';
-import { records, recordTransitions, cycles, users, moduleDeclarations } from '@/server/db/schema';
+import { records, recordTransitions, cycles, users, departments, moduleDeclarations } from '@/server/db/schema';
 import { getModule } from '@darp/shared/modules';
 import type { ModuleConfig, RecordStatus } from '@darp/shared/modules/types';
 import type { SessionUser } from '@/server/auth/session';
@@ -12,6 +12,10 @@ import { validateRecord } from './validate';
 import { prepareForStorage, presentForRead, presentForEdit } from './prepare';
 import { resolvePeriod, type CycleWindows } from './periods';
 import { audit } from '@/server/audit/log';
+import { applyLookup, ownerMissingFromAuthors, evidenceMissing, outsideCycle } from '@/server/lookup/apply';
+import { unattachableFiles, linkEvidence } from './evidenceLinks';
+import { systemActor } from '@/server/lookup/system';
+import { LOOKUP_SOURCE_LABEL, type RecordVerification } from '@darp/shared/contracts';
 
 export class ServiceError extends Error {
   constructor(
@@ -75,6 +79,8 @@ export interface ListParams {
   pageSize?: number;
   status?: RecordStatus;
   periodYear?: number;
+  /** Only records with points for the verifying office or IQAC to check (see needsCheck). */
+  check?: boolean;
 }
 
 export async function listRecords(actor: SessionUser, moduleKey: string, params: ListParams) {
@@ -84,6 +90,13 @@ export async function listRecords(actor: SessionUser, moduleKey: string, params:
   let where = scopeFilter(actor, m, cycle.id);
   if (params.status) where = and(where, eq(records.status, params.status))!;
   if (params.periodYear) where = and(where, eq(records.periodYear, params.periodYear))!;
+  if (params.check) {
+    where = and(
+      where,
+      inArray(records.status, [...CHECKED_STATUSES]),
+      sql`jsonb_array_length(coalesce(${records.verification} -> 'reasons', '[]'::jsonb)) > 0`,
+    )!;
+  }
   if (params.q) {
     const needle = `%${params.q.trim().toLowerCase().slice(0, 100)}%`;
     where = and(where, sql`${records.searchText} like ${needle}`)!;
@@ -111,6 +124,7 @@ export async function listRecords(actor: SessionUser, moduleKey: string, params:
       departmentId: records.departmentId,
       updatedAt: records.updatedAt,
       returnedRemark: records.returnedRemark,
+      verification: records.verification,
     })
     .from(records)
     .innerJoin(users, eq(users.id, records.ownerUserId))
@@ -133,6 +147,7 @@ export async function listRecords(actor: SessionUser, moduleKey: string, params:
       ownerName: r.ownerName,
       isMine: r.ownerUserId === actor.id,
       returnedRemark: r.returnedRemark,
+      needsCheck: needsCheck(r.verification as RecordVerification | null, r.status),
       updatedAt: r.updatedAt,
       data: presentForRead(m, r.data as Record<string, unknown>, {
         includeSensitive: r.ownerUserId === actor.id || actor.role === 'admin',
@@ -158,7 +173,34 @@ export async function statusCounts(actor: SessionUser, moduleKey: string) {
   return out;
 }
 
+/** Statuses in which points to check concern the verifying office and IQAC (not the owner's drafts). */
+const CHECKED_STATUSES = ['submitted', 'verified', 'approved'] as const;
+
+/**
+ * Submitted or approved with points to check — details the owner changed or typed, or anything not
+ * confirmed automatically: DRIE/IQAC should look at it against the evidence.
+ */
+function needsCheck(v: RecordVerification | null, status: RecordStatus): boolean {
+  return (CHECKED_STATUSES as readonly string[]).includes(status) && (v?.reasons.length ?? 0) > 0;
+}
+
 /* ─────────────────────────────── read ─────────────────────────────── */
+
+const AUTHORITATIVE = new Set(['crossref', 'datacite']);
+
+/**
+ * Fields shown locked on the edit form: fetched from an authoritative register, non-empty, and not
+ * changed or typed by the owner (those stay open, marked, with the publisher's value beside them).
+ */
+function lockedFieldsOf(m: ModuleConfig, v: RecordVerification | null, data: Record<string, unknown>): string[] {
+  const always = m.fields.filter((f) => f.autofill?.alwaysLocked).map((f) => f.key);
+  if (!v?.source || !AUTHORITATIVE.has(v.source)) return always;
+  return m.fields
+    .filter((f) => f.autofill?.alwaysLocked || (
+      f.autofill?.locked && !v.fields?.[f.key] && data[f.key] !== undefined && data[f.key] !== ''
+    ))
+    .map((f) => f.key);
+}
 
 export async function getRecord(actor: SessionUser, moduleKey: string, id: string) {
   const m = mustGetModule(moduleKey);
@@ -166,9 +208,10 @@ export async function getRecord(actor: SessionUser, moduleKey: string, id: strin
 
   // The scope filter comes first; the id is an additional condition, never the only one.
   const [found] = await db
-    .select({ record: records, ownerName: users.name })
+    .select({ record: records, ownerName: users.name, departmentName: departments.name })
     .from(records)
     .innerJoin(users, eq(users.id, records.ownerUserId))
+    .leftJoin(departments, eq(departments.id, records.departmentId))
     .where(and(scopeFilter(actor, m, cycle.id), eq(records.id, id)))
     .limit(1);
 
@@ -207,16 +250,93 @@ export async function getRecord(actor: SessionUser, moduleKey: string, id: strin
     updatedAt: row.updatedAt,
     ownerUserId: row.ownerUserId,
     ownerName: found.ownerName,
+    departmentName: found.departmentName ?? null,
     isMine: row.ownerUserId === actor.id,
     canEdit,
     data: presentForRead(m, row.data as Record<string, unknown>, { includeSensitive: mine }),
     // Only the person who may edit gets the raw values back for the form.
     editValues: canEdit ? presentForEdit(m, row.data as Record<string, unknown>) : null,
     history,
+    verification: (row.verification as RecordVerification | null) ?? null,
+    lockedFields: lockedFieldsOf(m, row.verification as RecordVerification | null, row.data as Record<string, unknown>),
   };
 }
 
 /* ────────────────────────────── create ────────────────────────────── */
+
+/** Records the system's Submitted → Approved step for an auto-checked record (decision D1). */
+async function recordAutoApproval(recordId: string, v: RecordVerification) {
+  const system = await systemActor();
+  const source = v.source ? LOOKUP_SOURCE_LABEL[v.source] : 'the publisher register';
+  await db.insert(recordTransitions).values({
+    recordId, fromStatus: 'submitted', toStatus: 'approved',
+    actorUserId: system.id, actorRole: system.role,
+    remark: v.reasons.length === 0
+      ? `Checked automatically against ${source}: the details match the published record and the owner is named on it.`
+      : `Approved automatically on submission. ${v.reasons.length} point${v.reasons.length === 1 ? '' : 's'} for the verifying office or IQAC to check against the evidence: ${v.reasons.join(' ')}`.slice(0, 1000),
+  });
+  await audit({
+    actor: system, action: 'record.transition', entity: 'record', entityId: recordId,
+    before: { status: 'submitted' }, after: { status: 'approved' },
+    meta: { automatic: true, source: v.source, identifier: v.identifier },
+  });
+}
+
+type Looked = Awaited<ReturnType<typeof applyLookup>>;
+
+/**
+ * Refusals that say everything on their own, checked on submit before any field rule so that
+ * nothing else confuses the message: a work that belongs in another module (a conference paper
+ * in Publications, a preprint anywhere), and one from outside the cycle by the publisher's year.
+ */
+function refuseOnSubmit(m: ModuleConfig, looked: Looked, mode: 'draft' | 'submit', cycle: CycleWindows) {
+  if (mode !== 'submit' || !m.lookup) return;
+  if (looked.misplaced) {
+    throw new ServiceError('VALIDATION', looked.misplaced.message, { [looked.misplaced.field]: looked.misplaced.message });
+  }
+  const outside = outsideCycle(m, looked.data, cycle, looked.fetched);
+  if (outside) throw new ServiceError('VALIDATION', outside.message, { [outside.field]: outside.message });
+}
+
+/**
+ * Field errors on submit for a module with a lookup, shown together with the ordinary ones:
+ *  - the owner's name must be in the author list (`lookup.ownerMustBeIn`);
+ *  - evidence when anything could not be confirmed (`lookup.evidenceField`) — modules whose
+ *    evidence field is `required` need it on every record anyway.
+ */
+function submitErrors(
+  m: ModuleConfig, looked: Looked, ownerName: string, mode: 'draft' | 'submit',
+): Record<string, string> {
+  if (mode !== 'submit' || !m.lookup) return {};
+  const errors: Record<string, string> = {};
+  const owner = ownerMissingFromAuthors(m, looked.data, ownerName);
+  if (owner) errors[owner.field] = owner.message;
+  const evidence = evidenceMissing(m, looked.data, looked.verification);
+  if (evidence) errors[evidence.field] = evidence.message;
+  return errors;
+}
+
+/** Field rules and submit rules together, so the owner sees every problem at once. */
+async function validateSubmission(
+  m: ModuleConfig, looked: Looked, ownerName: string, mode: 'draft' | 'submit', cycle: CycleWindows,
+) {
+  refuseOnSubmit(m, looked, mode, cycle);
+  const v = await validateRecord(m, looked.data, mode);
+  const errors = { ...submitErrors(m, looked, ownerName, mode), ...(v.ok ? {} : v.errors) };
+  if (!v.ok || Object.keys(errors).length > 0) throw new ServiceError('VALIDATION', 'Some fields need attention.', errors);
+  return v;
+}
+
+/**
+ * Whether a submission is approved at once. `autoApprove: 'always'` approves every submission;
+ * 'whenChecksPass' only a fully confirmed one. A record the verifying office returned goes back
+ * to that office when resubmitted, never straight to Approved again — otherwise a return could
+ * simply be undone by resubmitting.
+ */
+function approvesNow(m: ModuleConfig, looked: Looked, mode: 'draft' | 'submit', previousStatus?: RecordStatus): boolean {
+  if (mode !== 'submit' || !m.lookup || previousStatus === 'returned') return false;
+  return m.lookup.autoApprove === 'always' || looked.eligible;
+}
 
 export async function createRecord(
   actor: SessionUser, moduleKey: string, input: Record<string, unknown>, mode: 'draft' | 'submit',
@@ -225,27 +345,40 @@ export async function createRecord(
   if (!canCreateIn(actor, m)) throw new ServiceError('FORBIDDEN', 'You cannot add records to this module.');
 
   const cycle = await activeCycle();
-  const v = await validateRecord(m, input, mode);
-  if (!v.ok) throw new ServiceError('VALIDATION', 'Some fields need attention.', v.errors);
+  const looked = await applyLookup(m, input, { ownerName: actor.name, cycle });
+  const v = await validateSubmission(m, looked, actor.name, mode, cycle);
 
   const departmentId = departmentForRecord(actor, m);
+  const badFiles = await unattachableFiles(actor.id, m, null, v.data);
+  if (Object.keys(badFiles).length > 0) throw new ServiceError('VALIDATION', 'Some fields need attention.', badFiles);
+
   const { data, naturalKey, searchText } = prepareForStorage(m, v.data, departmentId);
   const { periodYear, periodLabel } = resolvePeriod(m, v.data, cycle);
 
   await assertNoDuplicate(m, cycle.id, naturalKey, null);
+
+  const auto = approvesNow(m, looked, mode);
+  const system = auto ? await systemActor() : null;
+  const verification = looked.verification ? { ...looked.verification, autoApproved: auto } : null;
+  const now = new Date();
 
   const [created] = await db.insert(records).values({
     moduleKey: m.key,
     cycleId: cycle.id,
     ownerUserId: actor.id,
     departmentId,
-    status: mode === 'submit' ? 'submitted' : 'draft',
-    submittedAt: mode === 'submit' ? new Date() : null,
+    status: auto ? 'approved' : mode === 'submit' ? 'submitted' : 'draft',
+    submittedAt: mode === 'submit' ? now : null,
+    verifiedAt: auto ? now : null,
+    verifiedBy: system?.id ?? null,
+    approvedAt: auto ? now : null,
+    approvedBy: system?.id ?? null,
     periodLabel,
     periodYear,
     naturalKey,
     data,
     searchText,
+    verification,
     createdBy: actor.id,
     updatedBy: actor.id,
   }).returning({ id: records.id, status: records.status })
@@ -262,6 +395,8 @@ export async function createRecord(
       actorUserId: actor.id, actorRole: actor.role,
     });
   }
+  await linkEvidence(m, created!.id, data);
+  if (auto && verification) await recordAutoApproval(created!.id, verification);
 
   return { id: created!.id, status: created!.status };
 }
@@ -289,8 +424,13 @@ export async function updateRecord(
     );
   }
 
-  const v = await validateRecord(m, input, mode);
-  if (!v.ok) throw new ServiceError('VALIDATION', 'Some fields need attention.', v.errors);
+  const [owner] = await db.select({ name: users.name }).from(users).where(eq(users.id, existing.ownerUserId));
+  const looked = await applyLookup(m, input, { ownerName: owner?.name ?? actor.name, cycle });
+
+  const v = await validateSubmission(m, looked, owner?.name ?? actor.name, mode, cycle);
+
+  const badFiles = await unattachableFiles(actor.id, m, id, v.data);
+  if (Object.keys(badFiles).length > 0) throw new ServiceError('VALIDATION', 'Some fields need attention.', badFiles);
 
   const prepared = prepareForStorage(m, v.data, existing.departmentId);
   // An encrypted field left blank on the form keeps its stored ciphertext.
@@ -304,9 +444,15 @@ export async function updateRecord(
   const { periodYear, periodLabel } = resolvePeriod(m, v.data, cycle);
   await assertNoDuplicate(m, cycle.id, prepared.naturalKey, id);
 
-  const nextStatus: RecordStatus = mode === 'submit'
-    ? 'submitted'
-    : existing.status === 'returned' ? 'returned' : 'draft';
+  const auto = approvesNow(m, looked, mode, existing.status);
+  const system = auto ? await systemActor() : null;
+  const now = new Date();
+  const nextStatus: RecordStatus = auto
+    ? 'approved'
+    : mode === 'submit' ? 'submitted' : existing.status === 'returned' ? 'returned' : 'draft';
+  const verification = looked.verification
+    ? { ...looked.verification, autoApproved: auto }
+    : (existing.verification as RecordVerification | null);
 
   await db.update(records).set({
     data: prepared.data,
@@ -315,8 +461,10 @@ export async function updateRecord(
     periodYear,
     periodLabel,
     status: nextStatus,
-    submittedAt: mode === 'submit' ? new Date() : existing.submittedAt,
+    submittedAt: mode === 'submit' ? now : existing.submittedAt,
     returnedRemark: mode === 'submit' ? null : existing.returnedRemark,
+    verification,
+    ...(auto ? { verifiedAt: now, verifiedBy: system!.id, approvedAt: now, approvedBy: system!.id } : {}),
     updatedBy: actor.id,
   }).where(eq(records.id, id)).catch((e) => asConflict(e, m));
 
@@ -332,6 +480,8 @@ export async function updateRecord(
       actorUserId: actor.id, actorRole: actor.role,
     });
   }
+  await linkEvidence(m, id, prepared.data);
+  if (auto && verification) await recordAutoApproval(id, verification);
 
   return { id, status: nextStatus };
 }
@@ -391,6 +541,12 @@ export async function transitionRecord(
     });
   }
 
+  // A module with a lookup has submit rules of its own (name in the author list, evidence,
+  // automatic approval): submit through the save path so there is one set of rules, not two.
+  if (action === 'submit' && m.lookup) {
+    return updateRecord(actor, moduleKey, id, existing.data as Record<string, unknown>, 'submit');
+  }
+
   // Submitting requires a complete record, not just a valid draft.
   if (action === 'submit') {
     const v = await validateRecord(m, existing.data as Record<string, unknown>, 'submit');
@@ -403,8 +559,10 @@ export async function transitionRecord(
   await db.update(records).set({
     status: decision.next,
     submittedAt: decision.next === 'submitted' ? now : existing.submittedAt,
-    verifiedAt: decision.next === 'verified' ? now : existing.verifiedAt,
-    verifiedBy: decision.next === 'verified' ? actor.id : existing.verifiedBy,
+    // A verification that is final (Publications) moves straight to approved: it is still a
+    // verification, and the database requires a verified record before an approved one.
+    verifiedAt: decision.next === 'verified' || action === 'verify' ? now : existing.verifiedAt,
+    verifiedBy: decision.next === 'verified' || action === 'verify' ? actor.id : existing.verifiedBy,
     approvedAt: decision.next === 'approved' ? now : null,
     approvedBy: decision.next === 'approved' ? actor.id : null,
     returnedRemark: decision.next === 'returned' ? remark!.trim().slice(0, 1000) : null,
@@ -497,6 +655,8 @@ export async function getEncryptedFieldForReveal(
 export async function setNilDeclaration(actor: SessionUser, moduleKey: string, declared: boolean) {
   const m = mustGetModule(moduleKey);
   if (!canCreateIn(actor, m)) throw new ServiceError('FORBIDDEN', 'This module is not yours to declare.');
+  // A one-per-owner module (the Faculty Profile) is filled in, never declared empty.
+  if (m.managedAt) throw new ServiceError('VALIDATION', 'This module cannot be declared empty.');
   const cycle = await activeCycle();
 
   if (declared) {

@@ -109,11 +109,12 @@ export interface AuditPayload {
   };
 }
 
-export type AdminTab = 'accounts' | 'lists' | 'cycle' | 'audit' | 'exports';
+export type AdminTab = 'accounts' | 'lists' | 'journals' | 'cycle' | 'audit' | 'exports';
 
 export const ADMIN_TABS: ReadonlyArray<{ key: AdminTab; label: string }> = [
   { key: 'accounts', label: 'Accounts' },
   { key: 'lists', label: 'Master lists' },
+  { key: 'journals', label: 'Journal lists' },
   { key: 'cycle', label: 'Cycle' },
   { key: 'audit', label: 'Audit log' },
   { key: 'exports', label: 'Exports' },
@@ -121,4 +122,20 @@ export const ADMIN_TABS: ReadonlyArray<{ key: AdminTab; label: string }> = [
 
 export function isAdminTab(value: string | undefined): value is AdminTab {
   return ADMIN_TABS.some((t) => t.key === value);
+}
+
+/** GET /api/admin/journal-lists */
+export interface JournalListsPayload {
+  /** source 'scimago' = loaded by IQAC; 'scopus-list' = computed automatically. */
+  sjr: Array<{ year: number; source: string; issns: number; ranked: number }>;
+  /** source 'upload' = loaded by IQAC; 'scopus-list' = fetched automatically. */
+  lists: Array<{ listName: string; year: number; source: string; issns: number }>;
+  /** The automatic copy of Elsevier's public Scopus list, or null before the first fetch. */
+  scopus: {
+    file: string; listYear: number; listMonth: number; sjrYear: number;
+    journals: number; indexed: number; ranked: number; fetchedAt: string;
+    discontinued?: number; checkedAt?: string;
+  } | null;
+  /** The Indexing master list, in IQAC's priority order. */
+  listNames: string[];
 }

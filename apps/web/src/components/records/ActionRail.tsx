@@ -48,9 +48,17 @@ function Glyph({ action }: { action: RailAction }) {
  * The workflow rail. It renders only the actions the page decided the viewer may take —
  * the server re-checks every one of them, so this list is convenience, never authority.
  */
+/** In modules approved on submission (Publications) the office's verification is final. */
+const VERIFY_FINAL = {
+  label: 'Verify and approve',
+  busy: 'Approving…',
+  note: 'Confirms the entry matches the evidence. This is final — no IQAC approval follows; IQAC can still return it later.',
+};
+
 export function ActionRail({
-  moduleKey, recordId, actions,
-}: { moduleKey: string; recordId: string; actions: RailAction[] }) {
+  moduleKey, recordId, actions, verifyIsFinal = false,
+}: { moduleKey: string; recordId: string; actions: RailAction[]; verifyIsFinal?: boolean }) {
+  const copy = (a: RailAction) => (a === 'verify' && verifyIsFinal ? VERIFY_FINAL : COPY[a]);
   const router = useRouter();
   const [busy, setBusy] = useState<RailAction | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -119,7 +127,7 @@ export function ActionRail({
               onClick={() => void run(action)}
             >
               <Glyph action={action} />
-              {busy === action ? COPY[action].busy : COPY[action].label}
+              {busy === action ? copy(action).busy : copy(action).label}
             </Button>
           );
         })}
@@ -156,7 +164,7 @@ export function ActionRail({
       ) : null}
 
       <ul className="space-y-1.5 text-xs text-ink-muted">
-        {actions.map((a) => <li key={a}>{COPY[a].note}</li>)}
+        {actions.map((a) => <li key={a}>{copy(a).note}</li>)}
       </ul>
     </div>
   );

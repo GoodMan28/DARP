@@ -64,7 +64,9 @@ export function resolvePeriod(
   // No usable date, or a date outside the cycle: the record was entered during this
   // cycle, so it belongs to it. Faculty Profile is the clearest case — its only dates
   // are a degree date and a joining date, neither of which is a reporting period.
-  if (year === null || !isInsideCycle(m, year, cycle)) {
+  // A module that refuses out-of-cycle records keeps the real year: such a record stays a
+  // draft and is never counted, and its list should not pretend it is from this cycle.
+  if (year === null || (!isInsideCycle(m, year, cycle) && !m.lookup?.refuseOutsideCycle)) {
     year = endYear;
   }
 
@@ -73,11 +75,18 @@ export function resolvePeriod(
 
 /** Is a record's period inside the cycle's window for its module? Used to warn, not to block. */
 export function isInsideCycle(m: ModuleConfig, periodYear: number, cycle: CycleWindows): boolean {
+  const { from, to } = cycleYears(m, cycle);
+  return periodYear >= from && periodYear <= to;
+}
+
+/** The first and last period years of the cycle for this module, e.g. 2022 and 2024. */
+export function cycleYears(m: ModuleConfig, cycle: CycleWindows): { from: number; to: number } {
   const startKey = m.periodType === 'CY' ? cycle.cyStart : m.periodType === 'FY' ? cycle.fyStart : cycle.ayStart;
   const endKey = m.periodType === 'CY' ? cycle.cyEnd : m.periodType === 'FY' ? cycle.fyEnd : cycle.ayEnd;
-  const from = yearOfPeriod(new Date(startKey), m.periodType);
-  const to = yearOfPeriod(new Date(endKey), m.periodType);
-  return periodYear >= from && periodYear <= to;
+  return {
+    from: yearOfPeriod(new Date(startKey), m.periodType),
+    to: yearOfPeriod(new Date(endKey), m.periodType),
+  };
 }
 
 /** Every period a module may report in, newest first — used by the list filters. */

@@ -35,6 +35,9 @@ export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async 
       scope: m.scope,
       canCreate: canCreateIn(actor, m),
       canVerify: canVerify(actor, m),
+      lookup: m.lookup
+        ? { kind: m.lookup.kind, idFields: m.lookup.idFields, idLabel: m.lookup.idLabel }
+        : null,
       listColumns: m.listColumns,
       periods: cycle ? periodOptions(m, cycle) : [],
       counts: cycle
@@ -57,6 +60,9 @@ export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async 
         maxSizeMB: f.maxSizeMB ?? null,
         // The browser is told a field is protected, but never why or how.
         protected: f.pii === 'encrypted' || !!f.sensitive,
+        autofill: f.autofill
+          ? { locked: f.autofill.locked, alwaysLocked: !!f.autofill.alwaysLocked, generated: f.autofill.from === 'citation' }
+          : null,
       })),
     });
   } catch (e) {

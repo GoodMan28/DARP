@@ -1,6 +1,6 @@
 import {
   pgTable, pgEnum, uuid, text, boolean, integer, bigint, bigserial,
-  jsonb, date, timestamp, index, uniqueIndex, check,
+  jsonb, date, timestamp, index, uniqueIndex, check, primaryKey,
 } from 'drizzle-orm/pg-core';
 import { sql, relations } from 'drizzle-orm';
 
@@ -144,6 +144,8 @@ export const records = pgTable('records', {
   data: jsonb('data').notNull().default(sql`'{}'::jsonb`),
   /** Lower-cased concatenation of non-sensitive field values, for search. */
   searchText: text('search_text').notNull().default(''),
+  /** How the record's facts were checked (RecordVerification). Null = before automatic checks. */
+  verification: jsonb('verification'),
 
   submittedAt: timestamp('submitted_at', { withTimezone: true }),
   verifiedAt: timestamp('verified_at', { withTimezone: true }),
@@ -280,6 +282,61 @@ export const auditLog = pgTable('audit_log', {
   index('audit_actor_idx').on(t.actorUserId, t.at),
   index('audit_entity_idx').on(t.entity, t.entityId),
   index('audit_action_idx').on(t.action, t.at),
+]);
+
+/* ─────────────── external lookups (DOI / ISBN) and journal lists ─────────────── */
+
+/** One fetched result per identifier. Found results are reused for 30 days, misses for 1 day. */
+export const lookupCache = pgTable('lookup_cache', {
+  kind: text('kind').notNull(),
+  lookupKey: text('lookup_key').notNull(),
+  found: boolean('found').notNull(),
+  result: jsonb('result').notNull(),
+  fetchedAt: timestamp('fetched_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.kind, t.lookupKey] })]);
+
+/** SCImago Journal Rank, one row per ISSN per yearly edition. */
+export const journalMetrics = pgTable('journal_metrics', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  issn: text('issn').notNull(),              // 8 characters, no hyphen, upper-case X
+  year: integer('year').notNull(),           // the SJR edition year
+  title: text('title').notNull(),
+  sourceType: text('source_type').notNull(), // journal | book series | conference and proceedings | trade journal
+  quartile: text('quartile'),                // Q1..Q4, or null when unranked
+  /** 'scimago' = SCImago's own file (official quartile); 'scopus-list' = computed from Elsevier's list. */
+  source: text('source').notNull().default('scimago'),
+  importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('journal_metrics_issn_year_uq').on(t.issn, t.year)]);
+
+/** Journals listed in an index (SCIE, SSCI, AHCI, ESCI, Scopus …), one row per ISSN per list per year. */
+export const journalIndexListings = pgTable('journal_index_listings', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  issn: text('issn').notNull(),
+  listName: text('list_name').notNull(),     // must equal a value of the indexingTypes master list
+  year: integer('year').notNull(),           // the year the list was downloaded
+  title: text('title').notNull().default(''),
+  /** 'upload' = loaded by IQAC; 'scopus-list' = fetched automatically from Elsevier's public list. */
+  source: text('source').notNull().default('upload'),
+  importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('journal_index_issn_list_year_uq').on(t.issn, t.listName, t.year)]);
+
+/**
+ * The years Scopus covered a journal, from Elsevier's list ('scopus-list': active titles, the last
+ * range open-ended; 'scopus-discontinued': titles Scopus dropped, from_year 0 and to_year the final
+ * year covered) or from SCImago's file ('scimago'). A paper counts as Scopus-indexed only when its
+ * year falls inside a range — a journal Scopus dropped in 2023 does not index a 2024 paper.
+ */
+export const journalCoverage = pgTable('journal_coverage', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  issn: text('issn').notNull(),
+  source: text('source').notNull(),
+  fromYear: integer('from_year').notNull(),
+  /** null = still covered (ongoing). */
+  toYear: integer('to_year'),
+  importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('journal_coverage_issn_source_from_uq').on(t.issn, t.source, t.fromYear),
+  index('journal_coverage_issn_idx').on(t.issn),
 ]);
 
 /* ───────────────────────────── relations ───────────────────────── */

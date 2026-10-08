@@ -55,6 +55,15 @@ describe('period resolution', () => {
     }
   });
 
+  it('keeps the real year of a record its module refuses outside the cycle', () => {
+    // Publications and Books & Chapters refuse such a record on submit, so its draft shows its
+    // own year in the list instead of pretending to be from the cycle's last year.
+    expect(resolvePeriod(MODULES.publications!, { year: '2019' }, cycle).periodLabel).toBe('2019');
+    expect(resolvePeriod(MODULES.books!, { year: '2025' }, cycle).periodLabel).toBe('2025');
+    // A module that only warns still lands inside the cycle.
+    expect(resolvePeriod(MODULES.awards!, { awardYear: '2019' }, cycle).periodLabel).toBe('2024');
+  });
+
   it('offers only in-cycle periods as filter options', () => {
     for (const m of MODULE_LIST) {
       const opts = periodOptions(m, cycle);

@@ -9,7 +9,8 @@
     "./modules/types": "./src/modules/_types.ts",
     "./format": "./src/format.ts",
     "./roles": "./src/roles.ts",
-    "./contracts": "./src/contracts.ts"
+    "./contracts": "./src/contracts.ts",
+    "./journals": "./src/journals.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

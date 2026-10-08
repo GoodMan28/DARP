@@ -40,9 +40,10 @@ test.describe('faculty journey', () => {
     await expect(page.getByRole('heading', { name: 'My modules' })).toBeVisible();
 
     // The filter navigator lists the modules this role owns.
-    await page.getByRole('link', { name: 'Publications' }).first().click();
-    await page.waitForURL('**/m/publications**');
-    await expect(page.getByRole('heading', { name: 'Publications' }).first()).toBeVisible();
+    // Patents: the demo data has no publications (they are entered by real faculty with real DOIs).
+    await page.getByRole('link', { name: 'Patents' }).first().click();
+    await page.waitForURL('**/m/patents**');
+    await expect(page.getByRole('heading', { name: 'Patents' }).first()).toBeVisible();
 
     // Records are listed, and open.
     const firstRow = page.locator('tbody tr a').first();

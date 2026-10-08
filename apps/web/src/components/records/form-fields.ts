@@ -9,12 +9,16 @@ import type { CurrentUser, PeriodOption } from '@darp/shared/contracts';
 /** The locked attribution strip: never typed, always taken from the account and the record. */
 export function lockedStrip(
   m: Pick<ModuleConfig, 'scope'>, user: CurrentUser, periodLabel: string, enteredBy?: string | null,
+  /** A saved record: its own department, which is not the viewer's when someone else opens it. */
+  record?: { departmentName: string | null },
 ): { period: string; department: string; enteredBy: string } {
   return {
     period: periodLabel,
     department: m.scope === 'institute'
       ? 'Institute-wide'
-      : user.departmentName ?? 'No department on your account',
+      : record
+        ? record.departmentName ?? 'No department'
+        : user.departmentName ?? 'No department on your account',
     enteredBy: enteredBy?.trim() ? enteredBy : user.name,
   };
 }

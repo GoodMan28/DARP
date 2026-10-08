@@ -168,7 +168,7 @@ export function Field({
 /* ─────────────────────────── file upload ──────────────────────────── */
 
 export function FileInput({
-  accept, maxSizeMB = 5, value, onUploaded, disabled, id,
+  accept, maxSizeMB = 5, value, onUploaded, disabled, id, fieldKey, moduleKey, recordId,
 }: {
   accept?: string[] | null;
   maxSizeMB?: number;
@@ -176,6 +176,11 @@ export function FileInput({
   onUploaded: (id: string) => void;
   disabled?: boolean;
   id?: string;
+  /** Which field of which module the file is for: the server checks type and size against it. */
+  fieldKey: string;
+  moduleKey: string;
+  /** Set when editing an existing record: the file is attached to it straight away. */
+  recordId?: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -191,6 +196,10 @@ export function FileInput({
     }
     setBusy(true);
     const form = new FormData();
+    // The fields go before the file so the server knows the module before it reads the bytes.
+    form.append('fieldKey', fieldKey);
+    form.append('moduleKey', moduleKey);
+    if (recordId) form.append('recordId', recordId);
     form.append('file', file);
     const { csrfHeader } = await import('@/lib/csrf-client');
     const res = await fetch('/api/evidence', {
@@ -199,10 +208,10 @@ export function FileInput({
       credentials: 'same-origin',
       headers: csrfHeader(),
     });
-    const json = await res.json();
+    const json = await res.json().catch(() => null);
     setBusy(false);
-    if (!json.ok) {
-      setError(json.error?.message ?? 'That file could not be uploaded.');
+    if (!json?.ok) {
+      setError(json?.error?.message ?? 'That file could not be uploaded.');
       return;
     }
     setName(file.name);
@@ -232,10 +241,14 @@ export function FileInput({
           onChange={(e) => { const f = e.target.files?.[0]; if (f) void upload(f); }}
         />
         {value ? (
-          <span className="inline-flex items-center gap-1 text-xs text-ink-muted">
+          // Always a download (the server sends it as an attachment), never opened in place.
+          <a
+            href={`/api/evidence/${encodeURIComponent(value)}`}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-primary underline"
+          >
             <IconDoc />
-            {name ?? 'Attached'}
-          </span>
+            {name ?? 'Download attached file'}
+          </a>
         ) : null}
       </div>
       <p className="mt-1 text-xs text-ink-muted">

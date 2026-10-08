@@ -29,6 +29,7 @@ const paper = {
   year: '2024',
   issn: '0167-739X',
   bibliographic: 'A, B. "A paper." FGCS (2024).',
+  evidence: '00000000-0000-4000-8000-000000000001',
 };
 
 describe('field validation', () => {
@@ -40,6 +41,12 @@ describe('field validation', () => {
     const bad = await validateRecord(pubs, { ...paper, doi: 'not-a-doi' }, 'submit');
     expect(bad.ok).toBe(false);
     expect(bad.errors.doi).toMatch(/valid DOI/);
+  });
+
+  it('needs evidence on every paper submitted, not on a draft', async () => {
+    const { evidence: _none, ...noEvidence } = paper;
+    expect((await validateRecord(pubs, noEvidence, 'submit')).errors.evidence).toMatch(/required/);
+    expect((await validateRecord(pubs, noEvidence, 'draft')).ok).toBe(true);
   });
 
   it('rejects a value that is not in the master list', async () => {

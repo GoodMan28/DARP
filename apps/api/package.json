@@ -21,7 +21,8 @@
     "db:seed": "tsx --env-file=.env.local scripts/seed.ts",
     "db:seed:demo": "tsx --env-file=.env.local scripts/seed-demo.ts",
     "db:reset": "tsx --env-file=.env.local scripts/reset.ts",
-    "db:setup": "npm run db:migrate && npm run db:harden && npm run db:seed"
+    "db:setup": "npm run db:migrate && npm run db:harden && npm run db:seed",
+    "journals:import": "tsx --env-file=.env.local scripts/import-journals.ts"
   },
   "dependencies": {
     "@darp/shared": "*",

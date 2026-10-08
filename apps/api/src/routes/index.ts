@@ -12,6 +12,7 @@ import * as moduleRecords from './modules/records';
 import * as moduleRecord from './modules/record';
 import * as moduleTransition from './modules/transition';
 import * as moduleDeclare from './modules/declare';
+import * as lookup from './lookup';
 import * as evidenceUpload from './evidence/upload';
 import * as evidenceFile from './evidence/file';
 import * as exportWorkbook from './export';
@@ -22,6 +23,7 @@ import * as adminAudit from './admin/audit';
 import * as adminBaselines from './admin/baselines';
 import * as adminCycles from './admin/cycles';
 import * as adminMasterLists from './admin/master-lists';
+import * as adminJournalLists from './admin/journal-lists';
 import * as adminReveal from './admin/reveal';
 
 /**
@@ -49,6 +51,7 @@ api.patch('/modules/:moduleKey/records/:id', moduleRecord.PATCH);
 api.delete('/modules/:moduleKey/records/:id', moduleRecord.DELETE);
 api.post('/modules/:moduleKey/records/:id/transition', moduleTransition.POST);
 api.post('/modules/:moduleKey/declare', moduleDeclare.POST);
+api.post('/lookup/:moduleKey', lookup.POST);
 
 api.post('/evidence', evidenceUpload.POST);
 api.get('/evidence/:id', evidenceFile.GET);
@@ -70,4 +73,6 @@ api.patch('/admin/cycles', adminCycles.PATCH);
 api.get('/admin/master-lists', adminMasterLists.GET);
 api.post('/admin/master-lists', adminMasterLists.POST);
 api.patch('/admin/master-lists', adminMasterLists.PATCH);
+api.get('/admin/journal-lists', adminJournalLists.GET);
+api.post('/admin/journal-lists', adminJournalLists.POST);
 api.post('/admin/reveal/:recordId/:fieldKey', adminReveal.POST);

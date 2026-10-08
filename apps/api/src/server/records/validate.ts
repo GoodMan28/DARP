@@ -2,6 +2,8 @@ import { z } from 'zod';
 import type { FieldConfig, ModuleConfig } from '@darp/shared/modules/types';
 import { getAllLists } from './masterLists';
 import { isValidAadhaar, isValidPan } from '@/server/crypto/pii';
+import { isbn13 } from '@/server/lookup/isbn';
+import { normalisePatentNumber } from './patentNumber';
 
 /** Patterns that are checked server-side, never only in the browser. */
 export const PATTERNS = {
@@ -37,7 +39,7 @@ function fieldSchema(f: FieldConfig, lists: Record<string, string[]>): z.ZodType
     case 'issn':
       return baseString(f).regex(PATTERNS.issn, 'ISSN looks like 0167-739X.');
     case 'isbn':
-      return baseString(f).regex(PATTERNS.isbn, 'Enter a valid ISBN.');
+      return baseString(f).refine((v) => v === '' || isbn13(v) !== null, 'Enter a valid ISBN (10 or 13 digits; the last digit is a check digit).');
     case 'pan':
       return baseString(f).refine((v) => v === '' || isValidPan(v), 'PAN looks like ABCDE1234F.');
     case 'aadhaar':
@@ -132,6 +134,12 @@ export async function validateRecord(
     const parsed = fieldSchema(f, lists).safeParse(raw);
     if (!parsed.success) {
       errors[f.key] = parsed.error.issues[0]?.message ?? 'This value is not valid.';
+      continue;
+    }
+    if (f.normalise === 'patentNumber' && typeof parsed.data === 'string') {
+      const n = normalisePatentNumber(parsed.data, String(input.country ?? ''));
+      if ('error' in n) { errors[f.key] = n.error; continue; }
+      out[f.key] = n.value;
       continue;
     }
     out[f.key] = parsed.data;

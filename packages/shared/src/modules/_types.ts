@@ -22,6 +22,49 @@ export type FieldType =
  *  server in plaintext except in an admin export. 'masked' fields are shown partially. */
 export type PiiLevel = 'none' | 'masked' | 'encrypted';
 
+/** Facts an external register can supply. Field configs name the one they take. */
+export type MetaKey =
+  | 'doi' | 'title' | 'authors' | 'containerTitle' | 'issn' | 'year' | 'onlineYear' | 'volume' | 'issue' | 'pages'
+  | 'publisher' | 'workType' | 'quartile' | 'quartileSource' | 'indexing' | 'citation'
+  | 'bookType' | 'bookTitle' | 'chapterTitle' | 'isbn' | 'eventName';
+
+/** Which register a module's records are fetched from. */
+export type LookupKind = 'doi' | 'book';
+
+export interface LookupConfig {
+  kind: LookupKind;
+  /** Fields the identifier may live in, in priority order; the first non-empty one is used. */
+  idFields: string[];
+  /** Label of the identifier box on the form, e.g. 'DOI'. */
+  idLabel: string;
+  /**
+   * When a submitted record is approved without a human (server/lookup/apply.ts):
+   *  - 'always'          every submission is approved at once. Whatever could not be confirmed
+   *                      becomes a "point to check" that the verifying office and IQAC see, and
+   *                      they may return the approved record. A returned record, resubmitted,
+   *                      goes to the verifying office instead (no second automatic approval).
+   *  - 'whenChecksPass'  approved only when every automatic check passes; otherwise reviewed.
+   */
+  autoApprove: 'always' | 'whenChecksPass';
+  /** Crossref work types that count as confirmed. Anything else becomes a point to check. */
+  acceptTypes: string[];
+  /**
+   * Work types that do not belong in this module and cannot be submitted here: they go to the
+   * module named (the form offers to open it with the DOI filled in), or nowhere (null) — for
+   * example a preprint, which has not been peer reviewed.
+   */
+  elsewhere?: Array<{ types: string[]; moduleKey: string | null }>;
+  /** The owner's name must appear in this field (the author list) before the record can be submitted. */
+  ownerMustBeIn?: string;
+  /** This file field becomes required on submit whenever any detail could not be confirmed. */
+  evidenceField?: string;
+  /**
+   * Refuse to submit a record whose year falls outside the reporting cycle (e.g. a 2020 paper in
+   * the 2022–2024 cycle), instead of approving it with a point to check. Drafts are not affected.
+   */
+  refuseOutsideCycle?: boolean;
+}
+
 export interface FieldConfig {
   key: string;                    // stored key inside records.data JSONB
   label: string;                  // exactly the workbook column wording where possible
@@ -46,6 +89,27 @@ export interface FieldConfig {
   maxSizeMB?: number;             // file: default 5
   /** Column header text in each original workbook sheet, used by the exporter. */
   exportAs?: Partial<Record<WorkbookKey, string>>;
+  /**
+   * Filled from the fetched record. `locked: true` shows it locked after a lookup; the owner may
+   * still change it (after a warning), and the server records every change against the publisher's
+   * value for the verifying office and IQAC to see.
+   */
+  autofill?: {
+    from: MetaKey;
+    locked: boolean;
+    /**
+     * Never typed by hand, even when nothing was fetched — for a field that states where a value
+     * came from (e.g. "SJR 2023 · Scopus list"), where a typed value would be a false claim.
+     */
+    alwaysLocked?: boolean;
+    /**
+     * For an `alwaysLocked` field that says where another field's value came from (quartileSource
+     * describes quartile): when the owner changes or types that field, this one says so instead.
+     */
+    describes?: string;
+  };
+  /** Server-side normalisation that needs other fields of the record. */
+  normalise?: 'patentNumber';
 }
 
 export interface ModuleConfig {
@@ -65,6 +129,16 @@ export interface ModuleConfig {
 
   /** Field keys forming the duplicate guard, unique per cycle. e.g. ['doi'] */
   naturalKey?: string[];
+
+  /**
+   * One record per owner per cycle, kept on its own page rather than added from the module list
+   * (the Faculty Profile lives on /profile). The list then shows no "Add record" button and no nil
+   * return; owners get a link to this page instead.
+   */
+  managedAt?: { href: string; label: string };
+
+  /** Fetch this module's facts from an external register (DOI, ISBN). */
+  lookup?: LookupConfig;
 
   fields: FieldConfig[];
   listColumns: string[];          // field keys shown in the table

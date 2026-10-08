@@ -1,11 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { apiFetch } from '@/lib/csrf-client';
+import { apiFetch, apiJson } from '@/lib/csrf-client';
 import {
-  Field, Input, Select, Textarea, Checkbox, FileInput, Button, Card, Notice,
+  Field, Input, Select, Textarea, Checkbox, FileInput, Button, LinkButton, Card, Notice,
 } from '@/components/ui';
-import type { FormFieldDef } from '@darp/shared/contracts';
+import {
+  LOOKUP_SOURCE_LABEL, type FieldProvenance, type FormFieldDef, type LookupFillPayload,
+} from '@darp/shared/contracts';
 
 export type { FormFieldDef } from '@darp/shared/contracts';
 
@@ -16,17 +18,83 @@ interface Props {
   initialValues?: Record<string, unknown>;
   locked: { period: string; department: string; enteredBy: string };
   readOnly?: boolean;
+  /** Present when the module fetches its facts from a register (DOI / ISBN). */
+  lookup?: { kind: string; idFields: string[]; idLabel: string } | null;
+  /** Fields locked when the form opens (an existing auto-checked record). */
+  initialLocked?: string[];
+  /** An identifier handed over from another module's form ("Add it under …"): fetched on opening. */
+  handedOver?: string;
+  /** A saved record: the fields its owner changed from the publisher's record or typed by hand. */
+  initialProvenance?: Record<string, FieldProvenance>;
 }
 
+/** The same text for this purpose: case and spacing aside (the server compares the same way). */
+const sameText = (a: unknown, b: string) => (
+  String(a ?? '').toLowerCase().replace(/\s+/g, ' ').trim() === b.toLowerCase().replace(/\s+/g, ' ').trim()
+);
+
 export function RecordForm({
-  moduleKey, fields, recordId, initialValues, locked, readOnly,
+  moduleKey, fields, recordId, initialValues, locked, readOnly, lookup, initialLocked, handedOver,
+  initialProvenance,
 }: Props) {
   const [values, setValues] = useState<Record<string, unknown>>(initialValues ?? {});
+  const [lockedKeys, setLockedKeys] = useState<Set<string>>(() => new Set(initialLocked ?? []));
+  /*
+   * The publisher's value of each fetched field, so a change can be shown beside it and undone.
+   * For a saved record: the locked fields hold it, and a changed field's is kept on the record.
+   */
+  const [fetchedValues, setFetchedValues] = useState<Record<string, string>>(() => {
+    // A saved record was fetched from the publisher when a locked field is locked (or a change is recorded).
+    const wasFetched = Object.keys(initialProvenance ?? {}).length > 0
+      || (initialLocked ?? []).some((k) => fields.find((f) => f.key === k)?.autofill?.locked);
+    const out: Record<string, string> = {};
+    if (!wasFetched) return out;
+    for (const f of fields) {
+      if (!f.autofill || f.autofill.alwaysLocked || f.autofill.generated) continue;
+      const p = initialProvenance?.[f.key];
+      const value = String(initialValues?.[f.key] ?? '');
+      // Changed: keep the publisher's value. Typed: nothing was fetched. Otherwise the saved value
+      // is the publisher's — including fields that are not locked, such as the author list.
+      if (p?.origin === 'changed') out[f.key] = p.fetched;
+      else if (!p && value) out[f.key] = value;
+    }
+    return out;
+  });
+  /** A lookup has filled this form (now or when it was saved): unfetched fields were typed by hand. */
+  const [looked, setLooked] = useState<boolean>(
+    () => Object.keys(initialProvenance ?? {}).length > 0 || (initialLocked ?? []).some((k) => fields.find((f) => f.key === k)?.autofill?.locked),
+  );
+  /** The field whose Change warning is open. */
+  const [confirming, setConfirming] = useState<string | null>(null);
+  const [identifier, setIdentifier] = useState<string>(
+    () => handedOver ?? (lookup?.idFields.map((k) => String(initialValues?.[k] ?? '')).find(Boolean)) ?? '',
+  );
+  /** The identifier field the box above stands for: the DOI field for a DOI, the ISBN field otherwise. */
+  const mirrorKey = useMemo(() => {
+    if (!lookup) return null;
+    const wantDoi = !identifier.trim() || /^(https?:\/\/(dx\.)?doi\.org\/|doi:\s*)?10\.\d{4,9}\//i.test(identifier.trim());
+    return lookup.idFields.find((k) => fields.find((f) => f.key === k)?.type === (wantDoi ? 'doi' : 'isbn')) ?? null;
+  }, [lookup, identifier, fields]);
+  const [fetching, setFetching] = useState(false);
+  const [lookupNote, setLookupNote] = useState<{
+    tone: 'success' | 'info' | 'warning'; title: string; notes: string[];
+    moveTo?: LookupFillPayload['moveTo'];
+  } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const errorSummary = useRef<HTMLDivElement>(null);
+
+  /* An identifier handed over from another module's form is fetched straight away. */
+  const handedOverFetched = useRef(false);
+  useEffect(() => {
+    if (handedOver && !handedOverFetched.current) {
+      handedOverFetched.current = true;
+      void fetchDetails();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handedOver]);
 
   /* Warn before losing typed data. */
   useEffect(() => {
@@ -56,12 +124,61 @@ export function RecordForm({
     setDirty(true);
   }
 
+  async function fetchDetails() {
+    if (!lookup || !identifier.trim()) return;
+    setFetching(true);
+    setLookupNote(null);
+    const res = await apiJson<LookupFillPayload>(`/api/lookup/${moduleKey}`, {
+      method: 'POST',
+      body: JSON.stringify({ identifier: identifier.trim() }),
+    });
+    setFetching(false);
+    if (!res.ok) {
+      setLookupNote({ tone: 'warning', title: res.error.message, notes: [] });
+      return;
+    }
+    const p = res.data;
+    setValues((v) => ({ ...v, ...p.fill }));
+    setLockedKeys(new Set(p.locked));
+    // Only the publisher's own record counts as "fetched": suggestions are not something to change from.
+    const fetchedNow: Record<string, string> = {};
+    if (p.found && p.authoritative) {
+      for (const f of fields) {
+        if (!f.autofill || f.autofill.alwaysLocked || f.autofill.generated || f.key === mirrorKey) continue;
+        if (p.fill[f.key]) fetchedNow[f.key] = p.fill[f.key]!;
+      }
+    }
+    setFetchedValues(fetchedNow);
+    setLooked(p.found && p.authoritative);
+    setConfirming(null);
+    setDirty(true);
+    const source = p.source ? LOOKUP_SOURCE_LABEL[p.source] : '';
+    setLookupNote(
+      p.moveTo !== undefined
+        ? {
+          tone: 'warning',
+          title: p.moveTo ? `This belongs under ${p.moveTo.name}` : 'This cannot be entered',
+          notes: p.notes,
+          moveTo: p.moveTo,
+        }
+        : !p.found
+        ? { tone: 'warning', title: 'No published record found', notes: p.notes }
+        : p.blocked
+          ? { tone: 'warning', title: `Details fetched from ${source}, but this cannot be submitted here`, notes: p.notes }
+        : p.authoritative
+          ? { tone: 'success', title: `Details fetched from ${source}`, notes: p.notes }
+          : { tone: 'info', title: `Suggested details from ${source} — check every field`, notes: p.notes },
+    );
+  }
+
   async function save(mode: 'draft' | 'submit') {
     setBusy(true);
     setBanner(null);
     // Conditional fields that are hidden must not be sent.
     const payload: Record<string, unknown> = {};
     for (const f of fields) if (visible(f)) payload[f.key] = values[f.key] ?? '';
+    // The identifier box is the record's DOI (or ISBN): it is what the server looks up.
+    if (mirrorKey && identifier.trim()) payload[mirrorKey] = identifier.trim();
 
     const url = recordId
       ? `/api/modules/${moduleKey}/records/${recordId}`
@@ -90,13 +207,17 @@ export function RecordForm({
           <Notice tone="danger" title={banner}>
             {Object.keys(errors).length > 0 ? (
               <ul className="mt-1 list-disc pl-5">
-                {Object.entries(errors).map(([k, msg]) => (
-                  <li key={k}>
-                    <a href={`#f-${k}`} className="underline">
-                      {fields.find((f) => f.key === k)?.label ?? k}: {msg}
-                    </a>
-                  </li>
-                ))}
+                {Object.entries(errors).filter(([, msg]) => msg !== banner).map(([k, msg]) => {
+                  const label = fields.find((f) => f.key === k)?.label ?? k;
+                  return (
+                    <li key={k}>
+                      <a href={`#f-${k}`} className="underline">
+                        {/* "Evidence is required." already names the field: do not say it twice. */}
+                        {msg.startsWith(label) ? msg : `${label}: ${msg}`}
+                      </a>
+                    </li>
+                  );
+                })}
               </ul>
             ) : null}
           </Notice>
@@ -124,6 +245,54 @@ export function RecordForm({
         </p>
       </Card>
 
+      {lookup && !readOnly ? (
+        <Card className="mb-4">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-64 flex-1">
+              <Field
+                label={lookup.idLabel}
+                htmlFor="lookup-identifier"
+                help="Paste it and press Fetch details. Fields marked “From the publisher's record” are filled in for you; if one is wrong, press Change beside it — DRIE and IQAC will see what you changed."
+              >
+                <Input
+                  id="lookup-identifier"
+                  value={identifier}
+                  onChange={(e) => {
+                    setIdentifier(e.target.value);
+                    setLockedKeys(new Set());
+                    setFetchedValues({});
+                    setLooked(false);
+                    setConfirming(null);
+                  }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void fetchDetails(); } }}
+                />
+              </Field>
+            </div>
+            <Button type="button" variant="secondary" disabled={fetching || !identifier.trim()} onClick={() => void fetchDetails()}>
+              {fetching ? 'Fetching…' : 'Fetch details'}
+            </Button>
+          </div>
+          {lookupNote ? (
+            <Notice tone={lookupNote.tone} title={lookupNote.title} className="mt-3">
+              {lookupNote.notes.length > 0 ? (
+                <ul className="mt-1 list-disc pl-5">
+                  {lookupNote.notes.map((n) => <li key={n}>{n}</li>)}
+                </ul>
+              ) : null}
+              {lookupNote.moveTo ? (
+                <LinkButton
+                  href={`/m/${lookupNote.moveTo.moduleKey}/new?id=${encodeURIComponent(identifier.trim())}`}
+                  variant="secondary"
+                  className="mt-2"
+                >
+                  Add it under {lookupNote.moveTo.name}
+                </LinkButton>
+              ) : null}
+            </Notice>
+          ) : null}
+        </Card>
+      ) : null}
+
       {sections.map(([section, sectionFields]) => {
         const shown = sectionFields.filter(visible);
         if (shown.length === 0) return null;
@@ -131,20 +300,102 @@ export function RecordForm({
           <Card key={section} className="mb-4" padded={false}>
             <h2 className="border-b border-line px-4 py-2.5 text-sm font-semibold">{section}</h2>
             <div className="grid gap-4 p-4 sm:grid-cols-2">
-              {shown.map((f) => (
-                <div key={f.key} className={f.colSpan === 2 ? 'sm:col-span-2' : ''} id={`f-${f.key}`}>
-                  <Field
-                    label={f.label}
-                    required={f.required}
-                    help={f.help}
-                    error={errors[f.key]}
-                    htmlFor={`i-${f.key}`}
-                    hint={f.protected ? 'Protected' : undefined}
+              {shown.map((f) => {
+                const system = !!f.autofill?.alwaysLocked || !!f.autofill?.generated;
+                // The field the identifier box fills is shown, not typed in a second time.
+                const mirror = f.key === mirrorKey;
+                const isLocked = lockedKeys.has(f.key);
+                const fetched = fetchedValues[f.key];
+                const changed = fetched !== undefined && !isLocked && !sameText(values[f.key], fetched);
+                const typed = looked && !!f.autofill && !system && !mirror && fetched === undefined
+                  && values[f.key] !== undefined && values[f.key] !== '';
+                const mayChange = isLocked && !readOnly && !system && !mirror;
+                const hint = mirror && !readOnly ? `From the ${lookup!.idLabel} box above`
+                  : f.autofill?.alwaysLocked ? 'Filled automatically'
+                  : f.autofill?.generated && isLocked ? 'Generated from the details'
+                    : isLocked ? 'From the publisher’s record'
+                      : changed ? 'Changed — DRIE and IQAC will see this'
+                        : typed ? 'Entered by hand — DRIE and IQAC will see this'
+                          : f.protected ? 'Protected' : undefined;
+                return (
+                  <div
+                    key={f.key}
+                    className={`${f.colSpan === 2 ? 'sm:col-span-2' : ''} ${changed || typed ? 'rounded-sm border border-warning-100 bg-warning-50 p-2' : ''}`}
+                    id={`f-${f.key}`}
                   >
-                    {renderInput(f, values[f.key], (v) => set(f.key, v), !!readOnly, !!errors[f.key])}
-                  </Field>
-                </div>
-              ))}
+                    <Field
+                      label={f.label}
+                      required={f.required}
+                      help={mirror && !readOnly ? null : f.help}
+                      error={errors[f.key]}
+                      htmlFor={`i-${f.key}`}
+                      hint={hint}
+                    >
+                      {renderInput(
+                        f, mirror && !readOnly ? identifier : values[f.key], (v) => set(f.key, v),
+                        !!readOnly || mirror || isLocked || !!f.autofill?.alwaysLocked, !!errors[f.key], { moduleKey, recordId },
+                      )}
+                      {mayChange && confirming !== f.key ? (
+                        <button
+                          type="button"
+                          className="mt-1 text-xs font-semibold text-brand-700 underline"
+                          onClick={() => setConfirming(f.key)}
+                        >
+                          Change
+                        </button>
+                      ) : null}
+                      {mayChange && confirming === f.key ? (
+                        <Notice tone="warning" title="Change a detail from the publisher's record?" className="mt-2">
+                          DRIE and IQAC will see that you changed this, along with the value from the publisher&apos;s
+                          record. Attach evidence that shows the correct value.
+                          <span className="mt-2 flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              onClick={() => {
+                                setLockedKeys((s) => { const next = new Set(s); next.delete(f.key); return next; });
+                                setConfirming(null);
+                                // Straight into the field, now that it can be typed in.
+                                requestAnimationFrame(() => document.getElementById(`i-${f.key}`)?.focus());
+                              }}
+                            >
+                              Change it
+                            </Button>
+                            <Button type="button" variant="ghost" onClick={() => setConfirming(null)}>
+                              Keep the publisher&apos;s value
+                            </Button>
+                          </span>
+                        </Notice>
+                      ) : null}
+                      {changed ? (
+                        <p className="mt-1 text-xs text-warning-700">
+                          Publisher&apos;s record: <strong>{fetched || '(empty)'}</strong>
+                          {!readOnly ? (
+                            <>
+                              {' · '}
+                              <button
+                                type="button"
+                                className="font-semibold underline"
+                                onClick={() => {
+                                  set(f.key, fetched);
+                                  if (f.autofill?.locked) setLockedKeys((s) => new Set(s).add(f.key));
+                                }}
+                              >
+                                Undo
+                              </button>
+                            </>
+                          ) : null}
+                        </p>
+                      ) : null}
+                      {typed && !readOnly ? (
+                        <p className="mt-1 text-xs text-warning-700">
+                          Not found in the publisher&apos;s record or the journal lists. Attach evidence for it.
+                        </p>
+                      ) : null}
+                    </Field>
+                  </div>
+                );
+              })}
             </div>
           </Card>
         );
@@ -170,6 +421,7 @@ export function RecordForm({
 
 function renderInput(
   f: FormFieldDef, value: unknown, onChange: (v: unknown) => void, readOnly: boolean, invalid: boolean,
+  ctx: { moduleKey: string; recordId?: string },
 ) {
   const common = { id: `i-${f.key}`, disabled: readOnly, 'aria-invalid': invalid || undefined };
   switch (f.type) {
@@ -221,6 +473,9 @@ function renderInput(
           maxSizeMB={f.maxSizeMB ?? 5}
           value={String(value ?? '')}
           onUploaded={(id) => onChange(id)}
+          fieldKey={f.key}
+          moduleKey={ctx.moduleKey}
+          recordId={ctx.recordId}
         />
       );
     case 'date':
