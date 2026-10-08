@@ -85,6 +85,13 @@ export async function lookupForForm(
   const nameMissing = ownerMissingFromAuthors(m, applied.data, actor.name);
   const notes: string[] = yearHint ? [yearHint] : [];
   if (nameMissing) notes.push(nameMissing.message);
+  // A choice the lists could not answer (the quartile of a journal with no SJR value): say so, or
+  // "everything matches" would hide an empty field the owner may need to fill.
+  for (const f of m.fields) {
+    if (f.type === 'select' && f.autofill?.locked && !f.autofill.alwaysLocked && !fill[f.key]) {
+      notes.push(`${f.label} was not found automatically. Choose it yourself if it applies — DRIE and IQAC will see that you chose it.`);
+    }
+  }
   // Evidence on every record (the module's evidence field is required), or only when something is unconfirmed.
   const evidenceAlways = !!m.fields.find((f) => f.key === m.lookup?.evidenceField)?.required;
   if (applied.eligible && m.lookup.autoApprove === 'always' && evidenceAlways) {

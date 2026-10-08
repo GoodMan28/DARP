@@ -3,6 +3,7 @@ import { truncateAll, closeDb } from '../helpers/db';
 import { makeUser } from '../helpers/factories';
 import { createRecord, updateRecord, getRecord, transitionRecord, listRecords } from '@/server/records/service';
 import { uploadEvidence } from '@/server/evidence/service';
+import { lookupForForm } from '@/server/lookup/form';
 import { LookupUnavailable } from '@/server/lookup/http';
 import { notFound, type LookupResult } from '@/server/lookup/types';
 import type { SessionUser } from '@/server/auth/session';
@@ -183,6 +184,21 @@ describe('details that could not be fetched are entered by hand', () => {
     resolveMock.mockResolvedValue(notFound());
     await expect(createRecord(faculty, 'publications', form(nextDoi(), { authors: faculty.name }), 'submit'))
       .rejects.toMatchObject({ code: 'VALIDATION', fields: { evidence: expect.any(String) } });
+  });
+});
+
+describe('what the form says after Fetch details', () => {
+  it('says when the quartile could not be found, instead of only "everything matches"', async () => {
+    resolveMock.mockResolvedValue(hit(faculty, { values: { ...hit(faculty).values, quartile: '', quartileSource: '' } }));
+    const res = await lookupForForm(faculty, 'publications', nextDoi());
+    expect(res.notes.join(' ')).toContain('Journal quartile (SJR) was not found automatically');
+    expect(res.locked).not.toContain('quartile');
+  });
+
+  it('offers Books & Chapters for a conference paper', async () => {
+    resolveMock.mockResolvedValue(hit(faculty, { rawType: 'proceedings-article', values: { ...hit(faculty).values, workType: 'Conference paper' } }));
+    const res = await lookupForForm(faculty, 'publications', nextDoi());
+    expect(res.moveTo).toEqual({ moduleKey: 'books', name: 'Books & Chapters' });
   });
 });
 
