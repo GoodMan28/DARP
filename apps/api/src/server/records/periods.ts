@@ -64,7 +64,9 @@ export function resolvePeriod(
   // No usable date, or a date outside the cycle: the record was entered during this
   // cycle, so it belongs to it. Faculty Profile is the clearest case — its only dates
   // are a degree date and a joining date, neither of which is a reporting period.
-  if (year === null || !isInsideCycle(m, year, cycle)) {
+  // A module that refuses out-of-cycle records keeps the real year: such a record stays a
+  // draft and is never counted, and its list should not pretend it is from this cycle.
+  if (year === null || (!isInsideCycle(m, year, cycle) && !m.lookup?.refuseOutsideCycle)) {
     year = endYear;
   }
 

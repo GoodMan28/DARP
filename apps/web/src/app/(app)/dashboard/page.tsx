@@ -7,8 +7,21 @@ import { requireMe, loadPageData } from '@/lib/api.server';
 import type { DashboardPayload, ModuleProgress } from '@darp/shared/contracts';
 import { ROLE_PURPOSE, ROLE_LABEL } from '@darp/shared/roles';
 import { formatDate, plural } from '@darp/shared/format';
+import { modulesVerifiedBy } from '@darp/shared/modules';
+import type { Role } from '@darp/shared/modules/types';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * The role's purpose, plus the modules whose records are approved on submission: there the
+ * verifying office's check is the last word and IQAC does not sign them off again.
+ */
+function purposeFor(role: Role): string {
+  const final = modulesVerifiedBy(role).filter((m) => m.lookup?.autoApprove === 'always').map((m) => m.name);
+  if (final.length === 0) return ROLE_PURPOSE[role];
+  const names = final.length === 1 ? final[0] : `${final.slice(0, -1).join(', ')} and ${final[final.length - 1]}`;
+  return `${ROLE_PURPOSE[role]} ${names} ${final.length === 1 ? 'is' : 'are'} approved on submission: you check ${final.length === 1 ? 'it' : 'them'} afterwards, and your verification is final.`;
+}
 
 const PROGRESS_LABEL: Record<ModuleProgress, string> = {
   not_started: 'Not started',
@@ -69,7 +82,7 @@ export default async function DashboardPage() {
       groups={groups}
       crumbs={[{ label: 'Overview' }]}
       title={`Good to see you, ${user.name}`}
-      subtitle={ROLE_PURPOSE[user.role]}
+      subtitle={purposeFor(user.role)}
       cycleName={cycle.name}
       actions={
         ownsModules && myModules[0]

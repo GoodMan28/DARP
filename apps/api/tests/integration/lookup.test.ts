@@ -21,9 +21,9 @@ let counter = 0;
 const nextDoi = () => `10.5555/lookup-test-${(counter += 1)}`;
 
 const PDF = Buffer.from('%PDF-1.4\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n');
-const evidence = async () => (await uploadEvidence(faculty, {
+const evidence = async (moduleKey = 'publications') => (await uploadEvidence(faculty, {
   bytes: PDF, fileName: 'first-page.pdf', declaredMime: 'application/pdf',
-  fieldKey: 'evidence', moduleKey: 'publications',
+  fieldKey: 'evidence', moduleKey,
 })).id;
 
 /** A Crossref hit that names the signed-in faculty member and passes every check. */
@@ -214,10 +214,19 @@ describe('papers from outside the reporting cycle', () => {
     });
   });
 
-  it('still lets them be kept as a draft', async () => {
+  it('still lets them be kept as a draft, listed under their own year', async () => {
     resolveMock.mockResolvedValue(old());
-    const { status } = await createRecord(faculty, 'publications', form(nextDoi()), 'draft');
+    const { id, status } = await createRecord(faculty, 'publications', form(nextDoi(), { year: '2019' }), 'draft');
     expect(status).toBe('draft');
+    expect((await getRecord(faculty, 'publications', id)).periodLabel).toBe('2019');
+  });
+
+  it('refuses a book or chapter from outside the cycle as well', async () => {
+    resolveMock.mockImplementation(() => { throw new LookupUnavailable('down'); });
+    await expect(createRecord(faculty, 'books', {
+      isbn: '9781509064717', publicationType: 'Book', sameAffiliation: 'Yes', bookTitle: 'An old book',
+      year: '2020', publisher: 'x', bibliographic: 'x', evidence: await evidence('books'),
+    }, 'submit')).rejects.toMatchObject({ code: 'VALIDATION', fields: { year: expect.stringContaining('covers 2022–2024') } });
   });
 
   it('refuses a year typed by hand too, when the register is unavailable', async () => {

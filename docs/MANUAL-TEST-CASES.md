@@ -92,7 +92,7 @@ named next to it, which is expected to **fail** until the issue is fixed.
 | K6 | **A returned Faculty Profile cannot be resubmitted** unless Aadhaar and PAN are typed again. They come back blank, so "Save and submit" says they are required. | PROF-06 |
 | K7 | **Exports are plain sheets, not the original workbooks.** No `.xlsx` templates are in the repo, so the export writes column headers only, without the original layout, instructions or dropdowns. The Competitive Exams grand total is not computed. | EXP-07, EXP-08 |
 | K8 | **Missing features in the UI**: <br>• no Delete button <br>• no "Submit" action on the record page (use "Save and submit") <br>• no evidence download <br>• no link to the admin console <br>• no admin "view as" <br>• no screen for the unmasked export (URL only) <br>• no screen to reveal a single Aadhaar/PAN <br>• no screen for "since joining" baselines | REC-08, ADM-09 |
-| K9 | **Years outside the cycle are accepted silently.** A 2019 publication is filed under 2024 and counted, where the plan said such a year should be refused or flagged. | VAL-12 |
+| K9 | **Years outside the cycle in other modules.** ~~Publications~~ and ~~Books & Chapters~~ now refuse them (fixed). Other modules still file such a record under the cycle's last year, without a warning. | VAL-12 |
 | K10 | **Sign-in small gaps:** <br>• "Keep me signed in" does nothing. <br>• After being sent to sign in, you always land on the dashboard, not the page you asked for. <br>• No confirmation is shown after a password reset. <br>• "Forgot password" shows the same "Check your e-mail" notice even when the request was refused. | AUTH-14 |
 | K11 | **Smaller UI defects:** <br>• ~~The verification queue card disappears instead of saying "Nothing waiting".~~ Fixed. <br>• "Nothing to report" declarations do not count in the department completion table. <br>• The unsaved-changes warning does not fire when you click a sidebar link. <br>• The error summary is not focused after a failed save. | DASH-08, NIL-03, REC-07, UX-04 |
 | K12 | **Validation gaps:** <br>• A field's own minimum year is ignored; only 1950–2100 is enforced. <br>• The ₹5,000 minimum on Financial Support is not enforced. <br>• An end date before its start date is accepted. | VAL-07, VAL-13, VAL-14 |
@@ -235,7 +235,7 @@ message under the field.
 | VAL-09 | Funds & Grants → any amount (money) | type `4,82,000` | The box keeps digits only: `482000`. In the list or record it shows as 4,82,000 (Indian grouping). | |
 | VAL-10 | Funds & Grants → amount | `99999999999` | "That amount looks too large." | |
 | VAL-11 | Faculty Profile → PAN No. / AADHAAR No. | `ABCDE12345`; `234567890125`; `134567890124` | "PAN looks like ABCDE1234F."; "Enter a valid 12-digit Aadhaar number." for both Aadhaar values | |
-| VAL-12 | Publications → Year of publication | `2019` **(known issue K9)** | Expected: refused or flagged as outside the cycle (2022–2024). Today: saved and filed under 2024. | |
+| VAL-12 | Publications → Year of publication | `2019` | **Save and submit** is refused ("This reporting cycle covers 2022–2024"); **Save as draft** works and the list shows `2019` with the marker **outside the cycle** | |
 | VAL-13 | Financial Support → amount | `4000` **(known issue K12)** | Expected: refused (the help text says the minimum is ₹5,000). Today: accepted. | |
 | VAL-14 | Financial Support → purpose "Conference/Workshop/Seminar/Symposium, etc" → end date before start date **(known issue K12)** | Expected: refused. Today: accepted. | |
 | VAL-15 | Any long text field | Keep typing past its limit | Typing stops at the limit | |
@@ -325,7 +325,7 @@ Use `testfac1`, which has no records.
 | DASH-01 | As `verma` | Tiles "My records", "Still with me", "Awaiting verification", "Approved by IQAC". The numbers agree with the status chips in the modules. | |
 | DASH-02 | "My modules" table | Columns Module / Records / With me / Status; status words Not started / In progress / Submitted / Verified / Approved | |
 | DASH-03 | "Continue data entry" | Opens a module form | |
-| DASH-04 | As `drie` | Tiles "Awaiting my verification", "Awaiting IQAC approval", "Departments", "Institute completion"; the "Verification queue"; a "Completion by department" table saying "Aggregates only — no record contents are shown here." | |
+| DASH-04 | As `drie` | Tiles "Awaiting my verification", "Awaiting IQAC approval", "Departments", "Institute completion"; the "Verification queue"; a "Completion by department" table saying "Aggregates only — no record contents are shown here." The subtitle says Publications are approved on submission and DRIE's verification of them is final. | |
 | DASH-05 | As `hodcse` | The department card is "My department" and shows CSE only | |
 | DASH-06 | As `iqac` | The queue shows both "To verify" and "To approve" | |
 | DASH-07 | As `iqac` → `/admin` → "Cycle" → set a "Deadline" → "Save dates". Then open any dashboard. | "The cycle dates were saved and logged." The dashboard shows "Data entry closes DD-MM-YYYY. Records still in draft after that date are not counted." Clear the deadline afterwards. | |
@@ -516,6 +516,8 @@ Publications are **approved when submitted** — they never wait for DRIE or IQA
 | SCP-02 | Fetch `10.5815/ijisa.2015.11.05` (2015) | Not Scopus: "Scopus covers this journal for 2016–2018 and 2024 onwards" | |
 | SCP-03 | As `iqac` → `/admin` → Journal lists | The Scopus card says it is checked every night at 2 AM and when it last checked | |
 | CYC-01 | As `iqac` → `/admin` → Reporting cycle → change the calendar-year window, then open a Faculty Profile | Counter labels show the new years (e.g. "Publications 2025–2029"); publications outside the new window are refused | |
+| CYC-02 | As `verma` → Books & Chapters → add a book by hand (no ISBN fetch) with year 2020, attach a PDF, **Save and submit** | Refused: "This was published in 2020. This reporting cycle covers 2022–2024 …". **Save as draft** works | |
+| CYC-03 | Open the Books & Chapters list | The draft's Period column shows `2020` with the marker **outside the cycle** | |
 
 ## After testing
 

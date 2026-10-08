@@ -22,6 +22,8 @@ export const books: ModuleConfig = {
       { types: ['journal-article'], moduleKey: 'publications' },
       { types: ['posted-content'], moduleKey: null },
     ],
+    // A book or chapter from another year belongs to another cycle; never count it in this one.
+    refuseOutsideCycle: true,
   },
   fields: [
     { key: 'doi', label: 'DOI', type: 'doi', section: 'Publication',
