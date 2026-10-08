@@ -1,11 +1,11 @@
 import { withRoute, ok, fail } from '@/server/http/handler';
 import {
-  mustGetModule, activeCycle, statusCounts, getNilDeclaration, ServiceError,
+  mustGetModule, activeCycle, statusCounts, getNilDeclaration, periodsInUse, ServiceError,
 } from '@/server/records/service';
 import { toResponse } from '@/server/records/toResponse';
 import { canViewModule, canCreateIn, canVerify } from '@/server/auth/permissions';
 import { getAllLists } from '@/server/records/masterLists';
-import { periodOptions } from '@/server/records/periods';
+import { periodOptions, labelFor } from '@/server/records/periods';
 import type { ModuleSchemaPayload } from '@darp/shared/contracts';
 
 /**
@@ -24,6 +24,10 @@ export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async 
       throw e;
     });
 
+    const periods = cycle ? periodOptions(m, cycle) : [];
+    const years = new Set([...periods.map((p) => p.year), ...(cycle ? await periodsInUse(actor, m.key) : [])]);
+    const recordPeriods = [...years].sort((a, b) => b - a).map((year) => ({ year, label: labelFor(year, m.periodType) }));
+
     return ok<ModuleSchemaPayload>({
       key: m.key,
       name: m.name,
@@ -39,7 +43,8 @@ export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async 
         ? { kind: m.lookup.kind, idFields: m.lookup.idFields, idLabel: m.lookup.idLabel }
         : null,
       listColumns: m.listColumns,
-      periods: cycle ? periodOptions(m, cycle) : [],
+      periods,
+      recordPeriods,
       counts: cycle
         ? await statusCounts(actor, m.key)
         : { draft: 0, submitted: 0, verified: 0, approved: 0, returned: 0 },

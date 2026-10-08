@@ -163,8 +163,6 @@ export function RecordForm({
         }
         : !p.found
         ? { tone: 'warning', title: 'No published record found', notes: p.notes }
-        : p.blocked
-          ? { tone: 'warning', title: `Details fetched from ${source}, but this cannot be submitted here`, notes: p.notes }
         : p.authoritative
           ? { tone: 'success', title: `Details fetched from ${source}`, notes: p.notes }
           : { tone: 'info', title: `Suggested details from ${source} — check every field`, notes: p.notes },

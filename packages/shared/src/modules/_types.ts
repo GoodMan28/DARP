@@ -58,11 +58,6 @@ export interface LookupConfig {
   ownerMustBeIn?: string;
   /** This file field becomes required on submit whenever any detail could not be confirmed. */
   evidenceField?: string;
-  /**
-   * Refuse to submit a record whose year falls outside the reporting cycle (e.g. a 2020 paper in
-   * the 2022–2024 cycle), instead of approving it with a point to check. Drafts are not affected.
-   */
-  refuseOutsideCycle?: boolean;
 }
 
 export interface FieldConfig {
@@ -136,6 +131,13 @@ export interface ModuleConfig {
    * return; owners get a link to this page instead.
    */
   managedAt?: { href: string; label: string };
+
+  /**
+   * false: the module's dates are not reporting periods (the Faculty Profile's promotion date), so
+   * its records are filed under the cycle's last year. Every other module files a record under the
+   * year of its own year or date field, whatever that year is.
+   */
+  periodic?: boolean;
 
   /** Fetch this module's facts from an external register (DOI, ISBN). */
   lookup?: LookupConfig;

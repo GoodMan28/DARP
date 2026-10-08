@@ -12,7 +12,7 @@ import { validateRecord } from './validate';
 import { prepareForStorage, presentForRead, presentForEdit } from './prepare';
 import { resolvePeriod, type CycleWindows } from './periods';
 import { audit } from '@/server/audit/log';
-import { applyLookup, ownerMissingFromAuthors, evidenceMissing, outsideCycle } from '@/server/lookup/apply';
+import { applyLookup, ownerMissingFromAuthors, evidenceMissing } from '@/server/lookup/apply';
 import { unattachableFiles, linkEvidence } from './evidenceLinks';
 import { systemActor } from '@/server/lookup/system';
 import { LOOKUP_SOURCE_LABEL, type RecordVerification } from '@darp/shared/contracts';
@@ -156,6 +156,16 @@ export async function listRecords(actor: SessionUser, moduleKey: string, params:
   };
 }
 
+/** The periods this caller's records are filed under, in the cycle's window or not — for the year filter. */
+export async function periodsInUse(actor: SessionUser, moduleKey: string): Promise<number[]> {
+  const m = mustGetModule(moduleKey);
+  const cycle = await activeCycle();
+  const rows = await db.selectDistinct({ year: records.periodYear })
+    .from(records)
+    .where(scopeFilter(actor, m, cycle.id));
+  return rows.map((r) => r.year);
+}
+
 /** Counts per status for the module header chips — one query, same scope. */
 export async function statusCounts(actor: SessionUser, moduleKey: string) {
   const m = mustGetModule(moduleKey);
@@ -285,17 +295,13 @@ async function recordAutoApproval(recordId: string, v: RecordVerification) {
 type Looked = Awaited<ReturnType<typeof applyLookup>>;
 
 /**
- * Refusals that say everything on their own, checked on submit before any field rule so that
+ * A refusal that says everything on its own, checked on submit before any field rule so that
  * nothing else confuses the message: a work that belongs in another module (a conference paper
- * in Publications, a preprint anywhere), and one from outside the cycle by the publisher's year.
+ * in Publications, a preprint anywhere). The year never refuses a record.
  */
-function refuseOnSubmit(m: ModuleConfig, looked: Looked, mode: 'draft' | 'submit', cycle: CycleWindows) {
-  if (mode !== 'submit' || !m.lookup) return;
-  if (looked.misplaced) {
-    throw new ServiceError('VALIDATION', looked.misplaced.message, { [looked.misplaced.field]: looked.misplaced.message });
-  }
-  const outside = outsideCycle(m, looked.data, cycle, looked.fetched);
-  if (outside) throw new ServiceError('VALIDATION', outside.message, { [outside.field]: outside.message });
+function refuseOnSubmit(m: ModuleConfig, looked: Looked, mode: 'draft' | 'submit') {
+  if (mode !== 'submit' || !m.lookup || !looked.misplaced) return;
+  throw new ServiceError('VALIDATION', looked.misplaced.message, { [looked.misplaced.field]: looked.misplaced.message });
 }
 
 /**
@@ -318,9 +324,9 @@ function submitErrors(
 
 /** Field rules and submit rules together, so the owner sees every problem at once. */
 async function validateSubmission(
-  m: ModuleConfig, looked: Looked, ownerName: string, mode: 'draft' | 'submit', cycle: CycleWindows,
+  m: ModuleConfig, looked: Looked, ownerName: string, mode: 'draft' | 'submit',
 ) {
-  refuseOnSubmit(m, looked, mode, cycle);
+  refuseOnSubmit(m, looked, mode);
   const v = await validateRecord(m, looked.data, mode);
   const errors = { ...submitErrors(m, looked, ownerName, mode), ...(v.ok ? {} : v.errors) };
   if (!v.ok || Object.keys(errors).length > 0) throw new ServiceError('VALIDATION', 'Some fields need attention.', errors);
@@ -345,8 +351,8 @@ export async function createRecord(
   if (!canCreateIn(actor, m)) throw new ServiceError('FORBIDDEN', 'You cannot add records to this module.');
 
   const cycle = await activeCycle();
-  const looked = await applyLookup(m, input, { ownerName: actor.name, cycle });
-  const v = await validateSubmission(m, looked, actor.name, mode, cycle);
+  const looked = await applyLookup(m, input, { ownerName: actor.name });
+  const v = await validateSubmission(m, looked, actor.name, mode);
 
   const departmentId = departmentForRecord(actor, m);
   const badFiles = await unattachableFiles(actor.id, m, null, v.data);
@@ -425,9 +431,9 @@ export async function updateRecord(
   }
 
   const [owner] = await db.select({ name: users.name }).from(users).where(eq(users.id, existing.ownerUserId));
-  const looked = await applyLookup(m, input, { ownerName: owner?.name ?? actor.name, cycle });
+  const looked = await applyLookup(m, input, { ownerName: owner?.name ?? actor.name });
 
-  const v = await validateSubmission(m, looked, owner?.name ?? actor.name, mode, cycle);
+  const v = await validateSubmission(m, looked, owner?.name ?? actor.name, mode);
 
   const badFiles = await unattachableFiles(actor.id, m, id, v.data);
   if (Object.keys(badFiles).length > 0) throw new ServiceError('VALIDATION', 'Some fields need attention.', badFiles);

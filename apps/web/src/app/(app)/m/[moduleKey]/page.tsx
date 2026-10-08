@@ -132,7 +132,7 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
   }
 
   const list = listed.data;
-  const { counts, periods, canCreate } = schema.data;
+  const { counts, recordPeriods, canCreate } = schema.data;
   // A module kept on its own page (the Faculty Profile) is never added to from the list.
   const mayCreate = canCreate && !m.managedAt;
   const declaredNil = mayCreate && schema.data.declaredNil;
@@ -240,7 +240,7 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
           q={q}
           status={status}
           year={year}
-          periods={periods}
+          periods={recordPeriods}
         />
 
         {list.rows.length === 0 ? (
@@ -304,14 +304,6 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
                     ))}
                     <Td className="whitespace-nowrap font-mono text-2xs tabular-nums text-ink-muted">
                       {row.periodLabel}
-                      {periods.some((p) => p.year === row.periodYear) ? null : (
-                        <span
-                          className="ml-1.5 inline-flex rounded-sm border border-warning-100 bg-warning-50 px-1.5 py-0.5 font-sans font-semibold text-warning-700"
-                          title={`Outside ${cycle.name}: it cannot be submitted in this cycle.`}
-                        >
-                          outside the cycle
-                        </span>
-                      )}
                     </Td>
                     <Td>
                       <StatePill status={row.status} />

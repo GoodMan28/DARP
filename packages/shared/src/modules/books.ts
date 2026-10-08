@@ -22,8 +22,6 @@ export const books: ModuleConfig = {
       { types: ['journal-article'], moduleKey: 'publications' },
       { types: ['posted-content'], moduleKey: null },
     ],
-    // A book or chapter from another year belongs to another cycle; never count it in this one.
-    refuseOutsideCycle: true,
   },
   fields: [
     { key: 'doi', label: 'DOI', type: 'doi', section: 'Publication',
@@ -112,5 +110,6 @@ export const books: ModuleConfig = {
   feedsCounters: [
     'books.count.book.cycle', 'books.count.book.sinceJoining',
     'books.count.chapter.cycle', 'books.count.chapter.sinceJoining',
+    'books.count.conference.cycle', 'books.count.conference.sinceJoining',
   ],
 };

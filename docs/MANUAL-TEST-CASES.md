@@ -92,7 +92,7 @@ named next to it, which is expected to **fail** until the issue is fixed.
 | K6 | **A returned Faculty Profile cannot be resubmitted** unless Aadhaar and PAN are typed again. They come back blank, so "Save and submit" says they are required. | PROF-06 |
 | K7 | **Exports are plain sheets, not the original workbooks.** No `.xlsx` templates are in the repo, so the export writes column headers only, without the original layout, instructions or dropdowns. The Competitive Exams grand total is not computed. | EXP-07, EXP-08 |
 | K8 | **Missing features in the UI**: <br>• no Delete button <br>• no "Submit" action on the record page (use "Save and submit") <br>• no evidence download <br>• no link to the admin console <br>• no admin "view as" <br>• no screen for the unmasked export (URL only) <br>• no screen to reveal a single Aadhaar/PAN <br>• no screen for "since joining" baselines | REC-08, ADM-09 |
-| K9 | **Years outside the cycle in other modules.** ~~Publications~~ and ~~Books & Chapters~~ now refuse them (fixed). Other modules still file such a record under the cycle's last year, without a warning. | VAL-12 |
+| K9 | ~~**Years outside the cycle.**~~ Fixed: a record from any year is accepted and filed under its own year in every module (the Faculty Profile excepted). Picking years for an export is still to come. | VAL-12 | Publications → fetch a paper from before the cycle, e.g. `10.1109/TKDE.2011.163` (2012) | — | Saved and approved like any other paper; the list's Period column shows its own year, and the year filter offers that year | |
 | K10 | **Sign-in small gaps:** <br>• "Keep me signed in" does nothing. <br>• After being sent to sign in, you always land on the dashboard, not the page you asked for. <br>• No confirmation is shown after a password reset. <br>• "Forgot password" shows the same "Check your e-mail" notice even when the request was refused. | AUTH-14 |
 | K11 | **Smaller UI defects:** <br>• ~~The verification queue card disappears instead of saying "Nothing waiting".~~ Fixed. <br>• "Nothing to report" declarations do not count in the department completion table. <br>• The unsaved-changes warning does not fire when you click a sidebar link. <br>• The error summary is not focused after a failed save. | DASH-08, NIL-03, REC-07, UX-04 |
 | K12 | **Validation gaps:** <br>• A field's own minimum year is ignored; only 1950–2100 is enforced. <br>• The ₹5,000 minimum on Financial Support is not enforced. <br>• An end date before its start date is accepted. | VAL-07, VAL-13, VAL-14 |
@@ -505,7 +505,7 @@ Publications are **approved when submitted** — they never wait for DRIE or IQA
 | CHG-06 | As `drie` → Publications → **Points to check only** | Only records with something to check are listed | |
 | CHG-07 | Change the quartile from Q1 to Q2 and save | Quartile source reads "Changed by the faculty member; SJR 2023 · … gave Q1" | |
 | CHG-08 | The DOI box, Quartile source and the citation | No **Change** link: the DOI decides what is fetched, the other two are filled by the system | |
-| CHG-09 | Fetch an older paper (e.g. `10.1007/s41870-018-0255-4`, published 2020), change the year to 2023, attach evidence, submit | Refused: "The publisher’s record dates this 2020 … changing the year does not change that." | |
+| CHG-09 | Fetch an older paper (e.g. `10.1007/s41870-018-0255-4`, published 2020), change the year to 2023, attach evidence, submit | Approved; the record page lists "Year of publication" under "Changed or typed by the faculty member" (publisher: 2020, faculty: 2023), and the record is filed under 2023 | |
 | CHG-10 | Fetch any paper, do not attach evidence, **Save and submit** | Refused: "Evidence … is required." — on every Publications and Books & Chapters record, even when everything matches | |
 | CNF-01 | Publications → fetch `10.1109/CCAA.2017.8229793` (an IEEE conference paper) | "This belongs under Books & Chapters" with a button **Add it under Books & Chapters**; submitting here is refused | |
 | CNF-02 | Press the button | Books & Chapters opens with the DOI filled in and fetched: type **Conference paper**, the conference name, the proceedings title and its ISBN | |
@@ -515,9 +515,10 @@ Publications are **approved when submitted** — they never wait for DRIE or IQA
 | SCP-01 | Fetch a 2024 paper from *Scientific Programming* (Scopus dropped it after 2023) | Indexing empty, Quartile "Not ranked", source "Not in Scopus in 2024"; the note says Scopus covered the journal only until 2023 | |
 | SCP-02 | Fetch `10.5815/ijisa.2015.11.05` (2015) | Not Scopus: "Scopus covers this journal for 2016–2018 and 2024 onwards" | |
 | SCP-03 | As `iqac` → `/admin` → Journal lists | The Scopus card says it is checked every night at 2 AM and when it last checked | |
-| CYC-01 | As `iqac` → `/admin` → Reporting cycle → change the calendar-year window, then open a Faculty Profile | Counter labels show the new years (e.g. "Publications 2025–2029"); publications outside the new window are refused | |
-| CYC-02 | As `verma` → Books & Chapters → add a book by hand (no ISBN fetch) with year 2020, attach a PDF, **Save and submit** | Refused: "This was published in 2020. This reporting cycle covers 2022–2024 …". **Save as draft** works | |
-| CYC-03 | Open the Books & Chapters list | The draft's Period column shows `2020` with the marker **outside the cycle** | |
+| CYC-01 | As `iqac` → `/admin` → Reporting cycle → change the calendar-year window, then open a Faculty Profile | Counter labels show the new years (e.g. "Publications 2025–2029"), and the "this cycle" totals count only records filed under those years | |
+| CYC-02 | As `verma` → Books & Chapters → add a book by hand (no ISBN fetch) with year 2020, attach a PDF, **Save and submit** | Submitted to DRIE like any other book; no message about the cycle | |
+| CYC-03 | Open the Books & Chapters list → year filter | The book is listed under `2020`, and `2020` is offered in the year filter | |
+| CNF-05 | Submit a conference paper in Books & Chapters and have it approved; open My profile | "Papers in conference proceedings 2022–2024" goes up by 1; "Book chapters" does not | |
 
 ## After testing
 

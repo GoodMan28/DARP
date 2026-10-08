@@ -44,7 +44,7 @@ export default async function ProfilePage() {
       groups={groups}
       crumbs={[{ label: 'Overview', href: '/dashboard' }, { label: 'My profile' }]}
       title="My profile"
-      subtitle="Twenty-two typed fields, forty-nine counters computed from your records, and thirteen figures you declare yourself."
+      subtitle="Twenty-two typed fields, fifty-one counters computed from your records, and thirteen figures you declare yourself."
       cycleName={cycle.name}
       actions={
         <LinkButton href={profileRecord ? `/m/profile/${profileRecord.id}` : '/m/profile/new'}>

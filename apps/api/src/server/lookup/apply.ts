@@ -1,9 +1,6 @@
 import type { ModuleConfig } from '@darp/shared/modules/types';
 import { getModule } from '@darp/shared/modules';
 import { LOOKUP_SOURCE_LABEL, type RecordVerification, type FieldProvenance } from '@darp/shared/contracts';
-import {
-  isInsideCycle, cycleYears, periodSourceField, yearOfPeriod, type CycleWindows,
-} from '@/server/records/periods';
 import { resolve } from './resolve';
 import { isLookupUnavailable } from './http';
 import { namesMatch } from './names';
@@ -48,11 +45,6 @@ export interface Applied {
   eligible: boolean;
   /** The work belongs in another module and cannot be submitted in this one. */
   misplaced: Misplaced | null;
-  /**
-   * The publisher's values by field key (what the register said, before any change). The cycle
-   * check reads the year from here, so changing the year cannot bring a paper into the cycle.
-   */
-  fetched: Record<string, string>;
 }
 
 const filled = (v: unknown) => v !== undefined && v !== null && v !== '';
@@ -76,9 +68,9 @@ const ownerFields = (m: ModuleConfig, except: string | null) => m.fields.filter(
 export async function applyLookup(
   m: ModuleConfig,
   input: Record<string, unknown>,
-  ctx: { ownerName: string; cycle: CycleWindows },
+  ctx: { ownerName: string },
 ): Promise<Applied> {
-  if (!m.lookup) return { data: input, verification: null, eligible: false, misplaced: null, fetched: {} };
+  if (!m.lookup) return { data: input, verification: null, eligible: false, misplaced: null };
 
   const data: Record<string, unknown> = { ...input };
   const checkedAt = new Date().toISOString();
@@ -94,7 +86,6 @@ export async function applyLookup(
       data,
       eligible: false,
       misplaced: null,
-      fetched: {},
       verification: {
         source: null, identifier: raw || null, checkedAt, autoApproved: false, reasons: [reason], fields,
       },
@@ -116,14 +107,12 @@ export async function applyLookup(
 
   const reasons: string[] = [];
   const fields: Record<string, FieldProvenance> = {};
-  const fetchedByKey: Record<string, string> = {};
 
   // Compare what was saved with what the publisher registered. A blank is filled from the
   // publisher; a different value is the owner's, kept and recorded with the publisher's value.
   for (const f of ownerFields(m, idKey)) {
     const fetched = (r.values[f.autofill!.from] ?? '').slice(0, f.maxLength ?? undefined);
     const typed = text(data[f.key]);
-    if (fetched) fetchedByKey[f.key] = fetched;
     if (!r.authoritative) {
       // Suggestions (Open Library), not the publisher's record: they only fill blanks.
       if (fetched && !typed) data[f.key] = fetched;
@@ -174,18 +163,11 @@ export async function applyLookup(
   } else if (published.every((p) => p.bitAffiliated === false)) {
     reasons.push(`${ctx.ownerName} is listed on the published record with another institution, not BIT Mesra.`);
   }
-  // A module that refuses out-of-cycle records says so on submit (outsideCycle); others note it.
-  const year = Number(r.values.year ?? '');
-  if (!m.lookup.refuseOutsideCycle && Number.isInteger(year) && year > 1900 && !isInsideCycle(m, year, ctx.cycle)) {
-    reasons.push(`It was published in ${year}, outside this reporting cycle.`);
-  }
-
-  const fetched = r.authoritative ? fetchedByKey : {};
+  // The year is never a reason: a record keeps its own year, and IQAC chooses the years to pull.
   return {
     data,
-    eligible: reasons.length === 0 && !misplaced && outsideCycle(m, data, ctx.cycle, fetched) === null,
+    eligible: reasons.length === 0 && !misplaced,
     misplaced,
-    fetched,
     verification: {
       source: r.source,
       identifier: r.values.doi || raw,
@@ -258,35 +240,6 @@ export function workTypeNote(m: ModuleConfig, r: LookupResult): string | null {
     return `This DOI is for a whole book or conference proceedings volume, not for a single paper — that is why there are no authors or journal to fill in. If your paper is in this volume, use your paper's own DOI instead${doi ? ` (it is usually this one with a number added, e.g. ${doi}_6)` : ''}.`;
   }
   return `It is registered as "${r.values.workType || r.rawType || 'unknown'}", not as a ${m.lookup.acceptTypes.join(' / ').replace(/-/g, ' ')}.`;
-}
-
-/**
- * For a module that refuses out-of-cycle records (`lookup.refuseOutsideCycle`): the field to blame
- * and a plain message when the record's year is outside the cycle, otherwise null. The year is read
- * from the final values, so it covers fetched and hand-typed years alike.
- */
-export function outsideCycle(
-  m: ModuleConfig, data: Record<string, unknown>, cycle: CycleWindows, fetched: Record<string, string> = {},
-): { field: string; message: string } | null {
-  if (!m.lookup?.refuseOutsideCycle) return null;
-  const src = periodSourceField(m);
-  if (!src) return null;
-  // The publisher's year decides, when there is one: changing the year cannot move a paper into the cycle.
-  const fromPublisher = fetched[src.key] ?? '';
-  const raw = fromPublisher || data[src.key];
-  if (raw === undefined || raw === null || raw === '') return null;
-  const year = src.kind === 'year'
-    ? Number(String(raw))
-    : (Number.isNaN(new Date(String(raw)).getTime()) ? NaN : yearOfPeriod(new Date(String(raw)), m.periodType));
-  if (!Number.isInteger(year) || isInsideCycle(m, year, cycle)) return null;
-  const { from, to } = cycleYears(m, cycle);
-  const changed = fromPublisher && String(data[src.key] ?? '') !== fromPublisher;
-  return {
-    field: src.key,
-    message: changed
-      ? `The publisher's record dates this ${year}. This reporting cycle covers ${from}–${to}, so it cannot be submitted here — changing the year does not change that.`
-      : `This was published in ${year}. This reporting cycle covers ${from}–${to}, so it cannot be submitted here.`,
-  };
 }
 
 /** Splits an author list typed as "A. K. Verma, S. Mahato; P. Ranjan and X" into names. */

@@ -10,11 +10,13 @@ export interface CycleWindows {
 /**
  * Which field supplies the record's reporting period, resolved by convention so that
  * no module config has to declare it:
- *   1. a field whose type is 'year'
- *   2. otherwise the first field whose type is 'date'
- *   3. otherwise null — the record is stamped with the cycle's final year
+ *   1. none for a module that is not periodic (the Faculty Profile)
+ *   2. a field whose type is 'year'
+ *   3. otherwise the first field whose type is 'date'
+ *   4. otherwise null — the record is stamped with the cycle's final year
  */
 export function periodSourceField(m: ModuleConfig): { key: string; kind: 'year' | 'date' } | null {
+  if (m.periodic === false) return null;
   const year = m.fields.find((f) => f.type === 'year');
   if (year) return { key: year.key, kind: 'year' };
   const date = m.fields.find((f) => f.type === 'date');
@@ -52,7 +54,10 @@ export function resolvePeriod(
       }
     } else if (src.kind === 'date' && typeof raw === 'string' && raw) {
       const d = new Date(raw);
-      if (!Number.isNaN(d.getTime())) year = yearOfPeriod(d, m.periodType);
+      if (!Number.isNaN(d.getTime())) {
+        const y = yearOfPeriod(d, m.periodType);
+        if (y >= 1950 && y <= 2100) year = y;
+      }
     }
   }
 
@@ -61,19 +66,15 @@ export function resolvePeriod(
     m.periodType,
   );
 
-  // No usable date, or a date outside the cycle: the record was entered during this
-  // cycle, so it belongs to it. Faculty Profile is the clearest case — its only dates
-  // are a degree date and a joining date, neither of which is a reporting period.
-  // A module that refuses out-of-cycle records keeps the real year: such a record stays a
-  // draft and is never counted, and its list should not pretend it is from this cycle.
-  if (year === null || (!isInsideCycle(m, year, cycle) && !m.lookup?.refuseOutsideCycle)) {
-    year = endYear;
-  }
+  // The record keeps its own year, inside the cycle's window or not: IQAC chooses the years
+  // when pulling records. Only a record with no usable year or date (or a module that is not
+  // periodic) is filed under the cycle's last year.
+  if (year === null) year = endYear;
 
   return { periodYear: year, periodLabel: labelFor(year, m.periodType) };
 }
 
-/** Is a record's period inside the cycle's window for its module? Used to warn, not to block. */
+/** Is a period year inside the cycle's window for its module? (The profile's cycle counters.) */
 export function isInsideCycle(m: ModuleConfig, periodYear: number, cycle: CycleWindows): boolean {
   const { from, to } = cycleYears(m, cycle);
   return periodYear >= from && periodYear <= to;

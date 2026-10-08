@@ -1,9 +1,9 @@
 import type { LookupFillPayload } from '@darp/shared/contracts';
 import type { SessionUser } from '@/server/auth/session';
 import { canCreateIn } from '@/server/auth/permissions';
-import { mustGetModule, activeCycle, ServiceError } from '@/server/records/service';
+import { mustGetModule, ServiceError } from '@/server/records/service';
 import {
-  applyLookup, ownerMissingFromAuthors, outsideCycle, workTypeNote, yearNote, WHOLE_VOLUME_TYPES,
+  applyLookup, ownerMissingFromAuthors, yearNote, WHOLE_VOLUME_TYPES,
 } from './apply';
 import { namesMatch } from './names';
 import { resolve } from './resolve';
@@ -55,8 +55,7 @@ export async function lookupForForm(
     return byHand(`No published record was found for this ${m.lookup.idLabel}. Check it, or fill in the details by hand — the record will then be checked by the verifying office.`);
   }
 
-  const cycle = await activeCycle();
-  const applied = await applyLookup(m, typed, { ownerName: actor.name, cycle });
+  const applied = await applyLookup(m, typed, { ownerName: actor.name });
   const fill: Record<string, string> = {};
   for (const f of m.fields) {
     const v = applied.data[f.key];
@@ -76,14 +75,6 @@ export async function lookupForForm(
   }
 
   const yearHint = yearNote(result);
-  // Out of the cycle: say that — after explaining what the DOI is, if it is not a single paper.
-  const outside = outsideCycle(m, applied.data, cycle, applied.fetched);
-  if (outside) {
-    const typeNote = workTypeNote(m, result);
-    const notes = [typeNote, yearHint, outside.message].filter((n): n is string => !!n);
-    return { found: true, source: result.source, authoritative: result.authoritative, fill, locked, notes, blocked: true };
-  }
-
   // "…the name was added by hand" describes a saved record; at this point nothing was added yet.
   const reasons = (applied.verification?.reasons ?? []).filter((r) => !r.includes('added by hand'));
   const nameMissing = ownerMissingFromAuthors(m, applied.data, actor.name);
