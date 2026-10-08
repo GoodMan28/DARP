@@ -14,9 +14,10 @@ type CoverageRow = { source: string; fromYear: number; toYear: number | null };
 
 /** "2016–2017 and 2019 onwards" — the ranges as a phrase for a reason shown to people. */
 function describeRanges(rows: CoverageRow[]): string {
-  const parts = [...rows].sort((a, b) => a.fromYear - b.fromYear).map((r) => (
+  // A journal's print and online ISSNs (and both lists) repeat the same ranges: say each once.
+  const parts = [...new Set([...rows].sort((a, b) => a.fromYear - b.fromYear).map((r) => (
     r.toYear === null ? `${r.fromYear} onwards` : r.toYear === r.fromYear ? String(r.fromYear) : `${r.fromYear}–${r.toYear}`
-  ));
+  )))];
   return parts.length <= 1 ? (parts[0] ?? '') : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
 }
 

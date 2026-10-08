@@ -83,6 +83,9 @@ export function fromCrossref(w: CrossrefWork): LookupResult {
   const printIssn = (w['issn-type'] ?? []).find((i) => i.type === 'print')?.value;
   const issnMain = normIssn(printIssn ?? issnAll[0] ?? '');
 
+  // Wiley registers book chapters as "other", with a DOI ending .chN and the book's ISBN.
+  const type = w.type === 'other' && /\.ch\d+$/i.test(w.DOI) && isbnsOf(w).length > 0 ? 'book-chapter' : (w.type ?? null);
+
   const flags: string[] = [];
   const updates = [...(w['update-to'] ?? []), ...(w['updated-by'] ?? [])];
   if (updates.some((u) => RETRACTION.has(String(u.type ?? '').toLowerCase()))) flags.push('retracted');
@@ -91,7 +94,7 @@ export function fromCrossref(w: CrossrefWork): LookupResult {
     found: true,
     source: 'crossref',
     authoritative: true,
-    rawType: w.type ?? null,
+    rawType: type,
     values: {
       doi: w.DOI.toLowerCase(),
       title: clean(w.title?.[0]),
@@ -104,7 +107,7 @@ export function fromCrossref(w: CrossrefWork): LookupResult {
       issue: clean(w.issue),
       pages: clean(w.page ?? w['article-number']),
       publisher: clean(w.publisher),
-      workType: WORK_TYPE_LABEL[w.type ?? ''] ?? (w.type ?? ''),
+      workType: WORK_TYPE_LABEL[type ?? ''] ?? (type ?? ''),
       eventName: clean(w.event?.name),
     },
     people,

@@ -80,6 +80,12 @@ describe('scopusCovered', () => {
     expect(scopusCovered([list(2023, null)], 2021).covered).toBe(false);
   });
 
+  it('names each range once, though both ISSNs and both lists repeat them (IJISA)', () => {
+    const scimago = (from: number, to: number | null) => ({ source: 'scimago', fromYear: from, toYear: to });
+    const rows = [scimago(2016, 2018), scimago(2024, null), scimago(2016, 2018), scimago(2024, null)];
+    expect(scopusCovered(rows, 2015).flag).toBe('scopus-not-that-year:2016–2018 and 2024 onwards');
+  });
+
   it('does not cover a paper after the year Scopus dropped the journal (Scientific Programming)', () => {
     const rows = [list(2009, null), dropped(2023)];   // a stale "ongoing" range is overruled
     expect(scopusCovered(rows, 2024)).toEqual({ covered: false, flag: 'scopus-dropped:2023' });

@@ -74,6 +74,18 @@ describe('fromCrossref', () => {
   });
 });
 
+describe('fromCrossref, Wiley chapters', () => {
+  it('reads a Wiley "other" with a .chN DOI and an ISBN as a book chapter', () => {
+    const r = fromCrossref({
+      DOI: '10.1002/9781119821908.ch9', type: 'other', title: ['A chapter'],
+      ISBN: ['9781119821885'], 'container-title': ['Fundamentals and Methods of Machine and Deep Learning'],
+    });
+    expect(r.rawType).toBe('book-chapter');
+    expect(r.values.workType).toBe('Book chapter');
+    expect(fromCrossref({ DOI: '10.1002/x.ch9', type: 'other' }).rawType).toBe('other');   // no ISBN: not a chapter
+  });
+});
+
 describe('resolveBook, conference papers', () => {
   it('fills the proceedings volume and its ISBN, which IEEE registers separately', async () => {
     const r = await resolveBook('10.1109/cvpr.2016.90');
