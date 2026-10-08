@@ -476,7 +476,7 @@ Publications are **approved when submitted** — they never wait for DRIE or IQA
 
 | ID | Do this | You should see | Result |
 |---|---|---|---|
-| LOOK-01 | As `verma` → Publications → "Add record" → paste `10.1109/access.2023.3237542` → "Fetch details" | Title, journal (IEEE Access), year 2023, ISSN 2169-3536, volume, pages, citation filled and "Fetched · locked"; Indexing **Scopus**, Quartile **Q1**, Quartile source "SJR 2023 · Scopus list" | |
+| LOOK-01 | As `verma` → Publications → "Add record" → paste `10.1109/access.2023.3237542` → "Fetch details" | Title, journal (IEEE Access), year 2023, ISSN 2169-3536, volume, pages, citation filled and marked "From the publisher’s record" with a **Change** link; Indexing **Scopus**, Quartile **Q1**, Quartile source "SJR 2023 · estimated (Scopus list)" (or "SJR 2023 · SCImago" once IQAC has loaded SCImago’s 2023 file) | |
 | LOOK-02 | Read the notes under "Fetch details" | "Your name (Dr A. K. Verma) must be in the author list before you can submit…" — Verma is not an author of this paper | |
 | LOOK-03 | "Save and submit" straight away | Refused: the author-list message under "Name of the author/s", and "Attach evidence…" under Evidence | |
 | LOOK-04 | "Save as draft" instead | Saved as Draft — the name rule applies only to submitting | |
@@ -486,12 +486,36 @@ Publications are **approved when submitted** — they never wait for DRIE or IQA
 | LOOK-08 | "Return to owner" with a remark | Status Returned; Verma sees the remark | |
 | LOOK-09 | As `verma`, fix and "Save and submit" again | Status **Submitted** (goes to DRIE), not straight back to Approved | |
 | LOOK-09b | As `drie`, open it | The button reads **"Verify and approve"** (note: no IQAC approval follows). Pressing it → status **Approved**; IQAC's dashboard shows nothing to approve for Publications | |
-| LOOK-10 | Fetch a DOI whose journal is not in Scopus (e.g. `10.1016/j.matpr.2021.01.001`, Materials Today: Proceedings) | Indexing and Quartile are **empty and editable** — choose them yourself; Quartile source stays empty and locked; evidence is then required | |
+| LOOK-10 | Fetch a DOI whose journal is not in Scopus (e.g. `10.1016/j.matpr.2021.01.001`, Materials Today: Proceedings) | Indexing and Quartile are **empty and editable**, marked "Entered by hand" once you choose them; after saving, Quartile source reads "Chosen by the faculty member" | |
 | LOOK-11 | Fetch `hello`, then `10.9999/nope` | "That does not look like a valid DOI."; then "No published record was found…" and every field editable | |
-| LOOK-12 | A paper where you are a real author (an account named after a real BIT author, e.g. `Dr Vandana Bhattacharjee` for the DOI in LOOK-01) | Approved on submission with **no** evidence needed and no Check marker; the record says "Checked automatically" | |
+| LOOK-12 | A paper where you are a real author (an account named after a real BIT author, e.g. `Dr Vandana Bhattacharjee` for the DOI in LOOK-01) | Approved on submission (evidence is still required) with no Check marker; the record says "Checked automatically" | |
 | LOOK-13 | Books & Chapters → fetch `10.1007/978-981-19-0475-2_1` | "Book chapter", book title "Innovations in Computational Intelligence and Computer Vision" (not the series name). Books still go to DRIE unless every check passes | |
 | LOOK-14 | As `iqac` → `/admin` → "Journal lists" | "Automatic: Scopus list from Elsevier" shows the November 2024 list and its counts; "Refresh now" works | |
 | LOOK-15 | Patents → Country India → number `IN202331012345A` → save | Stored as `202331012345`; `TEMP/E-1/…` is refused with an explanation. Patents still go to DRIE | |
+
+## 23 · Changing fetched details, evidence on every record, conference papers, Scopus years
+
+| ID | Do this | You should see | Result |
+|---|---|---|---|
+| CHG-01 | As `vandana` → Publications → fetch `10.1109/access.2023.3237542` → press **Change** under "Name of journal" | A yellow box: "DRIE and IQAC will see that you changed this, along with the value from the publisher’s record. Attach evidence that shows the correct value." with **Change it** / **Keep the publisher’s value** | |
+| CHG-02 | **Change it**, type "IEEE Access Journal" | The field turns amber, the label says "Changed — DRIE and IQAC will see this", and "Publisher’s record: IEEE Access · Undo" appears under it | |
+| CHG-03 | Press **Undo** | The value goes back to "IEEE Access" and the field is locked again | |
+| CHG-04 | Change the journal again, attach a PDF, **Save and submit** | Approved at once; the list row carries the **Check** marker | |
+| CHG-05 | As `drie`, open that record | A table "Changed or typed by the faculty member": Name of journal · IEEE Access · IEEE Access Journal. The points to check say the journal was changed | |
+| CHG-06 | As `drie` → Publications → **Points to check only** | Only records with something to check are listed | |
+| CHG-07 | Change the quartile from Q1 to Q2 and save | Quartile source reads "Changed by the faculty member; SJR 2023 · … gave Q1" | |
+| CHG-08 | The DOI box, Quartile source and the citation | No **Change** link: the DOI decides what is fetched, the other two are filled by the system | |
+| CHG-09 | Fetch an older paper (e.g. `10.1007/s41870-018-0255-4`, published 2020), change the year to 2023, attach evidence, submit | Refused: "The publisher’s record dates this 2020 … changing the year does not change that." | |
+| CHG-10 | Fetch any paper, do not attach evidence, **Save and submit** | Refused: "Evidence … is required." — on every Publications and Books & Chapters record, even when everything matches | |
+| CNF-01 | Publications → fetch `10.1109/CCAA.2017.8229793` (an IEEE conference paper) | "This belongs under Books & Chapters" with a button **Add it under Books & Chapters**; submitting here is refused | |
+| CNF-02 | Press the button | Books & Chapters opens with the DOI filled in and fetched: type **Conference paper**, the conference name, the proceedings title and its ISBN | |
+| CNF-03 | Publications → fetch a Springer chapter, e.g. `10.1007/978-3-031-94121-4_5` | Sent to Books & Chapters; there it arrives as "Book chapter" — change the type to "Conference paper" if it was one | |
+| CNF-04 | Publications → fetch a preprint DOI (Crossref type posted-content, e.g. an arXiv/SSRN/Research Square DOI) | "This cannot be entered": a preprint has not been peer reviewed | |
+| YR-01 | Fetch a paper published online in one year and in an issue the next | A note: "It was published online in 2021 and in an issue in 2022. The issue year, 2022, is the year that counts." | |
+| SCP-01 | Fetch a 2024 paper from *Scientific Programming* (Scopus dropped it after 2023) | Indexing empty, Quartile "Not ranked", source "Not in Scopus in 2024"; the note says Scopus covered the journal only until 2023 | |
+| SCP-02 | Fetch `10.5815/ijisa.2015.11.05` (2015) | Not Scopus: "Scopus covers this journal for 2016–2018 and 2024 onwards" | |
+| SCP-03 | As `iqac` → `/admin` → Journal lists | The Scopus card says it is checked every night at 2 AM and when it last checked | |
+| CYC-01 | As `iqac` → `/admin` → Reporting cycle → change the calendar-year window, then open a Faculty Profile | Counter labels show the new years (e.g. "Publications 2025–2029"); publications outside the new window are refused | |
 
 ## After testing
 
