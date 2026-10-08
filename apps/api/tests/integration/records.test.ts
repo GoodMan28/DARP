@@ -83,6 +83,12 @@ describe('create and read', () => {
     await expect(getRecord(otherHod, 'publications', id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
+  it("lists a department's records only to its own HOD, not to every HOD", async () => {
+    const { id } = await createRecord(faculty, 'publications', paper('10.1016/c-list'), 'draft');
+    expect((await listRecords(hod, 'publications', { pageSize: 100 })).rows.map((r) => r.id)).toContain(id);
+    expect((await listRecords(otherHod, 'publications', { pageSize: 100 })).rows.map((r) => r.id)).not.toContain(id);
+  });
+
   it('does not let an unrelated office read a module it neither owns nor verifies', async () => {
     const { id } = await createRecord(faculty, 'publications', paper('10.1016/d'), 'draft');
     await expect(getRecord(dofa, 'publications', id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
