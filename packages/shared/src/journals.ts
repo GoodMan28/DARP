@@ -12,6 +12,27 @@ export interface JournalListRow {
   sourceType?: string;
   /** SJR only: Q1..Q4, or null when the journal is unranked that year */
   quartile?: string | null;
+  /** SJR only: the years Scopus covered the journal, as SCImago writes them ("1996-2001, 2003-2026"). */
+  coverage?: string;
+}
+
+export interface CoverageRange { from: number; to: number | null }
+
+/**
+ * "2019-2023; 2016-2017", "2014-ongoing, 2012", "2002; 2000" → year ranges, oldest first.
+ * "ongoing" gives to: null; a single year is a range of one year. Anything unreadable is skipped.
+ */
+export function parseCoverage(text: string): CoverageRange[] {
+  const out: CoverageRange[] = [];
+  for (const part of text.split(/[;,]/)) {
+    const m = part.trim().match(/^((?:19|20)\d{2})(?:\s*[-–]\s*((?:19|20)\d{2}|ongoing|present))?$/i);
+    if (!m) continue;
+    const from = Number(m[1]);
+    const to = m[2] === undefined ? from : /^\d/.test(m[2]) ? Number(m[2]) : null;
+    if (to !== null && to < from) continue;
+    if (!out.some((r) => r.from === from)) out.push({ from, to });
+  }
+  return out.sort((a, b) => a.from - b.from);
 }
 
 /**
@@ -60,6 +81,7 @@ export function extractSjrRows(table: string[][]): ExtractResult {
   const iQ = col('SJR Best Quartile');
   const iTitle = col('Title');
   const iType = col('Type');
+  const iCoverage = col('Coverage');
   if ([iIssn, iQ, iTitle, iType].some((i) => i < 0)) {
     return {
       ok: false,
@@ -76,6 +98,7 @@ export function extractSjrRows(table: string[][]): ExtractResult {
         title: (r[iTitle] ?? '').trim().slice(0, 500),
         sourceType: (r[iType] ?? '').trim().toLowerCase().slice(0, 60),
         quartile: /^Q[1-4]$/.test(q) ? q : null,
+        ...(iCoverage >= 0 && r[iCoverage] ? { coverage: r[iCoverage]!.trim().slice(0, 200) } : {}),
       }));
   });
   if (rows.length === 0) return { ok: false, message: 'No journal in this file has a valid ISSN.' };

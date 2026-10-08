@@ -48,6 +48,15 @@ describe('extractSjrRows', () => {
     ]);
   });
 
+  it('keeps the coverage years of a current SCImago file', () => {
+    // The 2025 file adds columns (a second Publisher, %Female, Overton) and Coverage.
+    const r = extractSjrRows(parseCsv(
+      'Rank;Sourceid;Title;Type;Issn;Publisher;SJR;SJR Best Quartile;Publisher;Coverage;Categories\n'
+      + '1;2;"IJISA";journal;"20749058, 2074904X";"MECS";0,161;Q4;"MECS";"2016-2018, 2024-2026";"Computer Science (Q4)"\n',
+    ));
+    expect(r.ok && r.rows.map((x) => x.coverage)).toEqual(['2016-2018, 2024-2026', '2016-2018, 2024-2026']);
+  });
+
   it('refuses a file that is not from SCImago', () => {
     const r = extractSjrRows(parseCsv('Journal title,ISSN\nX,1234-5678\n'));
     expect(r.ok).toBe(false);

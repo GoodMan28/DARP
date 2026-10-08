@@ -320,6 +320,25 @@ export const journalIndexListings = pgTable('journal_index_listings', {
   importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex('journal_index_issn_list_year_uq').on(t.issn, t.listName, t.year)]);
 
+/**
+ * The years Scopus covered a journal, from Elsevier's list ('scopus-list': active titles, the last
+ * range open-ended; 'scopus-discontinued': titles Scopus dropped, from_year 0 and to_year the final
+ * year covered) or from SCImago's file ('scimago'). A paper counts as Scopus-indexed only when its
+ * year falls inside a range — a journal Scopus dropped in 2023 does not index a 2024 paper.
+ */
+export const journalCoverage = pgTable('journal_coverage', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  issn: text('issn').notNull(),
+  source: text('source').notNull(),
+  fromYear: integer('from_year').notNull(),
+  /** null = still covered (ongoing). */
+  toYear: integer('to_year'),
+  importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex('journal_coverage_issn_source_from_uq').on(t.issn, t.source, t.fromYear),
+  index('journal_coverage_issn_idx').on(t.issn),
+]);
+
 /* ───────────────────────────── relations ───────────────────────── */
 
 export const usersRelations = relations(users, ({ one, many }) => ({

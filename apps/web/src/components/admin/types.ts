@@ -134,6 +134,7 @@ export interface JournalListsPayload {
   scopus: {
     file: string; listYear: number; listMonth: number; sjrYear: number;
     journals: number; indexed: number; ranked: number; fetchedAt: string;
+    discontinued?: number; checkedAt?: string;
   } | null;
   /** The Indexing master list, in IQAC's priority order. */
   listNames: string[];

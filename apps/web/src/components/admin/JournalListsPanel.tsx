@@ -129,7 +129,7 @@ export function JournalListsPanel() {
       <Card padded={false}>
         <CardHeader
           title="Automatic: Scopus list from Elsevier"
-          subtitle="Fetched by the server from Elsevier's public Scopus source list — no download needed. Refreshed every month."
+          subtitle="Fetched by the server from Elsevier's public Scopus source list — no download needed. Checked for a newer list every night at 2 AM."
           actions={<Button type="button" variant="secondary" disabled={busy} onClick={() => void refreshScopus()}>Refresh now</Button>}
         />
         <div className="p-4 text-sm">
@@ -138,16 +138,25 @@ export function JournalListsPanel() {
               Using the <strong>{months[data.scopus.listMonth - 1]} {data.scopus.listYear}</strong> list
               ({data.scopus.file}), fetched {new Date(data.scopus.fetchedAt).toLocaleDateString('en-IN')}:{' '}
               {data.scopus.indexed.toLocaleString('en-IN')} journals indexed in Scopus,{' '}
-              {data.scopus.ranked.toLocaleString('en-IN')} with a quartile from their SJR {data.scopus.sjrYear} value.
+              {data.scopus.ranked.toLocaleString('en-IN')} with a quartile from their SJR {data.scopus.sjrYear} value
+              {data.scopus.discontinued
+                ? `, and ${data.scopus.discontinued.toLocaleString('en-IN')} titles Scopus has dropped`
+                : ''}.
+              {data.scopus.checkedAt ? (
+                <> Last checked for a newer list {new Date(data.scopus.checkedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}.</>
+              ) : null}
             </p>
           ) : (
             <p className="text-ink-muted">Not fetched yet. It is fetched when the API starts; press “Refresh now” to fetch it now.</p>
           )}
           <p className="mt-2 text-xs text-ink-muted">
-            Indexing “Scopus” means active in Scopus and not discontinued. The quartile applies SCImago’s method to
-            the SJR values in Elsevier’s list (rank within each subject category, best quartile) and is labelled
-            “Scopus list”. Loading SCImago’s own file below replaces it with SCImago’s figures. Web of Science
-            (SCIE, SSCI, …) cannot be fetched automatically — Clarivate requires a login — so load those below.
+            Indexing “Scopus” is given only when Scopus covered the journal in the paper’s year — a journal Scopus
+            dropped after 2023 does not index a 2024 paper. The quartile applies SCImago’s method to the SJR values
+            in Elsevier’s list (rank within each subject category, best quartile). Elsevier’s list has SJR values only
+            for journals still in Scopus, so this quartile is an estimate and is labelled “estimated”. Loading SCImago’s
+            own file for each year below (SCImago blocks automatic downloads) replaces it with SCImago’s official
+            figures for that year. Web of Science (SCIE, SSCI, …) cannot be fetched automatically either — Clarivate
+            requires a login — so load those below.
           </p>
         </div>
       </Card>

@@ -24,6 +24,21 @@ const FLAG_REASON: Record<string, string> = {
   'parent-book-not-found': 'The book this chapter belongs to could not be found, so its title came from the chapter record.',
 };
 
+/** A flag as a sentence. Some flags carry a value after a colon, e.g. "scopus-dropped:2023". */
+export function reasonForFlag(flag: string, year: string): string | null {
+  const at = flag.indexOf(':');
+  const name = at < 0 ? flag : flag.slice(0, at);
+  const arg = at < 0 ? '' : flag.slice(at + 1);
+  const paper = year ? `a ${year} paper` : 'this paper';
+  if (name === 'scopus-dropped') {
+    return `Scopus covered this journal only until ${arg}, so ${paper} is not Scopus-indexed.`;
+  }
+  if (name === 'scopus-not-that-year') {
+    return `Scopus covers this journal for ${arg}, so ${paper} is not Scopus-indexed.`;
+  }
+  return FLAG_REASON[name] ?? null;
+}
+
 export interface Applied {
   /** The input with locked fields overwritten and the citation rebuilt. */
   data: Record<string, unknown>;
@@ -101,7 +116,7 @@ export async function applyLookup(
   const typeNote = workTypeNote(m, r);
   if (typeNote) reasons.push(typeNote);
   for (const flag of r.flags) {
-    const reason = FLAG_REASON[flag];
+    const reason = reasonForFlag(flag, r.values.year ?? '');
     if (reason) reasons.push(reason);
   }
   // Matched against the PUBLISHED author list, never the edited one (decision D3).

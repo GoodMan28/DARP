@@ -2,7 +2,7 @@ import './env';
 import { createApp } from './app';
 import { pool } from '@/server/db';
 import { log } from '@/server/log';
-import { syncScopusListIfStale } from '@/server/lookup/scopusList';
+import { syncScopusListIfStale, scheduleNightlyScopusCheck } from '@/server/lookup/scopusList';
 
 const port = Number(process.env.PORT ?? 4000);
 // Loopback by default: the API is reached through the web tier, never directly from the
@@ -16,8 +16,10 @@ if (!process.env.APP_URL) {
 const server = createApp().listen(port, host, () => {
   log.info('api listening', { url: `http://${host}:${port}`, appUrl: process.env.APP_URL });
   // Quartile and Scopus indexing come from Elsevier's public Scopus list: fetch it in the
-  // background when it is missing or over a month old. Never blocks or crashes start-up.
+  // background when it is missing or over a month old, then look for a newer one every night
+  // at 2 AM India time. Never blocks or crashes start-up.
   void syncScopusListIfStale();
+  scheduleNightlyScopusCheck();
 });
 
 function shutdown(signal: string) {

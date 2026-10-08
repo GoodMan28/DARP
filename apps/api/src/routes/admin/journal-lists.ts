@@ -27,10 +27,12 @@ const rowSchema = z.object({
   title: z.string().max(500),
   sourceType: z.string().max(60).optional(),
   quartile: z.enum(['Q1', 'Q2', 'Q3', 'Q4']).nullable().optional(),
+  /** SCImago only: the years Scopus covered the journal. */
+  coverage: z.string().max(200).optional(),
 });
 
 const bodySchema = z.discriminatedUnion('action', [
-  /** Fetch Elsevier's public Scopus list again now, instead of waiting for the monthly refresh. */
+  /** Fetch Elsevier's public Scopus list again now, instead of waiting for the nightly check. */
   z.object({ action: z.literal('syncScopus') }),
   z.object({
     action: z.literal('import'),
