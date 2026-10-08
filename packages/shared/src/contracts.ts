@@ -307,6 +307,8 @@ export interface LookupFillPayload {
   locked: string[];
   /** plain-language notes for the person filling in */
   notes: string[];
+  /** Fetched, but it cannot be submitted in this module whatever is changed (e.g. outside the cycle). */
+  blocked?: boolean;
   /** The work belongs in another module: its key and name, for an "Add it there" link. */
   moveTo?: { moduleKey: string; name: string } | null;
 }

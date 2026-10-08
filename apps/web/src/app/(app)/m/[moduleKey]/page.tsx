@@ -96,6 +96,7 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
   const pageParam = Number(one(sp.page));
   const page = Number.isInteger(pageParam) && pageParam > 1 ? pageParam : 1;
   const saved = one(sp.saved) === '1';
+  const deleted = one(sp.deleted) === '1';
   // Only records with points to check: a module whose records are checked against the publisher.
   const check = !!m.lookup && one(sp.check) === '1';
 
@@ -218,6 +219,9 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
 
       {saved ? (
         <Notice tone="success" className="mb-4">Your record was saved.</Notice>
+      ) : null}
+      {deleted ? (
+        <Notice tone="info" className="mb-4">The record was deleted.</Notice>
       ) : null}
 
       <Card padded={false}>

@@ -78,7 +78,7 @@ export async function lookupForForm(
   if (outside) {
     const typeNote = workTypeNote(m, result);
     const notes = [typeNote, yearHint, outside.message].filter((n): n is string => !!n);
-    return { found: true, source: result.source, authoritative: result.authoritative, fill, locked, notes };
+    return { found: true, source: result.source, authoritative: result.authoritative, fill, locked, notes, blocked: true };
   }
 
   const reasons = applied.verification?.reasons ?? [];

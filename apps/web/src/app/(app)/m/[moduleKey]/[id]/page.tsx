@@ -7,6 +7,7 @@ import {
 import { IconArrowBack, IconLock } from '@/components/shell/Icon';
 import { RecordForm } from '@/components/form/RecordForm';
 import { ActionRail, type RailAction } from '@/components/records/ActionRail';
+import { DeleteRecord } from '@/components/records/DeleteRecord';
 import { lockedStrip } from '@/components/records/form-fields';
 import { requireMe, loadPageData } from '@/lib/api.server';
 import { LOOKUP_SOURCE_LABEL, type ModuleSchemaPayload, type RecordDetail } from '@darp/shared/contracts';
@@ -59,6 +60,8 @@ export default async function RecordPage({ params }: PageProps) {
   const record = loaded.data;
   const editable = record.canEdit && record.editValues !== null;
   const mayVerify = schema.data.canVerify;
+  // The owner's own draft or returned record: they correct and resubmit it, or delete it.
+  const ownOpen = editable && record.isMine && (record.status === 'draft' || record.status === 'returned');
   const isAdmin = user.role === 'admin';
 
   /*
@@ -168,7 +171,8 @@ export default async function RecordPage({ params }: PageProps) {
         </div>
 
         <aside className="space-y-4">
-          {record.verification ? (
+          {/* The automatic check's verdict describes an approval; once returned or resubmitted it no longer applies. */}
+          {record.verification && !(record.verification.autoApproved && record.status !== 'approved') ? (
             record.verification.autoApproved && record.verification.reasons.length === 0 ? (
               <Notice tone="success" title="Checked automatically">
                 Matched the published record
@@ -198,11 +202,16 @@ export default async function RecordPage({ params }: PageProps) {
               <StatePill status={record.status} />
               {rail.length > 0 ? (
                 <ActionRail moduleKey={m.key} recordId={record.id} actions={rail} verifyIsFinal={m.lookup?.autoApprove === 'always'} />
+              ) : ownOpen ? (
+                <p className="text-xs text-ink-muted">
+                  Correct the fields and press “Save and submit” below the form.
+                </p>
               ) : (
                 <p className="text-xs text-ink-muted">
                   No workflow action is available to you on this record right now.
                 </p>
               )}
+              {ownOpen ? <DeleteRecord moduleKey={m.key} recordId={record.id} /> : null}
             </div>
           </Card>
 

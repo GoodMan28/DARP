@@ -35,7 +35,7 @@ export const publications: ModuleConfig = {
     refuseOutsideCycle: true,
   },
   fields: [
-    { key: 'doi', label: 'Doi', type: 'doi', required: true, section: 'Paper',
+    { key: 'doi', label: 'DOI', type: 'doi', required: true, section: 'Paper',
       placeholder: 'https://doi.org/10.1016/j.ijpharm.2024.123793',
       help: 'Paste the DOI (for example 10.1016/j.future.2026.107812 or the full https://doi.org/… link) into the box above and press Fetch details.',
       exportAs: {

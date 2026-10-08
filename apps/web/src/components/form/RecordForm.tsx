@@ -69,6 +69,12 @@ export function RecordForm({
   const [identifier, setIdentifier] = useState<string>(
     () => handedOver ?? (lookup?.idFields.map((k) => String(initialValues?.[k] ?? '')).find(Boolean)) ?? '',
   );
+  /** The identifier field the box above stands for: the DOI field for a DOI, the ISBN field otherwise. */
+  const mirrorKey = useMemo(() => {
+    if (!lookup) return null;
+    const wantDoi = !identifier.trim() || /^(https?:\/\/(dx\.)?doi\.org\/|doi:\s*)?10\.\d{4,9}\//i.test(identifier.trim());
+    return lookup.idFields.find((k) => fields.find((f) => f.key === k)?.type === (wantDoi ? 'doi' : 'isbn')) ?? null;
+  }, [lookup, identifier, fields]);
   const [fetching, setFetching] = useState(false);
   const [lookupNote, setLookupNote] = useState<{
     tone: 'success' | 'info' | 'warning'; title: string; notes: string[];
@@ -138,7 +144,7 @@ export function RecordForm({
     const fetchedNow: Record<string, string> = {};
     if (p.found && p.authoritative) {
       for (const f of fields) {
-        if (!f.autofill || f.autofill.alwaysLocked || f.autofill.generated || lookup.idFields.includes(f.key)) continue;
+        if (!f.autofill || f.autofill.alwaysLocked || f.autofill.generated || f.key === mirrorKey) continue;
         if (p.fill[f.key]) fetchedNow[f.key] = p.fill[f.key]!;
       }
     }
@@ -157,6 +163,8 @@ export function RecordForm({
         }
         : !p.found
         ? { tone: 'warning', title: 'No published record found', notes: p.notes }
+        : p.blocked
+          ? { tone: 'warning', title: `Details fetched from ${source}, but this cannot be submitted here`, notes: p.notes }
         : p.authoritative
           ? { tone: 'success', title: `Details fetched from ${source}`, notes: p.notes }
           : { tone: 'info', title: `Suggested details from ${source} — check every field`, notes: p.notes },
@@ -169,6 +177,8 @@ export function RecordForm({
     // Conditional fields that are hidden must not be sent.
     const payload: Record<string, unknown> = {};
     for (const f of fields) if (visible(f)) payload[f.key] = values[f.key] ?? '';
+    // The identifier box is the record's DOI (or ISBN): it is what the server looks up.
+    if (mirrorKey && identifier.trim()) payload[mirrorKey] = identifier.trim();
 
     const url = recordId
       ? `/api/modules/${moduleKey}/records/${recordId}`
@@ -197,13 +207,17 @@ export function RecordForm({
           <Notice tone="danger" title={banner}>
             {Object.keys(errors).length > 0 ? (
               <ul className="mt-1 list-disc pl-5">
-                {Object.entries(errors).map(([k, msg]) => (
-                  <li key={k}>
-                    <a href={`#f-${k}`} className="underline">
-                      {fields.find((f) => f.key === k)?.label ?? k}: {msg}
-                    </a>
-                  </li>
-                ))}
+                {Object.entries(errors).filter(([, msg]) => msg !== banner).map(([k, msg]) => {
+                  const label = fields.find((f) => f.key === k)?.label ?? k;
+                  return (
+                    <li key={k}>
+                      <a href={`#f-${k}`} className="underline">
+                        {/* "Evidence is required." already names the field: do not say it twice. */}
+                        {msg.startsWith(label) ? msg : `${label}: ${msg}`}
+                      </a>
+                    </li>
+                  );
+                })}
               </ul>
             ) : null}
           </Notice>
@@ -288,14 +302,16 @@ export function RecordForm({
             <div className="grid gap-4 p-4 sm:grid-cols-2">
               {shown.map((f) => {
                 const system = !!f.autofill?.alwaysLocked || !!f.autofill?.generated;
-                const isId = !!lookup?.idFields.includes(f.key);
+                // The field the identifier box fills is shown, not typed in a second time.
+                const mirror = f.key === mirrorKey;
                 const isLocked = lockedKeys.has(f.key);
                 const fetched = fetchedValues[f.key];
                 const changed = fetched !== undefined && !isLocked && !sameText(values[f.key], fetched);
-                const typed = looked && !!f.autofill && !system && !isId && fetched === undefined
+                const typed = looked && !!f.autofill && !system && !mirror && fetched === undefined
                   && values[f.key] !== undefined && values[f.key] !== '';
-                const mayChange = isLocked && !readOnly && !system && !isId;
-                const hint = f.autofill?.alwaysLocked ? 'Filled automatically'
+                const mayChange = isLocked && !readOnly && !system && !mirror;
+                const hint = mirror && !readOnly ? `From the ${lookup!.idLabel} box above`
+                  : f.autofill?.alwaysLocked ? 'Filled automatically'
                   : f.autofill?.generated && isLocked ? 'Generated from the details'
                     : isLocked ? 'From the publisher’s record'
                       : changed ? 'Changed — DRIE and IQAC will see this'
@@ -310,12 +326,15 @@ export function RecordForm({
                     <Field
                       label={f.label}
                       required={f.required}
-                      help={f.help}
+                      help={mirror && !readOnly ? null : f.help}
                       error={errors[f.key]}
                       htmlFor={`i-${f.key}`}
                       hint={hint}
                     >
-                      {renderInput(f, values[f.key], (v) => set(f.key, v), !!readOnly || isLocked || !!f.autofill?.alwaysLocked, !!errors[f.key], { moduleKey, recordId })}
+                      {renderInput(
+                        f, mirror && !readOnly ? identifier : values[f.key], (v) => set(f.key, v),
+                        !!readOnly || mirror || isLocked || !!f.autofill?.alwaysLocked, !!errors[f.key], { moduleKey, recordId },
+                      )}
                       {mayChange && confirming !== f.key ? (
                         <button
                           type="button"
@@ -336,6 +355,8 @@ export function RecordForm({
                               onClick={() => {
                                 setLockedKeys((s) => { const next = new Set(s); next.delete(f.key); return next; });
                                 setConfirming(null);
+                                // Straight into the field, now that it can be typed in.
+                                requestAnimationFrame(() => document.getElementById(`i-${f.key}`)?.focus());
                               }}
                             >
                               Change it
