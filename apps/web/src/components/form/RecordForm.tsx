@@ -44,12 +44,19 @@ export function RecordForm({
    * For a saved record: the locked fields hold it, and a changed field's is kept on the record.
    */
   const [fetchedValues, setFetchedValues] = useState<Record<string, string>>(() => {
+    // A saved record was fetched from the publisher when a locked field is locked (or a change is recorded).
+    const wasFetched = Object.keys(initialProvenance ?? {}).length > 0
+      || (initialLocked ?? []).some((k) => fields.find((f) => f.key === k)?.autofill?.locked);
     const out: Record<string, string> = {};
+    if (!wasFetched) return out;
     for (const f of fields) {
       if (!f.autofill || f.autofill.alwaysLocked || f.autofill.generated) continue;
       const p = initialProvenance?.[f.key];
+      const value = String(initialValues?.[f.key] ?? '');
+      // Changed: keep the publisher's value. Typed: nothing was fetched. Otherwise the saved value
+      // is the publisher's — including fields that are not locked, such as the author list.
       if (p?.origin === 'changed') out[f.key] = p.fetched;
-      else if (!p && (initialLocked ?? []).includes(f.key)) out[f.key] = String(initialValues?.[f.key] ?? '');
+      else if (!p && value) out[f.key] = value;
     }
     return out;
   });

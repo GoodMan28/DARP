@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray, isNull, sql, count } from 'drizzle-orm';
 import { db } from '@/server/db';
-import { records, recordTransitions, cycles, users, moduleDeclarations } from '@/server/db/schema';
+import { records, recordTransitions, cycles, users, departments, moduleDeclarations } from '@/server/db/schema';
 import { getModule } from '@darp/shared/modules';
 import type { ModuleConfig, RecordStatus } from '@darp/shared/modules/types';
 import type { SessionUser } from '@/server/auth/session';
@@ -208,9 +208,10 @@ export async function getRecord(actor: SessionUser, moduleKey: string, id: strin
 
   // The scope filter comes first; the id is an additional condition, never the only one.
   const [found] = await db
-    .select({ record: records, ownerName: users.name })
+    .select({ record: records, ownerName: users.name, departmentName: departments.name })
     .from(records)
     .innerJoin(users, eq(users.id, records.ownerUserId))
+    .leftJoin(departments, eq(departments.id, records.departmentId))
     .where(and(scopeFilter(actor, m, cycle.id), eq(records.id, id)))
     .limit(1);
 
@@ -249,6 +250,7 @@ export async function getRecord(actor: SessionUser, moduleKey: string, id: strin
     updatedAt: row.updatedAt,
     ownerUserId: row.ownerUserId,
     ownerName: found.ownerName,
+    departmentName: found.departmentName ?? null,
     isMine: row.ownerUserId === actor.id,
     canEdit,
     data: presentForRead(m, row.data as Record<string, unknown>, { includeSensitive: mine }),

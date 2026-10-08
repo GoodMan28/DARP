@@ -255,6 +255,8 @@ export interface RecordDetail {
   updatedAt: string;
   ownerUserId: string;
   ownerName: string;
+  /** The record's own department (not the viewer's); null for an institute-wide record. */
+  departmentName: string | null;
   isMine: boolean;
   canEdit: boolean;
   data: Record<string, unknown>;

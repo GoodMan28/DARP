@@ -162,7 +162,7 @@ export default async function RecordPage({ params }: PageProps) {
             lookup={schema.data.lookup}
             initialLocked={record.lockedFields}
             initialProvenance={record.verification?.fields}
-            locked={lockedStrip(m, user, record.periodLabel, record.ownerName)}
+            locked={lockedStrip(m, user, record.periodLabel, record.ownerName, record)}
             readOnly={!editable}
           />
         </div>
