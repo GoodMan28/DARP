@@ -18,8 +18,8 @@ interface Props {
   initialValues?: Record<string, unknown>;
   locked: { period: string; department: string; enteredBy: string };
   readOnly?: boolean;
-  /** Present when the module fetches its facts from a register (DOI / ISBN). */
-  lookup?: { kind: string; idFields: string[]; idLabel: string } | null;
+  /** Present when the module fetches its facts from a register (DOI / ISBN / patent number). */
+  lookup?: { kind: string; idFields: string[]; idLabel: string; sourceName: string } | null;
   /** Fields locked when the form opens (an existing auto-checked record). */
   initialLocked?: string[];
   /** An identifier handed over from another module's form ("Add it under …"): fetched on opening. */
@@ -69,9 +69,13 @@ export function RecordForm({
   const [identifier, setIdentifier] = useState<string>(
     () => handedOver ?? (lookup?.idFields.map((k) => String(initialValues?.[k] ?? '')).find(Boolean)) ?? '',
   );
-  /** The identifier field the box above stands for: the DOI field for a DOI, the ISBN field otherwise. */
+  /**
+   * The identifier field the box above stands for: the only one (a patent number), or the DOI
+   * field for a DOI and the ISBN field otherwise.
+   */
   const mirrorKey = useMemo(() => {
     if (!lookup) return null;
+    if (lookup.idFields.length === 1) return lookup.idFields[0]!;
     const wantDoi = !identifier.trim() || /^(https?:\/\/(dx\.)?doi\.org\/|doi:\s*)?10\.\d{4,9}\//i.test(identifier.trim());
     return lookup.idFields.find((k) => fields.find((f) => f.key === k)?.type === (wantDoi ? 'doi' : 'isbn')) ?? null;
   }, [lookup, identifier, fields]);
@@ -85,6 +89,9 @@ export function RecordForm({
   const [dirty, setDirty] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const errorSummary = useRef<HTMLDivElement>(null);
+  /** "the publisher's record", "the Patent Office Journal" — and as a label, "Publisher's record". */
+  const source = lookup?.sourceName ?? "the publisher's record";
+  const sourceLabel = source.replace(/^the /, '').replace(/^./, (c) => c.toUpperCase());
 
   /* An identifier handed over from another module's form is fetched straight away. */
   const handedOverFetched = useRef(false);
@@ -152,7 +159,7 @@ export function RecordForm({
     setLooked(p.found && p.authoritative);
     setConfirming(null);
     setDirty(true);
-    const source = p.source ? LOOKUP_SOURCE_LABEL[p.source] : '';
+    const from = p.source ? LOOKUP_SOURCE_LABEL[p.source] : '';
     setLookupNote(
       p.moveTo !== undefined
         ? {
@@ -163,11 +170,9 @@ export function RecordForm({
         }
         : !p.found
         ? { tone: 'warning', title: 'No published record found', notes: p.notes }
-        : p.blocked
-          ? { tone: 'warning', title: `Details fetched from ${source}, but this cannot be submitted here`, notes: p.notes }
         : p.authoritative
-          ? { tone: 'success', title: `Details fetched from ${source}`, notes: p.notes }
-          : { tone: 'info', title: `Suggested details from ${source} — check every field`, notes: p.notes },
+          ? { tone: 'success', title: `Details fetched from ${from}`, notes: p.notes }
+          : { tone: 'info', title: `Suggested details from ${from} — check every field`, notes: p.notes },
     );
   }
 
@@ -252,7 +257,7 @@ export function RecordForm({
               <Field
                 label={lookup.idLabel}
                 htmlFor="lookup-identifier"
-                help="Paste it and press Fetch details. Fields marked “From the publisher's record” are filled in for you; if one is wrong, press Change beside it — DRIE and IQAC will see what you changed."
+                help={`Paste it and press Fetch details. Fields marked “From ${source}” are filled in for you; if one is wrong, press Change beside it — DRIE and IQAC will see what you changed.`}
               >
                 <Input
                   id="lookup-identifier"
@@ -313,7 +318,7 @@ export function RecordForm({
                 const hint = mirror && !readOnly ? `From the ${lookup!.idLabel} box above`
                   : f.autofill?.alwaysLocked ? 'Filled automatically'
                   : f.autofill?.generated && isLocked ? 'Generated from the details'
-                    : isLocked ? 'From the publisher’s record'
+                    : isLocked ? `From ${source}`
                       : changed ? 'Changed — DRIE and IQAC will see this'
                         : typed ? 'Entered by hand — DRIE and IQAC will see this'
                           : f.protected ? 'Protected' : undefined;
@@ -345,9 +350,9 @@ export function RecordForm({
                         </button>
                       ) : null}
                       {mayChange && confirming === f.key ? (
-                        <Notice tone="warning" title="Change a detail from the publisher's record?" className="mt-2">
-                          DRIE and IQAC will see that you changed this, along with the value from the publisher&apos;s
-                          record. Attach evidence that shows the correct value.
+                        <Notice tone="warning" title={`Change a detail from ${source}?`} className="mt-2">
+                          DRIE and IQAC will see that you changed this, along with the value from {source}.
+                          Attach evidence that shows the correct value.
                           <span className="mt-2 flex flex-wrap gap-2">
                             <Button
                               type="button"
@@ -362,14 +367,14 @@ export function RecordForm({
                               Change it
                             </Button>
                             <Button type="button" variant="ghost" onClick={() => setConfirming(null)}>
-                              Keep the publisher&apos;s value
+                              Keep the value from {source}
                             </Button>
                           </span>
                         </Notice>
                       ) : null}
                       {changed ? (
                         <p className="mt-1 text-xs text-warning-700">
-                          Publisher&apos;s record: <strong>{fetched || '(empty)'}</strong>
+                          {sourceLabel}: <strong>{fetched || '(empty)'}</strong>
                           {!readOnly ? (
                             <>
                               {' · '}
@@ -389,7 +394,7 @@ export function RecordForm({
                       ) : null}
                       {typed && !readOnly ? (
                         <p className="mt-1 text-xs text-warning-700">
-                          Not found in the publisher&apos;s record or the journal lists. Attach evidence for it.
+                          Not found in {source}{lookup?.kind === 'patent' ? '' : ' or the journal lists'}. Attach evidence for it.
                         </p>
                       ) : null}
                     </Field>

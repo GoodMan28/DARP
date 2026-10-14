@@ -65,16 +65,16 @@ describe('workflow transitions', () => {
     const drie = user({ id: 'd', role: 'drie', departmentId: null });
     const admin = user({ id: 'a', role: 'admin', departmentId: null });
 
-    // The general two-step lifecycle, on Patents (office verifies, IQAC approves).
-    const patents = MODULES.patents!;
-    expect(canTransition(owner, patents, rec(), 'submit').next).toBe('submitted');
-    expect(canTransition(owner, patents, rec(), 'verify').allowed).toBe(false);
-    expect(canTransition(drie, patents, rec({ status: 'submitted' }), 'verify').next).toBe('verified');
-    expect(canTransition(drie, patents, rec({ status: 'verified' }), 'approve').allowed).toBe(false);
-    expect(canTransition(admin, patents, rec({ status: 'verified' }), 'approve').next).toBe('approved');
-    expect(canTransition(admin, patents, rec({ status: 'approved' }), 'unlock').next).toBe('verified');
-    expect(canTransition(drie, patents, rec({ status: 'approved' }), 'unlock').allowed).toBe(false);
-    expect(canTransition(drie, patents, rec({ status: 'approved' }), 'return').allowed).toBe(false);
+    // The general two-step lifecycle, on Consultancy (office verifies, IQAC approves).
+    const classic = MODULES.consultancy!;
+    expect(canTransition(owner, classic, rec(), 'submit').next).toBe('submitted');
+    expect(canTransition(owner, classic, rec(), 'verify').allowed).toBe(false);
+    expect(canTransition(drie, classic, rec({ status: 'submitted' }), 'verify').next).toBe('verified');
+    expect(canTransition(drie, classic, rec({ status: 'verified' }), 'approve').allowed).toBe(false);
+    expect(canTransition(admin, classic, rec({ status: 'verified' }), 'approve').next).toBe('approved');
+    expect(canTransition(admin, classic, rec({ status: 'approved' }), 'unlock').next).toBe('verified');
+    expect(canTransition(drie, classic, rec({ status: 'approved' }), 'unlock').allowed).toBe(false);
+    expect(canTransition(drie, classic, rec({ status: 'approved' }), 'return').allowed).toBe(false);
   });
 
   it('makes the office\'s check final for publications, and lets it return an approved one', () => {
@@ -84,6 +84,15 @@ describe('workflow transitions', () => {
     expect(canTransition(drie, mod, rec({ status: 'submitted' }), 'verify').next).toBe('approved');
     expect(canTransition(drie, mod, rec({ status: 'approved' }), 'return').next).toBe('returned');
     expect(canTransition(admin, mod, rec({ status: 'approved' }), 'return').next).toBe('returned');
+  });
+
+  it('treats books, chapters and conference papers, and patents, the same way as publications', () => {
+    const drie = user({ id: 'd', role: 'drie', departmentId: null });
+    for (const key of ['books', 'patents']) {
+      const m = MODULES[key]!;
+      expect(canTransition(drie, m, rec({ status: 'submitted' }), 'verify').next).toBe('approved');
+      expect(canTransition(drie, m, rec({ status: 'approved' }), 'return').next).toBe('returned');
+    }
   });
 
   it('refuses to verify a record that was never submitted', () => {

@@ -206,11 +206,14 @@ export interface ModuleSchemaPayload {
   canCreate: boolean;
   canVerify: boolean;
   listColumns: string[];
+  /** The cycle's own periods, newest first. */
   periods: PeriodOption[];
+  /** Every period the records the caller can see are filed under, the cycle's or not, newest first. */
+  recordPeriods: PeriodOption[];
   counts: StatusCounts;
   declaredNil: boolean;
-  /** Present when the module fetches its facts from a register (DOI / ISBN). */
-  lookup: { kind: LookupKind; idFields: string[]; idLabel: string } | null;
+  /** Present when the module fetches its facts from a register (DOI / ISBN / patent number). */
+  lookup: { kind: LookupKind; idFields: string[]; idLabel: string; sourceName: string } | null;
   fields: FormFieldDef[];
 }
 
@@ -269,9 +272,9 @@ export interface RecordDetail {
   lockedFields: string[];
 }
 
-/* ── automatic lookup (DOI / ISBN) ─────────────────────────────────── */
+/* ── automatic lookup (DOI / ISBN / patent number) ─────────────────── */
 
-export type LookupSource = 'crossref' | 'datacite' | 'openlibrary';
+export type LookupSource = 'crossref' | 'datacite' | 'openlibrary' | 'ipindia';
 
 /** Stored on a record (records.verification) and returned with it. */
 export interface RecordVerification {
@@ -307,8 +310,6 @@ export interface LookupFillPayload {
   locked: string[];
   /** plain-language notes for the person filling in */
   notes: string[];
-  /** Fetched, but it cannot be submitted in this module whatever is changed (e.g. outside the cycle). */
-  blocked?: boolean;
   /** The work belongs in another module: its key and name, for an "Add it there" link. */
   moveTo?: { moduleKey: string; name: string } | null;
 }
@@ -317,4 +318,5 @@ export const LOOKUP_SOURCE_LABEL: Record<LookupSource, string> = {
   crossref: 'Crossref',
   datacite: 'DataCite',
   openlibrary: 'Open Library',
+  ipindia: 'the Patent Office Journal (IP India)',
 };

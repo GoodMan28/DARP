@@ -135,7 +135,8 @@ export function Sidebar({
                             : 'text-ink-muted hover:bg-surface-2 hover:text-ink',
                         )}
                       >
-                        <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                        {/* Long names (Books, Chapters & Conference Papers) wrap rather than being cut off. */}
+                        <span className="min-w-0 flex-1 break-words leading-snug">{item.name}</span>
                         {typeof item.count === 'number' && item.count > 0 ? (
                           <span className="shrink-0 rounded-xs bg-surface-inset px-1.5 py-0.5 font-mono text-2xs text-ink-muted">
                             {item.count}

@@ -14,7 +14,7 @@ const PDF = Buffer.from('%PDF-1.4\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n'
 
 let n = 0;
 const patent = (evidence: string) => ({
-  inventors: 'Test Inventor',
+  inventors: `Test Inventor, ${owner.name}`,   // the owner must be among the inventors
   applicant: 'Birla Institute of Technology, Mesra',
   country: 'India',
   applicationNo: `20233101${String(2000 + (n += 1)).padStart(4, '0')}`,

@@ -3,27 +3,30 @@ import type { ModuleConfig } from './_types';
 
 export const books: ModuleConfig = {
   key: 'books',
-  name: 'Books & Chapters',
+  name: 'Books, Chapters & Conference Papers',
   group: 'Research',
   periodType: 'CY',
   naacRef: '3.4',
   bodies: ['NAAC'],
-  description: 'Books, chapters in edited volumes, and papers in conference proceedings published during the cycle.',
+  description:
+    'Books, chapters in edited volumes, and papers in conference proceedings. Paste the DOI (or the ISBN) and press Fetch details — the details are filled in from the publisher\'s record. Each entry is entered once.',
   ownerRoles: ['faculty'],
   verifierRoles: ['drie'],
   viewRoles: ['hod', 'drie', 'admin'],
   scope: 'self',
   naturalKey: ['isbn', 'bookTitle', 'chapterTitle'],
   lookup: {
-    kind: 'book', idFields: ['doi', 'isbn'], idLabel: 'DOI or ISBN', autoApprove: 'whenChecksPass',
+    kind: 'book', idFields: ['doi', 'isbn'], idLabel: 'DOI or ISBN',
+    // As for Publications: approved on submission, spot-checked afterwards by DRIE/IQAC.
+    autoApprove: 'always',
     acceptTypes: ['book-chapter', 'book-part', 'book-section', 'reference-entry', 'book', 'edited-book', 'monograph', 'reference-book',
       'proceedings-article'],
     elsewhere: [
       { types: ['journal-article'], moduleKey: 'publications' },
       { types: ['posted-content'], moduleKey: null },
     ],
-    // A book or chapter from another year belongs to another cycle; never count it in this one.
-    refuseOutsideCycle: true,
+    ownerMustBeIn: 'authors',
+    evidenceField: 'evidence',
   },
   fields: [
     { key: 'doi', label: 'DOI', type: 'doi', section: 'Publication',
@@ -47,9 +50,9 @@ export const books: ModuleConfig = {
       help: 'For a chapter, the book it is in; for a conference paper, the title of the proceedings volume.',
       exportAs: { faculty: 'Title of the book published', drie: 'Title of the book published' } },
 
-    { key: 'authors', label: 'Name of the author/s or editor/s', type: 'text', maxLength: 2000,
-      colSpan: 2, section: 'Publication', autofill: { from: 'authors', locked: false },
-      help: 'Filled in from the publisher\'s record. Add anyone missing — a record whose owner had to be added by hand is checked by DRIE.' },
+    { key: 'authors', label: 'Name of the author/s or editor/s', type: 'text', required: true,
+      maxLength: 2000, colSpan: 2, section: 'Publication', autofill: { from: 'authors', locked: false },
+      help: 'Filled in from the publisher\'s record. Your own name must be in this list before you can submit — add it if it is missing, and attach evidence.' },
     { key: 'pages', label: 'Pages', type: 'text', maxLength: 40, section: 'Publication',
       autofill: { from: 'pages', locked: true } },
 
@@ -97,7 +100,7 @@ export const books: ModuleConfig = {
 
     { key: 'evidence', label: 'Attach documents', type: 'file',
       accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence', required: true,
-      help: 'Required for every entry: the first page of the book, chapter or paper as a PDF or image. DRIE checks it against the details above.',
+      help: 'Required for every entry: the first page of the book, chapter or paper as a PDF or image. DRIE and IQAC check it against the details above — especially anything you changed or typed yourself.',
       exportAs: {
         faculty: 'Attach documents (link that opens directly to book/book chapter or 1st page of book/book chapter in pdf)',
         drie: 'Attach documents (link that opens directly to book/book chapter or 1st page of book/book chapter in pdf)',
@@ -112,5 +115,6 @@ export const books: ModuleConfig = {
   feedsCounters: [
     'books.count.book.cycle', 'books.count.book.sinceJoining',
     'books.count.chapter.cycle', 'books.count.chapter.sinceJoining',
+    'books.count.conference.cycle', 'books.count.conference.sinceJoining',
   ],
 };

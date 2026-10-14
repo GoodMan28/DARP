@@ -195,7 +195,7 @@ describe('what the form says after Fetch details', () => {
     expect(res.locked).not.toContain('quartile');
   });
 
-  it('asks for evidence in Books & Chapters even when everything matches', async () => {
+  it('asks for evidence in Books, Chapters & Conference Papers even when everything matches', async () => {
     const doi = nextDoi();
     resolveMock.mockResolvedValue(hit(faculty, {
       rawType: 'book-chapter',
@@ -224,45 +224,40 @@ describe('what the form says after Fetch details', () => {
     expect(notes).not.toContain('Everything matches');
   });
 
-  it('offers Books & Chapters for a conference paper', async () => {
+  it('offers Books, Chapters & Conference Papers for a conference paper', async () => {
     resolveMock.mockResolvedValue(hit(faculty, { rawType: 'proceedings-article', values: { ...hit(faculty).values, workType: 'Conference paper' } }));
     const res = await lookupForForm(faculty, 'publications', nextDoi());
-    expect(res.moveTo).toEqual({ moduleKey: 'books', name: 'Books & Chapters' });
+    expect(res.moveTo).toEqual({ moduleKey: 'books', name: 'Books, Chapters & Conference Papers' });
   });
 });
 
-describe('papers from outside the reporting cycle', () => {
+describe("papers from years outside the cycle's window", () => {
   const old = () => hit(faculty, { values: { ...hit(faculty).values, year: '2019' } });
 
-  it('refuses to submit them, saying only that', async () => {
+  it('are accepted like any other paper and filed under their own year', async () => {
     resolveMock.mockResolvedValue(old());
-    await expect(createRecord(faculty, 'publications', form(nextDoi(), { year: '2019' }), 'submit')).rejects.toMatchObject({
-      code: 'VALIDATION',
-      message: expect.stringContaining('published in 2019'),
-      fields: { year: expect.stringContaining('covers 2022–2024') },
-    });
+    const { id, status } = await createRecord(
+      faculty, 'publications', form(nextDoi(), { year: '2019', evidence: await evidence() }), 'submit',
+    );
+    expect(status).toBe('approved');
+    const read = await getRecord(faculty, 'publications', id);
+    expect(read.periodLabel).toBe('2019');
+    expect(read.verification?.reasons).toEqual([]);   // the year is never a point to check
   });
 
-  it('still lets them be kept as a draft, listed under their own year', async () => {
-    resolveMock.mockResolvedValue(old());
-    const { id, status } = await createRecord(faculty, 'publications', form(nextDoi(), { year: '2019' }), 'draft');
-    expect(status).toBe('draft');
-    expect((await getRecord(faculty, 'publications', id)).periodLabel).toBe('2019');
+  it('can be picked by year in the list', async () => {
+    const list = await listRecords(drie, 'publications', { periodYear: 2019, pageSize: 100 });
+    expect(list.rows.length).toBeGreaterThan(0);
+    expect(list.rows.every((r) => r.periodYear === 2019)).toBe(true);
   });
 
-  it('refuses a book or chapter from outside the cycle as well', async () => {
+  it('accepts a book or chapter from any year as well', async () => {
     resolveMock.mockImplementation(() => { throw new LookupUnavailable('down'); });
-    await expect(createRecord(faculty, 'books', {
+    const { id } = await createRecord(faculty, 'books', {
       isbn: '9781509064717', publicationType: 'Book', sameAffiliation: 'Yes', bookTitle: 'An old book',
-      year: '2020', publisher: 'x', bibliographic: 'x', evidence: await evidence('books'),
-    }, 'submit')).rejects.toMatchObject({ code: 'VALIDATION', fields: { year: expect.stringContaining('covers 2022–2024') } });
-  });
-
-  it('refuses a year typed by hand too, when the register is unavailable', async () => {
-    resolveMock.mockImplementation(() => { throw new LookupUnavailable('down'); });
-    await expect(createRecord(
-      faculty, 'publications', form(nextDoi(), { authors: faculty.name, year: '2018', evidence: await evidence() }), 'submit',
-    )).rejects.toMatchObject({ code: 'VALIDATION', fields: { year: expect.stringContaining('2018') } });
+      authors: faculty.name, year: '2020', publisher: 'x', bibliographic: 'x', evidence: await evidence('books'),
+    }, 'submit');
+    expect((await getRecord(faculty, 'books', id)).periodLabel).toBe('2020');
   });
 });
 
@@ -302,11 +297,14 @@ describe('the owner may change a fetched detail; DRIE and IQAC see the change', 
     expect(read.verification?.fields).toEqual({});
   });
 
-  it('cannot bring a paper into the cycle by changing its year', async () => {
+  it('records a changed year as a change, and files the record under the year it was given', async () => {
     resolveMock.mockResolvedValue(hit(faculty, { values: { ...hit(faculty).values, year: '2019' } }));
-    await expect(createRecord(
+    const { id } = await createRecord(
       faculty, 'publications', form(nextDoi(), { year: '2023', evidence: await evidence() }), 'submit',
-    )).rejects.toMatchObject({ code: 'VALIDATION', message: expect.stringContaining('changing the year does not change that') });
+    );
+    const read = await getRecord(drie, 'publications', id);
+    expect(read.verification?.fields?.year).toEqual({ origin: 'changed', fetched: '2019' });
+    expect(read.periodLabel).toBe('2023');
   });
 
   it('lists records with points to check for DRIE', async () => {
@@ -323,11 +321,11 @@ describe('works that belong elsewhere', () => {
     rawType, values: { ...hit(faculty).values, workType },
   });
 
-  it('refuses a conference paper in Publications and points to Books & Chapters', async () => {
+  it('refuses a conference paper in Publications and points to Books, Chapters & Conference Papers', async () => {
     resolveMock.mockResolvedValue(typed('proceedings-article', 'Conference paper'));
     await expect(createRecord(faculty, 'publications', form(nextDoi()), 'submit')).rejects.toMatchObject({
       code: 'VALIDATION',
-      message: expect.stringContaining('Add it under Books & Chapters'),
+      message: expect.stringContaining('Add it under Books, Chapters & Conference Papers'),
       fields: { doi: expect.stringContaining('conference paper') },
     });
   });
@@ -338,7 +336,7 @@ describe('works that belong elsewhere', () => {
       .rejects.toMatchObject({ code: 'VALIDATION', message: expect.stringContaining('peer review') });
   });
 
-  it('accepts a conference paper in Books & Chapters', async () => {
+  it('accepts a conference paper in Books, Chapters & Conference Papers', async () => {
     const doi = nextDoi();
     resolveMock.mockResolvedValue(hit(faculty, {
       rawType: 'proceedings-article',
@@ -391,5 +389,72 @@ describe('DRIE and IQAC check afterwards', () => {
     resolveMock.mockResolvedValue(hit(faculty));
     const { status } = await createRecord(faculty, 'publications', form(nextDoi()), 'draft');
     expect(status).toBe('draft');
+  });
+});
+
+describe('books, chapters and conference papers follow the same flow as publications', () => {
+  /** A Crossref chapter that names the signed-in faculty member. */
+  const chapter = (doi: string, over: Partial<LookupResult> = {}) => hit(faculty, {
+    rawType: 'book-chapter',
+    values: {
+      doi, authors: `${faculty.name}, Someone Else`, year: '2023', workType: 'Book chapter', bookType: 'Book chapter',
+      chapterTitle: `A chapter ${doi}`, bookTitle: 'A book', isbn: '9781509064717', publisher: 'Springer', pages: '1-10',
+    },
+    identifiers: { issn: [], isbn: ['9781509064717'] },
+    ...over,
+  });
+  const bookForm = async (doi: string, over: Record<string, unknown> = {}) => ({
+    doi, publicationType: 'Book chapter', sameAffiliation: 'Yes', bookTitle: 'A book', year: '2023',
+    isbn: '9781509064717', publisher: 'Springer', bibliographic: 'x', evidence: await evidence('books'), ...over,
+  });
+
+  it('approves a fully confirmed chapter on submission, with nothing to check', async () => {
+    const doi = nextDoi();
+    resolveMock.mockResolvedValue(chapter(doi));
+    const { id, status } = await createRecord(faculty, 'books', await bookForm(doi), 'submit');
+    expect(status).toBe('approved');
+    const read = await getRecord(faculty, 'books', id);
+    expect(read.verification).toMatchObject({ autoApproved: true, reasons: [] });
+    expect(read.history[read.history.length - 1]!.actorName).toBe('DARP automatic check');
+  });
+
+  it('approves an entry typed by hand too (no DOI or ISBN found), listing it as a point to check', async () => {
+    resolveMock.mockResolvedValue(notFound());
+    const { id, status } = await createRecord(
+      faculty, 'books', await bookForm('', { isbn: '9788120340077', authors: faculty.name, chapterTitle: 'Typed' }), 'submit',
+    );
+    expect(status).toBe('approved');
+    const read = await getRecord(drie, 'books', id);
+    expect(read.verification?.reasons.join(' ')).toContain('typed by hand');
+    expect((await listRecords(drie, 'books', { check: true, pageSize: 100 })).rows.map((r) => r.id)).toContain(id);
+  });
+
+  it('refuses to submit when the owner is not among the authors or editors', async () => {
+    const doi = nextDoi();
+    resolveMock.mockResolvedValue(chapter(doi, {
+      values: { ...chapter(doi).values, authors: 'Anil Sharma' },
+      people: [{ given: 'Anil', family: 'Sharma', full: 'Anil Sharma', orcid: null, bitAffiliated: true }],
+    }));
+    await expect(createRecord(faculty, 'books', await bookForm(doi), 'submit'))
+      .rejects.toMatchObject({ code: 'VALIDATION', fields: { authors: expect.stringContaining('must be in the author list') } });
+  });
+
+  it('says on Fetch details that the entry is approved when submitted, even with a point to check', async () => {
+    const doi = nextDoi();
+    resolveMock.mockResolvedValue(chapter(doi, { flags: ['parent-book-not-found'] }));
+    const notes = (await lookupForForm(faculty, 'books', doi)).notes.join(' ');
+    expect(notes).toContain('The book this chapter belongs to could not be found');
+    expect(notes).toContain('the record is approved when you submit');
+  });
+
+  it('DRIE can return an approved entry; the resubmission goes to DRIE, whose Verify is final', async () => {
+    const doi = nextDoi();
+    resolveMock.mockResolvedValue(chapter(doi));
+    const values = await bookForm(doi);
+    const { id, status } = await createRecord(faculty, 'books', values, 'submit');
+    expect(status).toBe('approved');
+    expect((await transitionRecord(drie, 'books', id, 'return', 'Wrong book.')).status).toBe('returned');
+    expect((await updateRecord(faculty, 'books', id, values, 'submit')).status).toBe('submitted');
+    expect((await transitionRecord(drie, 'books', id, 'verify')).status).toBe('approved');
   });
 });

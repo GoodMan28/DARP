@@ -20,7 +20,7 @@ export const publications: ModuleConfig = {
     // Thousands of papers a year: approved on submission, spot-checked afterwards by DRIE/IQAC.
     autoApprove: 'always',
     acceptTypes: ['journal-article'],
-    // Conference papers, chapters and books are entered under Books & Chapters; preprints nowhere.
+    // Conference papers, chapters and books are entered under Books, Chapters & Conference Papers; preprints nowhere.
     elsewhere: [
       {
         types: ['proceedings-article', 'book-chapter', 'book-part', 'book-section', 'reference-entry',
@@ -31,8 +31,6 @@ export const publications: ModuleConfig = {
     ],
     ownerMustBeIn: 'authors',
     evidenceField: 'evidence',
-    // A paper from another year belongs to another cycle; never count it in this one.
-    refuseOutsideCycle: true,
   },
   fields: [
     { key: 'doi', label: 'DOI', type: 'doi', required: true, section: 'Paper',

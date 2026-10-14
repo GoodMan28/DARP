@@ -339,6 +339,54 @@ export const journalCoverage = pgTable('journal_coverage', {
   index('journal_coverage_issn_idx').on(t.issn),
 ]);
 
+/**
+ * Indian patent applications as the Patent Office Journal published them, read from its weekly
+ * PDFs (server/lookup/patentIndex.ts). What "Fetch details" on a patent looks a number up in.
+ */
+export const patentApplications = pgTable('patent_applications', {
+  /** 202331085872, or an older 935/KOL/2013 — as normalisePatentNumber stores it. */
+  applicationNo: text('application_no').primaryKey(),
+  title: text('title').notNull(),
+  filedDate: date('filed_date'),
+  publishedDate: date('published_date'),
+  /** string[] */
+  applicants: jsonb('applicants').notNull(),
+  /** Array<{ name: string; bit: boolean }> — bit: the address given is BIT Mesra. */
+  inventors: jsonb('inventors').notNull(),
+  /** The journal issue, e.g. '16/2024'. */
+  issue: text('issue').notNull(),
+  importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Patents granted, from the journal's table "Publication Under Section 43(2) in Respect of the Grant". */
+export const patentGrants = pgTable('patent_grants', {
+  patentNo: text('patent_no').primaryKey(),
+  applicationNo: text('application_no').notNull(),
+  title: text('title').notNull(),
+  patentee: text('patentee').notNull(),
+  filedDate: date('filed_date'),
+  /** When the application itself was published (u/s 11A). */
+  publishedDate: date('published_date'),
+  office: text('office').notNull(),
+  /** The date of the journal issue that published the grant. */
+  grantPublishedDate: date('grant_published_date').notNull(),
+  issue: text('issue').notNull(),
+  importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('patent_grants_application_idx').on(t.applicationNo)]);
+
+/** Each journal PDF read (or that failed), so that none is downloaded twice. */
+export const patentJournalParts = pgTable('patent_journal_parts', {
+  fileName: text('file_name').primaryKey(),
+  issue: text('issue').notNull(),
+  issueDate: date('issue_date').notNull(),
+  /** 'indexed' | 'failed' */
+  status: text('status').notNull(),
+  applications: integer('applications').notNull().default(0),
+  grants: integer('grants').notNull().default(0),
+  error: text('error'),
+  indexedAt: timestamp('indexed_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 /* ───────────────────────────── relations ───────────────────────── */
 
 export const usersRelations = relations(users, ({ one, many }) => ({

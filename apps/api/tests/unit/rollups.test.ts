@@ -26,11 +26,13 @@ describe('counter catalogue', () => {
     expect(extra, `defined but no module feeds them: ${extra.join(', ')}`).toEqual([]);
   });
 
-  it('adds up to the 84 rows of the Faculty Profile sheet', () => {
+  it('adds up to the 84 rows of the Faculty Profile sheet, plus the two conference-paper counters', () => {
+    // The sheet has no conference-paper row; NAAC 3.4 counts them with books and chapters.
     expect(getModule('profile')!.fields).toHaveLength(22);
-    expect(COUNTERS).toHaveLength(49);
+    expect(COUNTERS).toHaveLength(51);
+    expect(COUNTERS.filter((c) => c.key.startsWith('books.count.conference'))).toHaveLength(2);
     expect(DECLARED_COUNTERS).toHaveLength(13);
-    expect(22 + COUNTERS.length + DECLARED_COUNTERS.length).toBe(84);
+    expect(22 + COUNTERS.length + DECLARED_COUNTERS.length).toBe(84 + 2);
   });
 
   it('has unique keys, a known module and a sum field wherever it sums', () => {
@@ -69,6 +71,17 @@ describe('computation', () => {
     const out = computeCounters([rec({ periodYear: 2019 }), rec({ periodYear: 2023 })], bounds, pt);
     expect(out['publications.count.cycle']).toBe(1);
     expect(out['publications.count.sinceJoining']).toBe(2);
+  });
+
+  it('counts papers in conference proceedings on their own, not as chapters', () => {
+    const out = computeCounters([
+      rec({ moduleKey: 'books', data: { publicationType: 'Conference paper' } }),
+      rec({ moduleKey: 'books', data: { publicationType: 'Conference paper' }, periodYear: 2019 }),
+      rec({ moduleKey: 'books', data: { publicationType: 'Book chapter' } }),
+    ], bounds, pt);
+    expect(out['books.count.conference.cycle']).toBe(1);
+    expect(out['books.count.conference.sinceJoining']).toBe(2);
+    expect(out['books.count.chapter.cycle']).toBe(1);
   });
 
   it('splits on a filter field', () => {

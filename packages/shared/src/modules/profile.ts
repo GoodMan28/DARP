@@ -14,6 +14,7 @@ export const profile: ModuleConfig = {
   viewRoles: ['hod', 'dofa', 'admin'],
   scope: 'self',
   managedAt: { href: '/profile', label: 'Open my profile' },
+  periodic: false,
   fields: [
     { key: 'name', label: 'Name', type: 'text', required: true, maxLength: 160, colSpan: 2,
       section: 'Identity',

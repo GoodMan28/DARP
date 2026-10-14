@@ -27,16 +27,16 @@ const paper = (doi: string) => ({
   bibliographic: 'A. K. Verma. "Edge scheduling." IEEE TCC (2024).',
 });
 
-/** A complete Patents record; `tag` keeps each application number unique. */
-const patentNos: Record<string, string> = {};
-const patent = (tag: string) => ({
-  inventors: 'A. K. Verma',
-  applicant: 'Birla Institute of Technology, Mesra',
-  country: 'India',
-  applicationNo: (patentNos[tag] ??= `202331${String(100000 + Object.keys(patentNos).length).padStart(6, '0')}`),
-  title: `Patent ${tag}`,
-  status: 'Published',
-  statusDate: '2023-05-01',
+/** A module still checked by DRIE and approved by IQAC, with no automatic lookup. */
+const WORKFLOW = 'consultancy';
+/** A complete Consultancy record; `tag` keeps each one unique. */
+const engagement = (tag: string) => ({
+  recordType: 'Consultancy',
+  consultants: 'A. K. Verma',
+  projectTitle: `Project ${tag}`,
+  agency: 'Tata Steel, Jamshedpur',
+  financialYear: '2024',
+  revenue: '250000',
 });
 
 beforeAll(async () => {
@@ -135,46 +135,46 @@ describe('create and read', () => {
   });
 });
 
-// The generic verify/return workflow runs on Patents, which still go to DRIE for checking.
-// Publications are approved on submission instead (tests/integration/lookup.test.ts).
+// The generic verify/return workflow runs on Consultancy, which still goes to DRIE for checking.
+// Publications, books and patents are approved on submission instead (lookup.test.ts, patents-lookup.test.ts).
 describe('workflow', () => {
   it('walks draft → submitted → verified → approved with the right actors', async () => {
-    const { id } = await createRecord(faculty, 'patents', patent('w'), 'draft');
-    await expect(transitionRecord(drie, 'patents', id, 'verify'))
+    const { id } = await createRecord(faculty, WORKFLOW, engagement('w'), 'draft');
+    await expect(transitionRecord(drie, WORKFLOW, id, 'verify'))
       .rejects.toMatchObject({ code: 'FORBIDDEN' });
 
-    expect((await transitionRecord(faculty, 'patents', id, 'submit')).status).toBe('submitted');
-    await expect(transitionRecord(faculty, 'patents', id, 'verify'))
+    expect((await transitionRecord(faculty, WORKFLOW, id, 'submit')).status).toBe('submitted');
+    await expect(transitionRecord(faculty, WORKFLOW, id, 'verify'))
       .rejects.toMatchObject({ code: 'FORBIDDEN' });
-    expect((await transitionRecord(drie, 'patents', id, 'verify')).status).toBe('verified');
-    await expect(transitionRecord(drie, 'patents', id, 'approve'))
+    expect((await transitionRecord(drie, WORKFLOW, id, 'verify')).status).toBe('verified');
+    await expect(transitionRecord(drie, WORKFLOW, id, 'approve'))
       .rejects.toMatchObject({ code: 'FORBIDDEN' });
-    expect((await transitionRecord(admin, 'patents', id, 'approve')).status).toBe('approved');
-    expect((await transitionRecord(admin, 'patents', id, 'unlock')).status).toBe('verified');
+    expect((await transitionRecord(admin, WORKFLOW, id, 'approve')).status).toBe('approved');
+    expect((await transitionRecord(admin, WORKFLOW, id, 'unlock')).status).toBe('verified');
   });
 
   it('freezes a submitted record against owner edits, and frees it again on return', async () => {
-    const { id } = await createRecord(faculty, 'patents', patent('f'), 'submit');
-    await expect(updateRecord(faculty, 'patents', id, patent('f'), 'draft'))
+    const { id } = await createRecord(faculty, WORKFLOW, engagement('f'), 'submit');
+    await expect(updateRecord(faculty, WORKFLOW, id, engagement('f'), 'draft'))
       .rejects.toMatchObject({ code: 'FORBIDDEN' });
 
-    await expect(transitionRecord(drie, 'patents', id, 'return'))
+    await expect(transitionRecord(drie, WORKFLOW, id, 'return'))
       .rejects.toMatchObject({ code: 'VALIDATION' });
-    await transitionRecord(drie, 'patents', id, 'return', 'ISSN does not match the journal.');
-    await expect(updateRecord(faculty, 'patents', id, patent('f'), 'draft')).resolves.toBeDefined();
+    await transitionRecord(drie, WORKFLOW, id, 'return', 'ISSN does not match the journal.');
+    await expect(updateRecord(faculty, WORKFLOW, id, engagement('f'), 'draft')).resolves.toBeDefined();
   });
 
   it('records a remark on the returned record and in its history', async () => {
-    const { id } = await createRecord(faculty, 'patents', patent('r'), 'submit');
-    await transitionRecord(drie, 'patents', id, 'return', 'Attach the DOI landing page.');
-    const read = await getRecord(faculty, 'patents', id);
+    const { id } = await createRecord(faculty, WORKFLOW, engagement('r'), 'submit');
+    await transitionRecord(drie, WORKFLOW, id, 'return', 'Attach the DOI landing page.');
+    const read = await getRecord(faculty, WORKFLOW, id);
     expect(read.returnedRemark).toBe('Attach the DOI landing page.');
     expect(read.history.at(-1)).toMatchObject({ toStatus: 'returned' });
   });
 
   it('refuses to submit an incomplete record', async () => {
-    const { id } = await createRecord(faculty, 'patents', { title: 'Half a record' }, 'draft');
-    await expect(transitionRecord(faculty, 'patents', id, 'submit'))
+    const { id } = await createRecord(faculty, WORKFLOW, { projectTitle: 'Half a record' }, 'draft');
+    await expect(transitionRecord(faculty, WORKFLOW, id, 'submit'))
       .rejects.toMatchObject({ code: 'VALIDATION' });
   });
 
@@ -186,8 +186,8 @@ describe('workflow', () => {
   });
 
   it('refuses to delete a record that has left the owner’s hands', async () => {
-    const { id } = await createRecord(faculty, 'patents', patent('keep'), 'submit');
-    await expect(deleteRecord(faculty, 'patents', id)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    const { id } = await createRecord(faculty, WORKFLOW, engagement('keep'), 'submit');
+    await expect(deleteRecord(faculty, WORKFLOW, id)).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 });
 

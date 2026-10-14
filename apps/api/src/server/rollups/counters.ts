@@ -37,8 +37,8 @@ function both(
 }
 
 /**
- * The 49 computed counters. These keys are exactly the `feedsCounters` values declared
- * across the 24 module configs — tests/unit/rollups.test.ts fails if the two ever drift.
+ * The 51 computed counters: the sheet's 49, plus papers in conference proceedings. These keys are
+ * exactly the `feedsCounters` values declared across the 24 module configs — tests/unit/rollups.test.ts fails if the two ever drift.
  */
 export const COUNTERS: CounterDef[] = [
   /* ── Publications ─────────────────────────────────────────── */
@@ -69,6 +69,12 @@ export const COUNTERS: CounterDef[] = [
     keyBase: 'books.count.chapter', moduleKey: 'books', metric: 'count', format: 'number',
     filter: { field: 'publicationType', in: ['Book chapter'] },
     label: 'Book chapters {CY}', labelSince: 'Book chapters since joining BIT',
+  }),
+  // NAAC 3.4 counts papers in conference proceedings together with books and chapters.
+  ...both({
+    keyBase: 'books.count.conference', moduleKey: 'books', metric: 'count', format: 'number',
+    filter: { field: 'publicationType', in: ['Conference paper'] },
+    label: 'Papers in conference proceedings {CY}', labelSince: 'Papers in conference proceedings since joining BIT',
   }),
 
   /* ── Funds and grants ─────────────────────────────────────── */

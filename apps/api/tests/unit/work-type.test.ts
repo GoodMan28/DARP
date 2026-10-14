@@ -48,17 +48,17 @@ describe('yearNote', () => {
 });
 
 describe('misplacedWork', () => {
-  it('sends a conference paper or a chapter from Publications to Books & Chapters', () => {
+  it('sends a conference paper or a chapter from Publications to Books, Chapters & Conference Papers', () => {
     const conf = misplacedWork(pubs, work('proceedings-article', 'Conference paper'));
     expect(conf).toMatchObject({ field: 'doi', moveTo: 'books' });
     expect(conf?.message).toContain('This DOI is a conference paper, not a journal article');
     expect(misplacedWork(pubs, work('book-chapter', 'Book chapter'))?.moveTo).toBe('books');
   });
 
-  it('explains a whole volume first, then offers Books & Chapters for a book the owner wrote', () => {
+  it('explains a whole volume first, then offers Books, Chapters & Conference Papers for a book the owner wrote', () => {
     const note = misplacedWork(pubs, work('book', 'Book'))?.message ?? '';
     expect(note).toContain('whole book or conference proceedings volume');
-    expect(note).toContain('If it is a book you wrote or edited, add it under Books & Chapters');
+    expect(note).toContain('If it is a book you wrote or edited, add it under Books, Chapters & Conference Papers');
   });
 
   it('refuses a preprint everywhere, with nowhere to move it', () => {
@@ -66,15 +66,15 @@ describe('misplacedWork', () => {
     expect(misplacedWork(books, work('posted-content', 'Preprint'))?.message).toContain('peer review');
   });
 
-  it('sends a journal article from Books & Chapters to Publications, and keeps what belongs', () => {
+  it('sends a journal article from Books, Chapters & Conference Papers to Publications, and keeps what belongs', () => {
     expect(misplacedWork(books, work('journal-article', 'Journal article'))?.moveTo).toBe('publications');
     expect(misplacedWork(pubs, work('journal-article', 'Journal article'))).toBeNull();
     expect(misplacedWork(books, work('proceedings-article', 'Conference paper'))).toBeNull();
   });
 });
 
-describe('misplacedWork in Books & Chapters', () => {
-  it('names the journal article and Publications, without listing every type Books & Chapters takes', () => {
+describe('misplacedWork in Books, Chapters & Conference Papers', () => {
+  it('names the journal article and Publications, without listing every type Books, Chapters & Conference Papers takes', () => {
     const note = misplacedWork(books, work('journal-article', 'Journal article'))?.message;
     expect(note).toBe('This DOI is a journal article, so it cannot be submitted here. Add it under Publications instead.');
   });

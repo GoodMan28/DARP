@@ -43,25 +43,17 @@ describe('period resolution', () => {
     expect(resolvePeriod(m, { year: '2023' }, cycle).periodLabel).toBe('2023');
   });
 
-  it('never stamps a record with a period outside the cycle', () => {
-    // The Faculty Profile's only dates are a degree date and a joining date, neither
-    // of which is a reporting period — it must still land inside the cycle.
-    for (const m of MODULE_LIST) {
-      const early = resolvePeriod(m, Object.fromEntries(
-        m.fields.filter((f) => f.type === 'date').map((f) => [f.key, '1998-03-04']),
-      ), cycle);
-      expect(isInsideCycle(m, early.periodYear, cycle), `${m.key} resolved to ${early.periodLabel}`)
-        .toBe(true);
-    }
-  });
-
-  it('keeps the real year of a record its module refuses outside the cycle', () => {
-    // Publications and Books & Chapters refuse such a record on submit, so its draft shows its
-    // own year in the list instead of pretending to be from the cycle's last year.
+  it("files a record under its own year, inside the cycle's window or not", () => {
     expect(resolvePeriod(MODULES.publications!, { year: '2019' }, cycle).periodLabel).toBe('2019');
     expect(resolvePeriod(MODULES.books!, { year: '2025' }, cycle).periodLabel).toBe('2025');
-    // A module that only warns still lands inside the cycle.
-    expect(resolvePeriod(MODULES.awards!, { awardYear: '2019' }, cycle).periodLabel).toBe('2024');
+    expect(resolvePeriod(MODULES.awards!, { awardYear: '2019' }, cycle).periodLabel).toBe('2019');
+    expect(resolvePeriod(MODULES.patents!, { filedDate: '2018-05-01' }, cycle).periodLabel).toBe('2018');
+  });
+
+  it("files the Faculty Profile under the cycle's last year: its dates are not reporting periods", () => {
+    const m = MODULES.profile!;
+    const dated = Object.fromEntries(m.fields.filter((f) => f.type === 'date').map((f) => [f.key, '1998-03-04']));
+    expect(resolvePeriod(m, dated, cycle).periodLabel).toBe('AY 2024-25');
   });
 
   it('offers only in-cycle periods as filter options', () => {

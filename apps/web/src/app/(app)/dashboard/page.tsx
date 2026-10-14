@@ -226,7 +226,7 @@ export default async function DashboardPage() {
             <CardHeader title="My profile" subtitle="Computed from your records." />
             <div className="p-4 text-sm text-ink-muted">
               <p>
-                Your profile carries 22 typed fields, 49 counters computed from the records above,
+                Your profile carries 22 typed fields, 51 counters computed from the records above,
                 and 13 figures you declare yourself.
               </p>
               <div className="mt-3">

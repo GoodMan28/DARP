@@ -105,6 +105,19 @@ export function JournalListsPanel() {
     await load();
   }
 
+  async function refreshPatents() {
+    setBusy(true);
+    setResult(null);
+    const res = await apiJson<JournalListsPayload['patents']>('/api/admin/journal-lists', {
+      method: 'POST', body: JSON.stringify({ action: 'syncPatents' }),
+    });
+    setBusy(false);
+    setResult(res.ok
+      ? { tone: 'success', text: 'Reading new Patent Office Journal issues in the background. Reload this page to see the progress.' }
+      : { tone: 'danger', text: res.error.message });
+    await load();
+  }
+
   async function clear(k: Kind, y: number, name?: string) {
     const label = k === 'sjr' ? `SJR ${y}` : `${name} ${y}`;
     if (!window.confirm(`Remove ${label}? Records already saved keep their values.`)) return;
@@ -157,6 +170,49 @@ export function JournalListsPanel() {
             own file for each year below (SCImago blocks automatic downloads) replaces it with SCImago’s official
             figures for that year. Web of Science (SCIE, SSCI, …) cannot be fetched automatically either — Clarivate
             requires a login — so load those below.
+          </p>
+        </div>
+      </Card>
+
+      <Card padded={false}>
+        <CardHeader
+          title="Automatic: Patent Office Journal (IP India)"
+          subtitle="Patents → Fetch details looks the number up here. The server reads each weekly issue of the Official Journal once; new issues every night at 3 AM."
+          actions={(
+            <Button type="button" variant="secondary" disabled={busy || data.patents.running} onClick={() => void refreshPatents()}>
+              {data.patents.running ? 'Reading…' : 'Read new issues now'}
+            </Button>
+          )}
+        />
+        <div className="p-4 text-sm">
+          {data.patents.newestIssue && data.patents.oldestIssue ? (
+            <p>
+              Read <strong>{data.patents.partsIndexed.toLocaleString('en-IN')}</strong>
+              {data.patents.partsListed ? ` of ${data.patents.partsListed.toLocaleString('en-IN')}` : ''} journal parts,
+              issues {data.patents.oldestIssue.issue} ({new Date(data.patents.oldestIssue.date).toLocaleDateString('en-IN')})
+              to {data.patents.newestIssue.issue} ({new Date(data.patents.newestIssue.date).toLocaleDateString('en-IN')}):{' '}
+              {data.patents.applications.toLocaleString('en-IN')} published applications and{' '}
+              {data.patents.grants.toLocaleString('en-IN')} granted patents.
+              {data.patents.partsFailed ? ` ${data.patents.partsFailed} parts could not be read and will be tried again tonight.` : ''}
+            </p>
+          ) : (
+            <p className="text-ink-muted">
+              {data.patents.running
+                ? 'Reading the journal now. The first time it reads every issue since January ' + data.patents.fromYear + ', which takes some hours; patents can be entered by hand meanwhile.'
+                : 'Not read yet. It is read when the API starts; press “Read new issues now” to start.'}
+            </p>
+          )}
+          {data.patents.checkedAt ? (
+            <p className="mt-1 text-xs text-ink-muted">
+              Last looked for new issues {new Date(data.patents.checkedAt).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}.
+              {data.patents.lastError ? ` That check failed: ${data.patents.lastError}` : ''}
+            </p>
+          ) : null}
+          <p className="mt-2 text-xs text-ink-muted">
+            IP India offers no API, and its patent search is behind a CAPTCHA, which the portal never automates. The
+            weekly Official Journal is the statutory publication of every application and grant, as plain PDFs. A patent
+            whose application and grant were both published before {data.patents.fromYear}, or one filed outside India,
+            is entered by hand.
           </p>
         </div>
       </Card>

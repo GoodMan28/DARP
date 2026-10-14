@@ -3,6 +3,7 @@ import { createApp } from './app';
 import { pool } from '@/server/db';
 import { log } from '@/server/log';
 import { syncScopusListIfStale, scheduleNightlyScopusCheck } from '@/server/lookup/scopusList';
+import { schedulePatentJournal } from '@/server/lookup/patentIndex';
 
 const port = Number(process.env.PORT ?? 4000);
 // Loopback by default: the API is reached through the web tier, never directly from the
@@ -20,6 +21,10 @@ const server = createApp().listen(port, host, () => {
   // at 2 AM India time. Never blocks or crashes start-up.
   void syncScopusListIfStale();
   scheduleNightlyScopusCheck();
+  // Patents → Fetch details reads a local index of IP India's weekly Patent Office Journal: read the
+  // issues not read yet (the first time, several years of them, in the background), then each
+  // night's new issue at 3 AM.
+  schedulePatentJournal();
 });
 
 function shutdown(signal: string) {
