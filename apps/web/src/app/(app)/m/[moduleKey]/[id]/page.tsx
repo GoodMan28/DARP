@@ -79,6 +79,9 @@ export default async function RecordPage({ params }: PageProps) {
   if (record.status === 'approved' && isAdmin) rail.push('unlock');
 
   const { fields } = schema.data;
+  // "the publisher's record", "the Patent Office Journal" — and as a column head, "Publisher's record".
+  const source = schema.data.lookup?.sourceName ?? "the publisher's record";
+  const sourceLabel = source.replace(/^the /, '').replace(/^./, (c) => c.toUpperCase());
   // What the owner changed from the publisher's record or typed by hand, in form order.
   const provenance = record.verification?.fields ?? {};
   const changes = fields.filter((f) => provenance[f.key]).map((f) => ({
@@ -134,14 +137,14 @@ export default async function RecordPage({ params }: PageProps) {
             <Card padded={false} className="mb-4">
               <CardHeader
                 title="Changed or typed by the faculty member"
-                subtitle="Compared by the server with the publisher's record when the record was saved. Check these against the evidence."
+                subtitle={`Compared by the server with ${source} when the record was saved. Check these against the evidence.`}
               />
               <Table>
-                <caption className="sr-only">Fields changed from the publisher&apos;s record or typed by hand</caption>
+                <caption className="sr-only">Fields changed from {source} or typed by hand</caption>
                 <thead>
                   <tr>
                     <Th>Field</Th>
-                    <Th>Publisher&apos;s record</Th>
+                    <Th>{sourceLabel}</Th>
                     <Th>Faculty&apos;s value</Th>
                   </tr>
                 </thead>
@@ -176,7 +179,9 @@ export default async function RecordPage({ params }: PageProps) {
             record.verification.autoApproved && record.verification.reasons.length === 0 ? (
               <Notice tone="success" title="Checked automatically">
                 Matched the published record
-                {record.verification.source ? ` at ${LOOKUP_SOURCE_LABEL[record.verification.source]}` : ''} on{' '}
+                {record.verification.source
+                  ? `${record.verification.source === 'ipindia' ? ' in' : ' at'} ${LOOKUP_SOURCE_LABEL[record.verification.source]}`
+                  : ''} on{' '}
                 {formatDateTime(record.verification.checkedAt)}. No manual verification was needed.
               </Notice>
             ) : record.verification.autoApproved ? (

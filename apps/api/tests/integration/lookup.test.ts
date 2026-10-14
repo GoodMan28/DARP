@@ -195,7 +195,7 @@ describe('what the form says after Fetch details', () => {
     expect(res.locked).not.toContain('quartile');
   });
 
-  it('asks for evidence in Books & Chapters even when everything matches', async () => {
+  it('asks for evidence in Books, Chapters & Conference Papers even when everything matches', async () => {
     const doi = nextDoi();
     resolveMock.mockResolvedValue(hit(faculty, {
       rawType: 'book-chapter',
@@ -224,10 +224,10 @@ describe('what the form says after Fetch details', () => {
     expect(notes).not.toContain('Everything matches');
   });
 
-  it('offers Books & Chapters for a conference paper', async () => {
+  it('offers Books, Chapters & Conference Papers for a conference paper', async () => {
     resolveMock.mockResolvedValue(hit(faculty, { rawType: 'proceedings-article', values: { ...hit(faculty).values, workType: 'Conference paper' } }));
     const res = await lookupForForm(faculty, 'publications', nextDoi());
-    expect(res.moveTo).toEqual({ moduleKey: 'books', name: 'Books & Chapters' });
+    expect(res.moveTo).toEqual({ moduleKey: 'books', name: 'Books, Chapters & Conference Papers' });
   });
 });
 
@@ -255,7 +255,7 @@ describe("papers from years outside the cycle's window", () => {
     resolveMock.mockImplementation(() => { throw new LookupUnavailable('down'); });
     const { id } = await createRecord(faculty, 'books', {
       isbn: '9781509064717', publicationType: 'Book', sameAffiliation: 'Yes', bookTitle: 'An old book',
-      year: '2020', publisher: 'x', bibliographic: 'x', evidence: await evidence('books'),
+      authors: faculty.name, year: '2020', publisher: 'x', bibliographic: 'x', evidence: await evidence('books'),
     }, 'submit');
     expect((await getRecord(faculty, 'books', id)).periodLabel).toBe('2020');
   });
@@ -321,11 +321,11 @@ describe('works that belong elsewhere', () => {
     rawType, values: { ...hit(faculty).values, workType },
   });
 
-  it('refuses a conference paper in Publications and points to Books & Chapters', async () => {
+  it('refuses a conference paper in Publications and points to Books, Chapters & Conference Papers', async () => {
     resolveMock.mockResolvedValue(typed('proceedings-article', 'Conference paper'));
     await expect(createRecord(faculty, 'publications', form(nextDoi()), 'submit')).rejects.toMatchObject({
       code: 'VALIDATION',
-      message: expect.stringContaining('Add it under Books & Chapters'),
+      message: expect.stringContaining('Add it under Books, Chapters & Conference Papers'),
       fields: { doi: expect.stringContaining('conference paper') },
     });
   });
@@ -336,7 +336,7 @@ describe('works that belong elsewhere', () => {
       .rejects.toMatchObject({ code: 'VALIDATION', message: expect.stringContaining('peer review') });
   });
 
-  it('accepts a conference paper in Books & Chapters', async () => {
+  it('accepts a conference paper in Books, Chapters & Conference Papers', async () => {
     const doi = nextDoi();
     resolveMock.mockResolvedValue(hit(faculty, {
       rawType: 'proceedings-article',
@@ -389,5 +389,72 @@ describe('DRIE and IQAC check afterwards', () => {
     resolveMock.mockResolvedValue(hit(faculty));
     const { status } = await createRecord(faculty, 'publications', form(nextDoi()), 'draft');
     expect(status).toBe('draft');
+  });
+});
+
+describe('books, chapters and conference papers follow the same flow as publications', () => {
+  /** A Crossref chapter that names the signed-in faculty member. */
+  const chapter = (doi: string, over: Partial<LookupResult> = {}) => hit(faculty, {
+    rawType: 'book-chapter',
+    values: {
+      doi, authors: `${faculty.name}, Someone Else`, year: '2023', workType: 'Book chapter', bookType: 'Book chapter',
+      chapterTitle: `A chapter ${doi}`, bookTitle: 'A book', isbn: '9781509064717', publisher: 'Springer', pages: '1-10',
+    },
+    identifiers: { issn: [], isbn: ['9781509064717'] },
+    ...over,
+  });
+  const bookForm = async (doi: string, over: Record<string, unknown> = {}) => ({
+    doi, publicationType: 'Book chapter', sameAffiliation: 'Yes', bookTitle: 'A book', year: '2023',
+    isbn: '9781509064717', publisher: 'Springer', bibliographic: 'x', evidence: await evidence('books'), ...over,
+  });
+
+  it('approves a fully confirmed chapter on submission, with nothing to check', async () => {
+    const doi = nextDoi();
+    resolveMock.mockResolvedValue(chapter(doi));
+    const { id, status } = await createRecord(faculty, 'books', await bookForm(doi), 'submit');
+    expect(status).toBe('approved');
+    const read = await getRecord(faculty, 'books', id);
+    expect(read.verification).toMatchObject({ autoApproved: true, reasons: [] });
+    expect(read.history[read.history.length - 1]!.actorName).toBe('DARP automatic check');
+  });
+
+  it('approves an entry typed by hand too (no DOI or ISBN found), listing it as a point to check', async () => {
+    resolveMock.mockResolvedValue(notFound());
+    const { id, status } = await createRecord(
+      faculty, 'books', await bookForm('', { isbn: '9788120340077', authors: faculty.name, chapterTitle: 'Typed' }), 'submit',
+    );
+    expect(status).toBe('approved');
+    const read = await getRecord(drie, 'books', id);
+    expect(read.verification?.reasons.join(' ')).toContain('typed by hand');
+    expect((await listRecords(drie, 'books', { check: true, pageSize: 100 })).rows.map((r) => r.id)).toContain(id);
+  });
+
+  it('refuses to submit when the owner is not among the authors or editors', async () => {
+    const doi = nextDoi();
+    resolveMock.mockResolvedValue(chapter(doi, {
+      values: { ...chapter(doi).values, authors: 'Anil Sharma' },
+      people: [{ given: 'Anil', family: 'Sharma', full: 'Anil Sharma', orcid: null, bitAffiliated: true }],
+    }));
+    await expect(createRecord(faculty, 'books', await bookForm(doi), 'submit'))
+      .rejects.toMatchObject({ code: 'VALIDATION', fields: { authors: expect.stringContaining('must be in the author list') } });
+  });
+
+  it('says on Fetch details that the entry is approved when submitted, even with a point to check', async () => {
+    const doi = nextDoi();
+    resolveMock.mockResolvedValue(chapter(doi, { flags: ['parent-book-not-found'] }));
+    const notes = (await lookupForForm(faculty, 'books', doi)).notes.join(' ');
+    expect(notes).toContain('The book this chapter belongs to could not be found');
+    expect(notes).toContain('the record is approved when you submit');
+  });
+
+  it('DRIE can return an approved entry; the resubmission goes to DRIE, whose Verify is final', async () => {
+    const doi = nextDoi();
+    resolveMock.mockResolvedValue(chapter(doi));
+    const values = await bookForm(doi);
+    const { id, status } = await createRecord(faculty, 'books', values, 'submit');
+    expect(status).toBe('approved');
+    expect((await transitionRecord(drie, 'books', id, 'return', 'Wrong book.')).status).toBe('returned');
+    expect((await updateRecord(faculty, 'books', id, values, 'submit')).status).toBe('submitted');
+    expect((await transitionRecord(drie, 'books', id, 'verify')).status).toBe('approved');
   });
 });

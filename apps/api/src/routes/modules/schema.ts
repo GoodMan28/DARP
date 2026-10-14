@@ -40,7 +40,10 @@ export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async 
       canCreate: canCreateIn(actor, m),
       canVerify: canVerify(actor, m),
       lookup: m.lookup
-        ? { kind: m.lookup.kind, idFields: m.lookup.idFields, idLabel: m.lookup.idLabel }
+        ? {
+          kind: m.lookup.kind, idFields: m.lookup.idFields, idLabel: m.lookup.idLabel,
+          sourceName: m.lookup.sourceName ?? "the publisher's record",
+        }
         : null,
       listColumns: m.listColumns,
       periods,

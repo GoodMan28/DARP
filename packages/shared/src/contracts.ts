@@ -212,8 +212,8 @@ export interface ModuleSchemaPayload {
   recordPeriods: PeriodOption[];
   counts: StatusCounts;
   declaredNil: boolean;
-  /** Present when the module fetches its facts from a register (DOI / ISBN). */
-  lookup: { kind: LookupKind; idFields: string[]; idLabel: string } | null;
+  /** Present when the module fetches its facts from a register (DOI / ISBN / patent number). */
+  lookup: { kind: LookupKind; idFields: string[]; idLabel: string; sourceName: string } | null;
   fields: FormFieldDef[];
 }
 
@@ -272,9 +272,9 @@ export interface RecordDetail {
   lockedFields: string[];
 }
 
-/* ── automatic lookup (DOI / ISBN) ─────────────────────────────────── */
+/* ── automatic lookup (DOI / ISBN / patent number) ─────────────────── */
 
-export type LookupSource = 'crossref' | 'datacite' | 'openlibrary';
+export type LookupSource = 'crossref' | 'datacite' | 'openlibrary' | 'ipindia';
 
 /** Stored on a record (records.verification) and returned with it. */
 export interface RecordVerification {
@@ -318,4 +318,5 @@ export const LOOKUP_SOURCE_LABEL: Record<LookupSource, string> = {
   crossref: 'Crossref',
   datacite: 'DataCite',
   openlibrary: 'Open Library',
+  ipindia: 'the Patent Office Journal (IP India)',
 };

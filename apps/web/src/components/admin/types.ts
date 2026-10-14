@@ -138,4 +138,20 @@ export interface JournalListsPayload {
   } | null;
   /** The Indexing master list, in IQAC's priority order. */
   listNames: string[];
+  /** The index of the Patent Office Journal that patent numbers are fetched from. */
+  patents: PatentIndexStatus;
+}
+
+export interface PatentIndexStatus {
+  fromYear: number;
+  partsListed: number | null;
+  partsIndexed: number;
+  partsFailed: number;
+  applications: number;
+  grants: number;
+  newestIssue: { issue: string; date: string } | null;
+  oldestIssue: { issue: string; date: string } | null;
+  running: boolean;
+  checkedAt: string | null;
+  lastError: string | null;
 }

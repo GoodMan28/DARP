@@ -196,7 +196,7 @@ function needsCheck(v: RecordVerification | null, status: RecordStatus): boolean
 
 /* ─────────────────────────────── read ─────────────────────────────── */
 
-const AUTHORITATIVE = new Set(['crossref', 'datacite']);
+const AUTHORITATIVE = new Set(['crossref', 'datacite', 'ipindia']);
 
 /**
  * Fields shown locked on the edit form: fetched from an authoritative register, non-empty, and not

@@ -19,7 +19,14 @@ const FLAG_REASON: Record<string, string> = {
   'no-issn': 'The publisher has not registered an ISSN for this journal.',
   'not-a-book': 'This DOI is not a book or a book chapter.',
   'parent-book-not-found': 'The book this chapter belongs to could not be found, so its title came from the chapter record.',
+  'inventors-from-applicants': 'The Patent Office Journal lists no inventors for this application; the individual applicants were taken as the inventors.',
+  'grant-only': 'Only the grant was found in the Patent Office Journal (the application was published before the issues the portal has read), so the inventors were typed by hand.',
 };
+
+/** What the fetched record is called in messages: "the publisher's record", "the Patent Office Journal". */
+export const sourceOf = (m: ModuleConfig) => m.lookup?.sourceName ?? "the publisher's record";
+/** Who the owner must be among: "author", "inventor". */
+export const personOf = (m: ModuleConfig) => m.lookup?.personWord ?? 'author';
 
 /** A flag as a sentence. Some flags carry a value after a colon, e.g. "scopus-dropped:2023". */
 export function reasonForFlag(flag: string, year: string): string | null {
@@ -93,6 +100,7 @@ export async function applyLookup(
   };
 
   if (!raw) return manual(`No ${m.lookup.idLabel} was entered, so every detail was typed by hand.`);
+  const source = sourceOf(m);
 
   let r: LookupResult;
   try {
@@ -103,7 +111,9 @@ export async function applyLookup(
     }
     throw e;
   }
-  if (!r.found) return manual(`This ${m.lookup.idLabel} was not found in the publisher registers, so every detail was typed by hand.`);
+  if (!r.found) {
+    return manual(`This ${m.lookup.idLabel} was not found in ${m.lookup.sourceName ?? 'the publisher registers'}, so every detail was typed by hand.`);
+  }
 
   const reasons: string[] = [];
   const fields: Record<string, FieldProvenance> = {};
@@ -122,7 +132,7 @@ export async function applyLookup(
       data[f.key] = fetched;
     } else if (fetched) {
       fields[f.key] = { origin: 'changed', fetched };
-      reasons.push(`${f.label} was changed by the faculty member: the publisher's record says "${clip(fetched)}", the record says "${clip(typed)}".`);
+      reasons.push(`${f.label} was changed by the faculty member: ${source} says "${clip(fetched)}", the record says "${clip(typed)}".`);
     } else if (typed) {
       fields[f.key] = { origin: 'typed', fetched: '' };
       reasons.push(`${f.label} could not be found automatically and was entered by hand.`);
@@ -157,10 +167,11 @@ export async function applyLookup(
     if (reason) reasons.push(reason);
   }
   // Matched against the PUBLISHED author list, never the edited one (decision D3).
+  // A grant found without its application has no inventor list at all: its flag's reason says so.
   const published = r.people.filter((p) => namesMatch(ctx.ownerName, p));
-  if (published.length === 0) {
-    reasons.push(`${ctx.ownerName} is not in the author list the publisher registered — the name was added by hand.`);
-  } else if (published.every((p) => p.bitAffiliated === false)) {
+  if (published.length === 0 && !r.flags.includes('grant-only')) {
+    reasons.push(`${ctx.ownerName} is not in the ${personOf(m)} list of ${source} — the name was added by hand.`);
+  } else if (published.length > 0 && published.every((p) => p.bitAffiliated === false)) {
     reasons.push(`${ctx.ownerName} is listed on the published record with another institution, not BIT Mesra.`);
   }
   // The year is never a reason: a record keeps its own year, and IQAC chooses the years to pull.
@@ -201,7 +212,7 @@ export function misplacedWork(m: ModuleConfig, r: LookupResult): Misplaced | nul
     };
   }
   const target = getModule(rule.moduleKey)?.name ?? rule.moduleKey;
-  // A short list of accepted types is worth naming; Books & Chapters' nine are not.
+  // A short list of accepted types is worth naming; the nine of Books, Chapters & Conference Papers are not.
   const accepted = m.lookup.acceptTypes.length <= 2 ? m.lookup.acceptTypes.map((t) => t.replace(/-/g, ' ')).join(' or ') : '';
   // The usual mistake with a whole volume is pasting the volume's DOI instead of the paper's own.
   const volume = WHOLE_VOLUME_TYPES.has(r.rawType ?? '') ? `${workTypeNote(m, r) ?? ''} ` : '';
@@ -258,9 +269,10 @@ export function ownerMissingFromAuthors(
   if (!key) return null;
   const names = splitAuthors(String(data[key] ?? ''));
   const found = names.some((full) => namesMatch(ownerName, { given: '', family: '', full }));
+  const word = personOf(m);
   return found ? null : {
     field: key,
-    message: `Your name (${ownerName}) must be in the author list before you can submit. If it is hidden behind "et al.", add it — and attach evidence.`,
+    message: `Your name (${ownerName}) must be in the ${word} list before you can submit. ${word === 'author' ? 'If it is hidden behind "et al.", add it' : 'If it is missing, add it'} — and attach evidence.`,
   };
 }
 

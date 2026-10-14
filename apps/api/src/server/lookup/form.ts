@@ -3,7 +3,7 @@ import type { SessionUser } from '@/server/auth/session';
 import { canCreateIn } from '@/server/auth/permissions';
 import { mustGetModule, ServiceError } from '@/server/records/service';
 import {
-  applyLookup, ownerMissingFromAuthors, yearNote, WHOLE_VOLUME_TYPES,
+  applyLookup, ownerMissingFromAuthors, yearNote, WHOLE_VOLUME_TYPES, sourceOf, personOf,
 } from './apply';
 import { namesMatch } from './names';
 import { resolve } from './resolve';
@@ -11,6 +11,7 @@ import { isLookupUnavailable } from './http';
 import { normaliseDoiInput } from './doi';
 import { isbn13 } from './isbn';
 import type { LookupResult } from './types';
+import { patentIndexStatus } from './patentIndex';
 import { getModule } from '@darp/shared/modules';
 
 /** Which of the module's identifier fields this input belongs in, judged by the field's type. */
@@ -20,8 +21,24 @@ function fieldFor(m: ReturnType<typeof mustGetModule>, identifier: string) {
     if (!f) continue;
     if (f.type === 'doi' && normaliseDoiInput(identifier)) return f;
     if (f.type === 'isbn' && isbn13(identifier)) return f;
+    // A patent number is checked against the country chosen when the record is saved.
+    if (f.normalise === 'patentNumber' && identifier.trim()) return f;
   }
   return null;
+}
+
+/** "9 October 2026" */
+const longDate = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString('en-GB', {
+  day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
+});
+
+/** Why a patent number was not found: which issues of the journal the portal has read so far. */
+async function patentNotFound(): Promise<string> {
+  const s = await patentIndexStatus();
+  if (!s.oldestIssue || !s.newestIssue) {
+    return 'The portal has not finished reading the Patent Office Journal yet, so the details could not be fetched. Fill them in by hand and attach the published or grant document.';
+  }
+  return `This number is not in the Patent Office Journal issues the portal has read (${longDate(s.oldestIssue.date)} to ${longDate(s.newestIssue.date)}). Check the number — Indian application numbers look like 202331012345 — or fill in the details by hand and attach the published or grant document.`;
 }
 
 export async function lookupForForm(
@@ -42,17 +59,21 @@ export async function lookupForForm(
     found: false, source: null, authoritative: false, fill: typed, locked: [], notes: [note],
   });
 
+  const afterTyping = m.lookup.autoApprove === 'always'
+    ? 'DRIE and IQAC will see that they were typed by hand.'
+    : 'the record will then be checked by the verifying office.';
   let result: LookupResult;
   try {
     result = await resolve(m.lookup.kind, identifier);
   } catch (e) {
     if (isLookupUnavailable(e)) {
-      return byHand('The publisher register could not be reached just now. Try again in a minute, or fill in the details by hand — the record will then be checked by the verifying office.');
+      return byHand(`The publisher register could not be reached just now. Try again in a minute, or fill in the details by hand and attach evidence — ${afterTyping}`);
     }
     throw e;
   }
   if (!result.found) {
-    return byHand(`No published record was found for this ${m.lookup.idLabel}. Check it, or fill in the details by hand — the record will then be checked by the verifying office.`);
+    if (m.lookup.kind === 'patent') return byHand(await patentNotFound());
+    return byHand(`No published record was found for this ${m.lookup.idLabel}. Check it, or fill in the details by hand and attach evidence — ${afterTyping}`);
   }
 
   const applied = await applyLookup(m, typed, { ownerName: actor.name });
@@ -85,7 +106,7 @@ export async function lookupForForm(
     // A whole book's record names its editors only: the usual mistake is a chapter author pasting the book.
     notes.push(WHOLE_VOLUME_TYPES.has(result.rawType ?? '') && m.lookup.kind === 'book'
       ? 'Your name is not among the authors or editors of this book. If you wrote a chapter in it, or a paper in these proceedings, paste the DOI of that chapter or paper instead.'
-      : 'Your name is not in the author list the publisher registered. Add it if you are an author or editor; the record is then checked against your evidence.');
+      : `Your name is not in the ${personOf(m)} list of ${sourceOf(m)}. Add it if you are ${m.lookup.kind === 'patent' ? 'an inventor' : 'an author or editor'}; the record is then checked against your evidence.`);
   }
   // A choice the lists could not answer (the quartile of a journal with no SJR value): say so, or
   // "everything matches" would hide an empty field the owner may need to fill.
@@ -96,7 +117,8 @@ export async function lookupForForm(
     } else if (f.required && f.autofill && !f.autofill.alwaysLocked && f.autofill.from !== 'citation' && !fill[f.key]) {
       // E.g. the ISBN of AIP proceedings, which the publisher does not register with the paper.
       mustType = true;
-      notes.push(`${f.label} is not in the publisher's record. Type it from the ${m.lookup.kind === 'book' ? 'book or proceedings' : 'paper'} — DRIE and IQAC will see that you typed it.`);
+      const from = m.lookup.kind === 'book' ? 'book or proceedings' : m.lookup.kind === 'patent' ? 'patent document' : 'paper';
+      notes.push(`${f.label} is not in ${sourceOf(m)}. Type it from the ${from} — DRIE and IQAC will see that you typed it.`);
     }
   }
   // Evidence on every record (a required file field), or only when something is unconfirmed.

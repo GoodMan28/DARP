@@ -6,6 +6,7 @@ import {
   journalListSummary, storeSjrRows, storeListRows, clearJournalList,
 } from '@/server/lookup/journals';
 import { scopusListStatus, syncScopusList } from '@/server/lookup/scopusList';
+import { patentIndexStatus, updatePatentIndex } from '@/server/lookup/patentIndex';
 
 /**
  * The journal lists quartile and indexing are read from (SCImago SJR, Web of Science collections).
@@ -19,6 +20,7 @@ export const GET = withRoute(
     ...(await journalListSummary()),
     listNames: await getList('indexingTypes'),
     scopus: await scopusListStatus(),
+    patents: await patentIndexStatus(),
   }),
 );
 
@@ -34,6 +36,8 @@ const rowSchema = z.object({
 const bodySchema = z.discriminatedUnion('action', [
   /** Fetch Elsevier's public Scopus list again now, instead of waiting for the nightly check. */
   z.object({ action: z.literal('syncScopus') }),
+  /** Read any Patent Office Journal issue not read yet, in the background (the first time, hours). */
+  z.object({ action: z.literal('syncPatents') }),
   z.object({
     action: z.literal('import'),
     kind: z.enum(['sjr', 'list']),
@@ -67,6 +71,17 @@ export const POST = withRoute(
       } catch (e) {
         return fail('INTERNAL', { message: `The Scopus list could not be fetched: ${e instanceof Error ? e.message : 'unknown error'}` });
       }
+    }
+
+    if (body.action === 'syncPatents') {
+      if (process.env.LOOKUP_OFFLINE === '1') {
+        return fail('VALIDATION', { message: 'Lookups are switched off on this server (LOOKUP_OFFLINE=1).' });
+      }
+      void updatePatentIndex();
+      await audit({
+        actor, action: 'masterlist.update', entity: 'masterlist', meta: { journalList: 'Patent Office Journal (automatic)' },
+      });
+      return ok(await patentIndexStatus());
     }
 
     if (body.kind === 'list') {

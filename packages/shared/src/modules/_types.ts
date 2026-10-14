@@ -26,10 +26,12 @@ export type PiiLevel = 'none' | 'masked' | 'encrypted';
 export type MetaKey =
   | 'doi' | 'title' | 'authors' | 'containerTitle' | 'issn' | 'year' | 'onlineYear' | 'volume' | 'issue' | 'pages'
   | 'publisher' | 'workType' | 'quartile' | 'quartileSource' | 'indexing' | 'citation'
-  | 'bookType' | 'bookTitle' | 'chapterTitle' | 'isbn' | 'eventName';
+  | 'bookType' | 'bookTitle' | 'chapterTitle' | 'isbn' | 'eventName'
+  // Patents (the Patent Office Journal)
+  | 'inventors' | 'applicant' | 'country' | 'filedDate' | 'patentStatus' | 'statusDate';
 
 /** Which register a module's records are fetched from. */
-export type LookupKind = 'doi' | 'book';
+export type LookupKind = 'doi' | 'book' | 'patent';
 
 export interface LookupConfig {
   kind: LookupKind;
@@ -37,6 +39,10 @@ export interface LookupConfig {
   idFields: string[];
   /** Label of the identifier box on the form, e.g. 'DOI'. */
   idLabel: string;
+  /** What the fetched record is called in messages. Default "the publisher's record". */
+  sourceName?: string;
+  /** Who the owner must be among, in messages ("author", "inventor"). Default "author". */
+  personWord?: string;
   /**
    * When a submitted record is approved without a human (server/lookup/apply.ts):
    *  - 'always'          every submission is approved at once. Whatever could not be confirmed
