@@ -112,6 +112,17 @@ const INSTITUTIONS = [
   'Birla Institute of Technology, Mesra',
 ];
 
+const OUTREACH_EVENTS = [
+  'Rural School STEM Outreach & Science Awareness Camp',
+  'Community Cyber Safety & Digital Literacy Workshop',
+  'Extension Lecture on Renewable Energy & Sustainability',
+  'Environmental Awareness Campaign & Public Health Drive',
+  'Village Water Quality Assessment & Awareness Initiative',
+  'School Hands-on Robotics & Innovation Workshop',
+  'Clean Campus & E-Waste Segregation Community Drive',
+  'AI Literacy & Modern Tools Workshop for School Teachers',
+];
+
 /* ───────────────────────── value generation ───────────────────────── */
 
 /** Deterministic pseudo-randomness, so repeated runs look the same. */
@@ -238,6 +249,8 @@ function valueFor(f: FieldConfig, ctx: GenContext): unknown {
       return [];
     case 'file':
       return '';                                                   // evidence is uploaded, not seeded
+    case 'validity':
+      return pick(['1', '2', '3', '5', '10', 'Lifetime', '4', '0.25', '0.5'], rng);
     case 'textarea':
       if (label.includes('bibliograph') || label.includes('citation')) {
         return `${pick(PEOPLE_NAMES, rng)}. "${pick(TITLES, rng)}." ${pick(JOURNALS, rng)} (${pick(ctx.cycleYears, rng)}).`;
@@ -281,6 +294,7 @@ function valueFor(f: FieldConfig, ctx: GenContext): unknown {
       if (label.includes('programme') || label.includes('program') || label.includes('course')) {
         return pick(PROGRAMMES, rng);
       }
+      if (label.includes('event')) return pick(OUTREACH_EVENTS, rng);
       if (label.includes('author') || label.includes('inventor') || label.includes('name of the')) {
         return pick(PEOPLE_NAMES, rng);
       }

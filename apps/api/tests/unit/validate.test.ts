@@ -159,12 +159,12 @@ describe('storage preparation', () => {
   });
 });
 
-describe('the 24 module configs are internally consistent', () => {
+describe('the 25 module configs are internally consistent', () => {
   const all = Object.values(MODULES);
 
-  it('has 24 modules with unique keys', () => {
-    expect(all).toHaveLength(24);
-    expect(new Set(all.map((m) => m.key)).size).toBe(24);
+  it('has 25 modules with unique keys', () => {
+    expect(all).toHaveLength(25);
+    expect(new Set(all.map((m) => m.key)).size).toBe(25);
   });
 
   it('gives every module unique field keys', () => {

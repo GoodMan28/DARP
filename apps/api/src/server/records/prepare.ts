@@ -36,8 +36,11 @@ export function buildNaturalKey(
 }
 
 /** Searchable text — sensitive and encrypted values are never included. */
-export function buildSearchText(m: ModuleConfig, data: Record<string, unknown>): string {
+export function buildSearchText(
+  m: ModuleConfig, data: Record<string, unknown>, ownerName?: string | null,
+): string {
   const parts: string[] = [];
+  if (ownerName?.trim()) parts.push(ownerName.trim());
   for (const f of m.fields) {
     if (f.sensitive || f.pii === 'encrypted' || f.type === 'file') continue;
     const v = data[f.key];
@@ -49,7 +52,7 @@ export function buildSearchText(m: ModuleConfig, data: Record<string, unknown>):
 
 /** Last step before the database: encrypt, normalise, drop anything not in the config. */
 export function prepareForStorage(
-  m: ModuleConfig, validated: Record<string, unknown>, departmentId?: string | null,
+  m: ModuleConfig, validated: Record<string, unknown>, departmentId?: string | null, ownerName?: string | null,
 ) {
   const data: Record<string, unknown> = {};
   for (const f of m.fields) {
@@ -64,7 +67,7 @@ export function prepareForStorage(
   return {
     data,
     naturalKey: buildNaturalKey(m, validated, departmentId),
-    searchText: buildSearchText(m, validated),
+    searchText: buildSearchText(m, validated, ownerName),
   };
 }
 

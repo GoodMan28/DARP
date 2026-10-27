@@ -1,7 +1,6 @@
 'use client';
 
 import { useId, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { apiJson } from '@/lib/csrf-client';
 import { Button, Field, Textarea, Notice } from '@/components/ui';
 import { IconCheck, IconUndo, IconShield, IconLock, IconSend } from '@/components/shell/Icon';
@@ -59,7 +58,6 @@ export function ActionRail({
   moduleKey, recordId, actions, verifyIsFinal = false,
 }: { moduleKey: string; recordId: string; actions: RailAction[]; verifyIsFinal?: boolean }) {
   const copy = (a: RailAction) => (a === 'verify' && verifyIsFinal ? VERIFY_FINAL : COPY[a]);
-  const router = useRouter();
   const [busy, setBusy] = useState<RailAction | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [remark, setRemark] = useState('');
@@ -84,7 +82,7 @@ export function ActionRail({
     }
     setReturning(false);
     setRemark('');
-    router.refresh();
+    window.location.reload();
   }
 
   function submitReturn() {

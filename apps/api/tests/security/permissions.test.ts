@@ -72,7 +72,9 @@ describe('workflow transitions', () => {
     expect(canTransition(drie, classic, rec({ status: 'submitted' }), 'verify').next).toBe('verified');
     expect(canTransition(drie, classic, rec({ status: 'verified' }), 'approve').allowed).toBe(false);
     expect(canTransition(admin, classic, rec({ status: 'verified' }), 'approve').next).toBe('approved');
+    expect(canTransition(admin, classic, rec({ status: 'submitted' }), 'approve').next).toBe('approved');
     expect(canTransition(admin, classic, rec({ status: 'approved' }), 'unlock').next).toBe('verified');
+    expect(canTransition(admin, classic, rec({ status: 'approved' }), 'return').next).toBe('returned');
     expect(canTransition(drie, classic, rec({ status: 'approved' }), 'unlock').allowed).toBe(false);
     expect(canTransition(drie, classic, rec({ status: 'approved' }), 'return').allowed).toBe(false);
   });
@@ -128,8 +130,8 @@ describe('capabilities', () => {
 });
 
 describe('every module is reachable and verifiable by somebody', () => {
-  it('gives each of the 24 modules an owner role and a verifier', () => {
-    expect(MODULE_LIST).toHaveLength(24);
+  it('gives each of the 25 modules an owner role and a verifier', () => {
+    expect(MODULE_LIST).toHaveLength(25);
     for (const m of MODULE_LIST) {
       expect(m.ownerRoles.length, `${m.key} has no owner role`).toBeGreaterThan(0);
       expect(m.verifierRoles.length, `${m.key} has no verifier role`).toBeGreaterThan(0);

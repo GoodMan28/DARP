@@ -24,12 +24,13 @@ import { feedback } from './feedback';
 import { edpmdp } from './edpmdp';
 import { quality } from './quality';
 import { exams } from './exams';
+import { outreach } from './outreach';
 
-/** The 24 modules, in the canonical order of 00-START-HERE §0.6. */
+/** The 25 modules, in the canonical order of 00-START-HERE §0.6. */
 export const MODULE_LIST: ModuleConfig[] = [
   profile, publications, patents, books, grants, consultancy, fellowships, seedmoney,
   riawards, awards, extawards, finsupport, fdpattended, studentsguided, qscontacts, mentorship,
-  econtent, mous, workshops, fdporganised, feedback, edpmdp, quality, exams,
+  econtent, mous, workshops, fdporganised, feedback, edpmdp, quality, exams, outreach,
 ];
 
 /** key → config. The only lookup any feature should use. */

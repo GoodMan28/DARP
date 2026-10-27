@@ -73,9 +73,9 @@ export default async function RecordPage({ params }: PageProps) {
   if (record.status === 'submitted' && mayVerify) rail.push('verify');
   // Approved-on-submission modules are checked afterwards: the office and IQAC may return an approved record.
   const returnable = record.status === 'submitted' || record.status === 'verified'
-    || (record.status === 'approved' && m.lookup?.autoApprove === 'always');
+    || (record.status === 'approved' && (m.lookup?.autoApprove === 'always' || isAdmin));
   if (returnable && mayVerify) rail.push('return');
-  if (record.status === 'verified' && isAdmin) rail.push('approve');
+  if ((record.status === 'verified' || record.status === 'submitted') && isAdmin) rail.push('approve');
   if (record.status === 'approved' && isAdmin) rail.push('unlock');
 
   const { fields } = schema.data;

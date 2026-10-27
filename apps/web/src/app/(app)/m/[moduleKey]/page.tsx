@@ -135,8 +135,12 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
   const { counts, recordPeriods, canCreate } = schema.data;
   // A module kept on its own page (the Faculty Profile) is never added to from the list.
   const mayCreate = canCreate && !m.managedAt;
-  const declaredNil = mayCreate && schema.data.declaredNil;
-  const managedLink = m.managedAt && m.ownerRoles.includes(user.role) ? m.managedAt : null;
+  const isOwner = m.ownerRoles.includes(user.role);
+  const totalRecords = counts.draft + counts.submitted + counts.verified + counts.approved + counts.returned;
+  // Nil returns are only declared when the owner has no records in this cycle.
+  const canDeclareNil = isOwner && mayCreate && totalRecords === 0;
+  const declaredNil = canDeclareNil && schema.data.declaredNil;
+  const managedLink = m.managedAt && isOwner ? m.managedAt : null;
 
   const base = { q, status, year, page, check };
   const pageCount = Math.max(1, Math.ceil(list.total / list.pageSize));
@@ -380,7 +384,7 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
           </nav>
         ) : null}
 
-        {mayCreate ? (
+        {canDeclareNil ? (
           <NilDeclaration moduleKey={m.key} moduleName={m.name} declared={declaredNil} />
         ) : null}
       </Card>

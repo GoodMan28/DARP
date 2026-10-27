@@ -13,6 +13,7 @@ import { log } from '@/server/log';
 import {
   buildPlans, plannedHeaders, norm, amountInWords, EXPORTABLE_STATUSES, type SheetPlan,
 } from './mapping';
+import { formatAwardValidity } from '@darp/shared/format';
 
 const TEMPLATE_DIR = process.env.EXPORT_TEMPLATE_DIR ?? 'templates';
 
@@ -280,6 +281,10 @@ async function renderValue(
       .where(and(eq(evidenceFiles.id, String(raw)), isNull(evidenceFiles.deletedAt)))
       .limit(1);
     return ev ? `${ev.name} (evidence id ${ev.id})` : '';
+  }
+
+  if (field?.type === 'validity' || fieldKey === 'awardValidity' || fieldKey === 'validity') {
+    return formatAwardValidity(raw);
   }
 
   if (Array.isArray(raw)) return raw.map((v) => String(v)).join(', ');

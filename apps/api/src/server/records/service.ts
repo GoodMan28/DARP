@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, sql, count } from 'drizzle-orm';
+import { and, or, asc, desc, eq, inArray, isNull, sql, count } from 'drizzle-orm';
 import { db } from '@/server/db';
 import { records, recordTransitions, cycles, users, departments, moduleDeclarations } from '@/server/db/schema';
 import { getModule } from '@darp/shared/modules';
@@ -99,7 +99,10 @@ export async function listRecords(actor: SessionUser, moduleKey: string, params:
   }
   if (params.q) {
     const needle = `%${params.q.trim().toLowerCase().slice(0, 100)}%`;
-    where = and(where, sql`${records.searchText} like ${needle}`)!;
+    where = and(
+      where,
+      or(sql`${records.searchText} like ${needle}`, sql`lower(${users.name}) like ${needle}`),
+    )!;
   }
 
   const pageSize = Math.min(Math.max(params.pageSize ?? 20, 5), 100);
@@ -133,7 +136,11 @@ export async function listRecords(actor: SessionUser, moduleKey: string, params:
     .limit(pageSize)
     .offset((page - 1) * pageSize);
 
-  const [totalRow] = await db.select({ n: count() }).from(records).where(where);
+  const [totalRow] = await db
+    .select({ n: count() })
+    .from(records)
+    .innerJoin(users, eq(users.id, records.ownerUserId))
+    .where(where);
 
   return {
     total: totalRow?.n ?? 0,
@@ -358,7 +365,7 @@ export async function createRecord(
   const badFiles = await unattachableFiles(actor.id, m, null, v.data);
   if (Object.keys(badFiles).length > 0) throw new ServiceError('VALIDATION', 'Some fields need attention.', badFiles);
 
-  const { data, naturalKey, searchText } = prepareForStorage(m, v.data, departmentId);
+  const { data, naturalKey, searchText } = prepareForStorage(m, v.data, departmentId, actor.name);
   const { periodYear, periodLabel } = resolvePeriod(m, v.data, cycle);
 
   await assertNoDuplicate(m, cycle.id, naturalKey, null);
@@ -403,6 +410,11 @@ export async function createRecord(
   }
   await linkEvidence(m, created!.id, data);
   if (auto && verification) await recordAutoApproval(created!.id, verification);
+  await db.delete(moduleDeclarations).where(and(
+    eq(moduleDeclarations.moduleKey, m.key),
+    eq(moduleDeclarations.cycleId, cycle.id),
+    eq(moduleDeclarations.userId, actor.id),
+  ));
 
   return { id: created!.id, status: created!.status };
 }
@@ -438,7 +450,7 @@ export async function updateRecord(
   const badFiles = await unattachableFiles(actor.id, m, id, v.data);
   if (Object.keys(badFiles).length > 0) throw new ServiceError('VALIDATION', 'Some fields need attention.', badFiles);
 
-  const prepared = prepareForStorage(m, v.data, existing.departmentId);
+  const prepared = prepareForStorage(m, v.data, existing.departmentId, owner?.name ?? actor.name);
   // An encrypted field left blank on the form keeps its stored ciphertext.
   const stored = existing.data as Record<string, unknown>;
   for (const f of m.fields) {
@@ -455,7 +467,11 @@ export async function updateRecord(
   const now = new Date();
   const nextStatus: RecordStatus = auto
     ? 'approved'
-    : mode === 'submit' ? 'submitted' : existing.status === 'returned' ? 'returned' : 'draft';
+    : mode === 'submit'
+      ? (existing.status === 'approved' || existing.status === 'verified' ? existing.status : 'submitted')
+      : existing.status === 'returned'
+        ? 'returned'
+        : 'draft';
   const verification = looked.verification
     ? { ...looked.verification, autoApproved: auto }
     : (existing.verification as RecordVerification | null);
@@ -565,10 +581,14 @@ export async function transitionRecord(
   await db.update(records).set({
     status: decision.next,
     submittedAt: decision.next === 'submitted' ? now : existing.submittedAt,
-    // A verification that is final (Publications) moves straight to approved: it is still a
-    // verification, and the database requires a verified record before an approved one.
-    verifiedAt: decision.next === 'verified' || action === 'verify' ? now : existing.verifiedAt,
-    verifiedBy: decision.next === 'verified' || action === 'verify' ? actor.id : existing.verifiedBy,
+    // A verification that is final (Publications) or an admin direct approval moves straight to approved:
+    // it is still a verification, and the database requires a verified record before an approved one.
+    verifiedAt: decision.next === 'verified' || decision.next === 'approved' || action === 'verify'
+      ? (existing.verifiedAt ?? now)
+      : existing.verifiedAt,
+    verifiedBy: decision.next === 'verified' || decision.next === 'approved' || action === 'verify'
+      ? (existing.verifiedBy ?? actor.id)
+      : existing.verifiedBy,
     approvedAt: decision.next === 'approved' ? now : null,
     approvedBy: decision.next === 'approved' ? actor.id : null,
     returnedRemark: decision.next === 'returned' ? remark!.trim().slice(0, 1000) : null,
@@ -660,12 +680,17 @@ export async function getEncryptedFieldForReveal(
 
 export async function setNilDeclaration(actor: SessionUser, moduleKey: string, declared: boolean) {
   const m = mustGetModule(moduleKey);
-  if (!canCreateIn(actor, m)) throw new ServiceError('FORBIDDEN', 'This module is not yours to declare.');
+  if (!m.ownerRoles.includes(actor.role)) throw new ServiceError('FORBIDDEN', 'This module is not yours to declare.');
   // A one-per-owner module (the Faculty Profile) is filled in, never declared empty.
   if (m.managedAt) throw new ServiceError('VALIDATION', 'This module cannot be declared empty.');
   const cycle = await activeCycle();
 
   if (declared) {
+    const counts = await statusCounts(actor, m.key);
+    const total = counts.draft + counts.submitted + counts.verified + counts.approved + counts.returned;
+    if (total > 0) {
+      throw new ServiceError('VALIDATION', 'Cannot declare a nil return when records already exist in this cycle.');
+    }
     await db.insert(moduleDeclarations)
       .values({ moduleKey: m.key, cycleId: cycle.id, userId: actor.id, declaredNil: true })
       .onConflictDoUpdate({

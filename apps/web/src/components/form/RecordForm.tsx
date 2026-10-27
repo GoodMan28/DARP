@@ -8,6 +8,8 @@ import {
 import {
   LOOKUP_SOURCE_LABEL, type FieldProvenance, type FormFieldDef, type LookupFillPayload,
 } from '@darp/shared/contracts';
+import { AwardValidityInput } from './AwardValidityInput';
+import { validateAndNormalizeValidity } from '@darp/shared/format';
 
 export type { FormFieldDef } from '@darp/shared/contracts';
 
@@ -184,6 +186,24 @@ export function RecordForm({
     for (const f of fields) if (visible(f)) payload[f.key] = values[f.key] ?? '';
     // The identifier box is the record's DOI (or ISBN): it is what the server looks up.
     if (mirrorKey && identifier.trim()) payload[mirrorKey] = identifier.trim();
+
+    // Client-side validation for Award Validity before submit
+    for (const f of fields) {
+      if ((f.type === 'validity' || f.key === 'awardValidity' || f.key === 'validity') && visible(f)) {
+        const raw = payload[f.key];
+        if (raw !== undefined && raw !== null && raw !== '') {
+          const res = validateAndNormalizeValidity(raw);
+          if (!res.valid) {
+            setErrors((e) => ({ ...e, [f.key]: res.error ?? 'Invalid award validity.' }));
+            setBanner(res.error ?? 'Invalid award validity.');
+            setBusy(false);
+            errorSummary.current?.focus();
+            return;
+          }
+          payload[f.key] = res.canonical;
+        }
+      }
+    }
 
     const url = recordId
       ? `/api/modules/${moduleKey}/records/${recordId}`
@@ -429,6 +449,20 @@ function renderInput(
   ctx: { moduleKey: string; recordId?: string },
 ) {
   const common = { id: `i-${f.key}`, disabled: readOnly, 'aria-invalid': invalid || undefined };
+
+  if (f.type === 'validity' || f.key === 'awardValidity' || f.key === 'validity') {
+    return (
+      <AwardValidityInput
+        id={`i-${f.key}`}
+        disabled={readOnly}
+        value={value}
+        onChange={(v) => onChange(v)}
+        invalid={invalid}
+        options={f.options.length > 0 ? f.options : undefined}
+      />
+    );
+  }
+
   switch (f.type) {
     case 'textarea':
       return (
