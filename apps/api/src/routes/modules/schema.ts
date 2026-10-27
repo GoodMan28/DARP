@@ -51,7 +51,13 @@ export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async 
       counts: cycle
         ? await statusCounts(actor, m.key)
         : { draft: 0, submitted: 0, verified: 0, approved: 0, returned: 0 },
-      declaredNil: cycle ? await getNilDeclaration(actor, m.key) : false,
+      declaredNil: cycle
+        ? (await (async () => {
+          const c = await statusCounts(actor, m.key);
+          const total = c.draft + c.submitted + c.verified + c.approved + c.returned;
+          return total === 0 && await getNilDeclaration(actor, m.key);
+        })())
+        : false,
       fields: m.fields.map((f) => ({
         key: f.key,
         label: f.label,

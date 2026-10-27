@@ -136,8 +136,9 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
   // A module kept on its own page (the Faculty Profile) is never added to from the list.
   const mayCreate = canCreate && !m.managedAt;
   const isOwner = m.ownerRoles.includes(user.role);
-  // Nil returns are declared by the module's owner (e.g. faculty), never by admin or verifying offices.
-  const canDeclareNil = isOwner && mayCreate;
+  const totalRecords = counts.draft + counts.submitted + counts.verified + counts.approved + counts.returned;
+  // Nil returns are only declared when the owner has no records in this cycle.
+  const canDeclareNil = isOwner && mayCreate && totalRecords === 0;
   const declaredNil = canDeclareNil && schema.data.declaredNil;
   const managedLink = m.managedAt && isOwner ? m.managedAt : null;
 

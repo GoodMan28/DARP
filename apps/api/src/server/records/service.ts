@@ -410,6 +410,11 @@ export async function createRecord(
   }
   await linkEvidence(m, created!.id, data);
   if (auto && verification) await recordAutoApproval(created!.id, verification);
+  await db.delete(moduleDeclarations).where(and(
+    eq(moduleDeclarations.moduleKey, m.key),
+    eq(moduleDeclarations.cycleId, cycle.id),
+    eq(moduleDeclarations.userId, actor.id),
+  ));
 
   return { id: created!.id, status: created!.status };
 }
@@ -681,6 +686,11 @@ export async function setNilDeclaration(actor: SessionUser, moduleKey: string, d
   const cycle = await activeCycle();
 
   if (declared) {
+    const counts = await statusCounts(actor, m.key);
+    const total = counts.draft + counts.submitted + counts.verified + counts.approved + counts.returned;
+    if (total > 0) {
+      throw new ServiceError('VALIDATION', 'Cannot declare a nil return when records already exist in this cycle.');
+    }
     await db.insert(moduleDeclarations)
       .values({ moduleKey: m.key, cycleId: cycle.id, userId: actor.id, declaredNil: true })
       .onConflictDoUpdate({
