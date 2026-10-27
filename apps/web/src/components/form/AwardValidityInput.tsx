@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Select, Input } from '@/components/ui';
 import {
   PREDEFINED_VALIDITY_OPTIONS,
@@ -51,13 +51,27 @@ export function AwardValidityInput({
   const [customValue, setCustomValue] = useState<string>(() => deriveState(value).customValue);
   const [customError, setCustomError] = useState<string | null>(null);
 
+  // Track the last value emitted via onChange so we don't reset state when our own onChange echoes back
+  const lastEmittedRef = useRef<string | null>(null);
+
   useEffect(() => {
+    // 1. If this prop update is just the echo of our own emitted onChange, ignore it
+    if (lastEmittedRef.current !== null && String(value ?? '').trim() === lastEmittedRef.current.trim()) {
+      return;
+    }
+
+    // 2. If the user intentionally chose 'Custom', do NOT reset back to "— Select —"
+    // when value is empty (since user is currently entering their custom input)
+    if (selectOption === 'Custom' && (!value || String(value).trim() === customValue.trim())) {
+      return;
+    }
+
     const derived = deriveState(value);
     setSelectOption(derived.selectOption);
     if (derived.selectOption === 'Custom') {
       setCustomValue(derived.customValue);
     }
-  }, [value]);
+  }, [value, selectOption, customValue]);
 
   function handleSelectChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const selected = e.target.value;
@@ -66,22 +80,26 @@ export function AwardValidityInput({
 
     if (!selected) {
       setCustomValue('');
+      lastEmittedRef.current = '';
       onChange('');
       return;
     }
 
     if (selected === 'Custom') {
-      // If we already have a valid custom value, propagate it; otherwise propagate current customValue or empty
+      // If we already have a valid custom value, propagate it; otherwise propagate empty
       if (customValue.trim()) {
         const res = validateAndNormalizeValidity(customValue);
         if (!res.valid) {
           setCustomError(res.error ?? 'Invalid custom validity.');
+          lastEmittedRef.current = customValue;
           onChange(customValue);
         } else {
           setCustomError(null);
+          lastEmittedRef.current = res.canonical!;
           onChange(res.canonical!);
         }
       } else {
+        lastEmittedRef.current = '';
         onChange('');
       }
       return;
@@ -89,8 +107,12 @@ export function AwardValidityInput({
 
     if (selected in PREDEFINED_VALIDITY_MAP) {
       setCustomValue('');
-      onChange(PREDEFINED_VALIDITY_MAP[selected]!);
+      const val = PREDEFINED_VALIDITY_MAP[selected]!;
+      lastEmittedRef.current = val;
+      onChange(val);
     } else {
+      setCustomValue('');
+      lastEmittedRef.current = selected;
       onChange(selected);
     }
   }
@@ -101,6 +123,7 @@ export function AwardValidityInput({
 
     if (!raw.trim()) {
       setCustomError('Enter a custom validity period.');
+      lastEmittedRef.current = '';
       onChange('');
       return;
     }
@@ -108,10 +131,11 @@ export function AwardValidityInput({
     const res = validateAndNormalizeValidity(raw);
     if (!res.valid) {
       setCustomError(res.error ?? 'Invalid custom validity.');
-      // Keep raw so parent form is aware of invalid input and can prevent submission
+      lastEmittedRef.current = raw;
       onChange(raw);
     } else {
       setCustomError(null);
+      lastEmittedRef.current = res.canonical!;
       onChange(res.canonical!);
     }
   }
@@ -146,6 +170,7 @@ export function AwardValidityInput({
           </label>
           <Input
             id={`${id}-custom`}
+            autoFocus
             disabled={disabled}
             inputMode="decimal"
             placeholder="e.g. 4 or 0.5"
