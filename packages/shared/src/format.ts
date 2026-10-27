@@ -29,13 +29,26 @@ export function truncate(value: unknown, max = 70): string {
   return `${s.slice(0, max - 1).trimEnd()}…`;
 }
 
+export {
+  formatAwardValidity,
+  VALIDITY_FRACTION_DISPLAY,
+  validateAndNormalizeValidity,
+  PREDEFINED_VALIDITY_OPTIONS,
+  PREDEFINED_VALIDITY_MAP,
+  CANONICAL_TO_PREDEFINED,
+} from './validity';
+import { formatAwardValidity } from './validity';
+
 /** Renders any stored field value for a read-only table cell. */
-export function displayValue(value: unknown, type?: string): string {
+export function displayValue(value: unknown, type?: string, key?: string): string {
   if (value === undefined || value === null || value === '') return '—';
   if (Array.isArray(value)) return value.join(', ');
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
   if (type === 'money') return formatRupees(value);
   if (type === 'date') return formatDate(value);
+  if (type === 'validity' || key === 'awardValidity' || key === 'validity') {
+    return formatAwardValidity(value);
+  }
   return String(value);
 }
 

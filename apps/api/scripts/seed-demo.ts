@@ -238,6 +238,8 @@ function valueFor(f: FieldConfig, ctx: GenContext): unknown {
       return [];
     case 'file':
       return '';                                                   // evidence is uploaded, not seeded
+    case 'validity':
+      return pick(['1', '2', '3', '5', '10', 'Lifetime', '4', '0.25', '0.5'], rng);
     case 'textarea':
       if (label.includes('bibliograph') || label.includes('citation')) {
         return `${pick(PEOPLE_NAMES, rng)}. "${pick(TITLES, rng)}." ${pick(JOURNALS, rng)} (${pick(ctx.cycleYears, rng)}).`;

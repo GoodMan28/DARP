@@ -4,6 +4,7 @@ import { getAllLists } from './masterLists';
 import { isValidAadhaar, isValidPan } from '@/server/crypto/pii';
 import { isbn13 } from '@/server/lookup/isbn';
 import { normalisePatentNumber } from './patentNumber';
+import { validateAndNormalizeValidity } from '@darp/shared/format';
 
 /** Patterns that are checked server-side, never only in the browser. */
 export const PATTERNS = {
@@ -81,6 +82,17 @@ function fieldSchema(f: FieldConfig, lists: Record<string, string[]>): z.ZodType
     case 'file':
       // The value is an evidence-file UUID produced by /api/evidence.
       return z.string().uuid('Upload the file again.').or(z.literal(''));
+    case 'validity':
+      return z.unknown()
+        .refine((v) => {
+          if (v === undefined || v === null || v === '') return true;
+          return validateAndNormalizeValidity(v).valid;
+        }, 'Custom validity must be a positive whole number or one of 0.25, 0.5, 0.75.')
+        .transform((v) => {
+          if (v === undefined || v === null || v === '') return '';
+          const res = validateAndNormalizeValidity(v);
+          return res.valid ? res.canonical : v;
+        });
     default:
       return baseString(f);
   }
@@ -111,6 +123,12 @@ export async function validateRecord(
   const lists = await getAllLists();
   const out: Record<string, unknown> = {};
   const errors: Record<string, string> = {};
+
+  // Support both awardValidity and validity alias for awards module
+  if (m.key === 'awards' && input.validity !== undefined && input.awardValidity === undefined) {
+    input.awardValidity = input.validity;
+    delete input.validity;
+  }
 
   // Reject unknown keys outright: this is what stops a crafted body writing arbitrary JSONB.
   const known = new Set(m.fields.map((f) => f.key));

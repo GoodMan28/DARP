@@ -16,7 +16,7 @@ export type FieldType =
   | 'date' | 'year'
   | 'email' | 'phone' | 'url'
   | 'doi' | 'issn' | 'isbn' | 'pan' | 'aadhaar'
-  | 'file';
+  | 'file' | 'validity';
 
 /** How a field is protected. 'encrypted' fields are AES-GCM at rest and never leave the
  *  server in plaintext except in an admin export. 'masked' fields are shown partially. */

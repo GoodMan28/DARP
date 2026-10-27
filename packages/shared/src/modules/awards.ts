@@ -39,6 +39,12 @@ export const awards: ModuleConfig = {
       maxLength: 240, section: 'Award',
       exportAs: { faculty: 'Name of the Awarding Agency', dofa: 'Name of the Awarding Agency' } },
 
+    { key: 'awardValidity', label: 'Award Validity', type: 'validity', required: false,
+      section: 'Award',
+      options: ['1 Year', '2 Years', '3 Years', '5 Years', '10 Years', 'Lifetime', 'Custom'],
+      help: 'Select validity duration or enter a custom period in years (e.g. 4, or 0.25, 0.5, 0.75).',
+      exportAs: { faculty: 'Award Validity', dofa: 'Award Validity' } },
+
     { key: 'evidence', label: 'Attach documents (Certificate Award Letters)', type: 'file',
       accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence',
       exportAs: {
@@ -46,7 +52,7 @@ export const awards: ModuleConfig = {
         dofa: 'Attach documents (Certificate Award Letters )',
       } },
   ],
-  listColumns: ['awardName', 'level', 'agency', 'awardYear'],
+  listColumns: ['awardName', 'level', 'agency', 'awardValidity', 'awardYear'],
   defaultSort: { key: 'awardYear', dir: 'desc' },
   exportTargets: [
     { workbook: 'faculty', sheet: 'Awards' },
