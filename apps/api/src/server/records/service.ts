@@ -675,7 +675,7 @@ export async function getEncryptedFieldForReveal(
 
 export async function setNilDeclaration(actor: SessionUser, moduleKey: string, declared: boolean) {
   const m = mustGetModule(moduleKey);
-  if (!canCreateIn(actor, m)) throw new ServiceError('FORBIDDEN', 'This module is not yours to declare.');
+  if (!m.ownerRoles.includes(actor.role)) throw new ServiceError('FORBIDDEN', 'This module is not yours to declare.');
   // A one-per-owner module (the Faculty Profile) is filled in, never declared empty.
   if (m.managedAt) throw new ServiceError('VALIDATION', 'This module cannot be declared empty.');
   const cycle = await activeCycle();
