@@ -108,9 +108,9 @@ export function canTransition(
       return { allowed: true, next: returnsAfterApproval(m) ? 'approved' : 'verified' };
     case 'return':
       // Where submissions are approved automatically, checking happens afterwards: the verifying
-      // office and IQAC may send an approved record back to its owner.
+      // office and IQAC may send an approved record back to its owner. Admin may always return an approved record.
       if (!(r.status === 'submitted' || r.status === 'verified'
-        || (r.status === 'approved' && returnsAfterApproval(m)))) {
+        || (r.status === 'approved' && (returnsAfterApproval(m) || actor.role === 'admin')))) {
         return { allowed: false, next: null, reason: 'Only a submitted or verified record can be returned.' };
       }
       if (!canVerify(actor, m)) {
@@ -118,8 +118,8 @@ export function canTransition(
       }
       return { allowed: true, next: 'returned' };
     case 'approve':
-      if (r.status !== 'verified') {
-        return { allowed: false, next: null, reason: 'Only a verified record can be approved.' };
+      if (r.status !== 'verified' && !(r.status === 'submitted' && actor.role === 'admin')) {
+        return { allowed: false, next: null, reason: 'Only a submitted or verified record can be approved.' };
       }
       if (!canApprove(actor)) {
         return { allowed: false, next: null, reason: 'Only IQAC may approve.' };

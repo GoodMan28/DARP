@@ -72,7 +72,9 @@ describe('workflow transitions', () => {
     expect(canTransition(drie, classic, rec({ status: 'submitted' }), 'verify').next).toBe('verified');
     expect(canTransition(drie, classic, rec({ status: 'verified' }), 'approve').allowed).toBe(false);
     expect(canTransition(admin, classic, rec({ status: 'verified' }), 'approve').next).toBe('approved');
+    expect(canTransition(admin, classic, rec({ status: 'submitted' }), 'approve').next).toBe('approved');
     expect(canTransition(admin, classic, rec({ status: 'approved' }), 'unlock').next).toBe('verified');
+    expect(canTransition(admin, classic, rec({ status: 'approved' }), 'return').next).toBe('returned');
     expect(canTransition(drie, classic, rec({ status: 'approved' }), 'unlock').allowed).toBe(false);
     expect(canTransition(drie, classic, rec({ status: 'approved' }), 'return').allowed).toBe(false);
   });

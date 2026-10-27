@@ -462,7 +462,11 @@ export async function updateRecord(
   const now = new Date();
   const nextStatus: RecordStatus = auto
     ? 'approved'
-    : mode === 'submit' ? 'submitted' : existing.status === 'returned' ? 'returned' : 'draft';
+    : mode === 'submit'
+      ? (existing.status === 'approved' || existing.status === 'verified' ? existing.status : 'submitted')
+      : existing.status === 'returned'
+        ? 'returned'
+        : 'draft';
   const verification = looked.verification
     ? { ...looked.verification, autoApproved: auto }
     : (existing.verification as RecordVerification | null);
@@ -572,10 +576,14 @@ export async function transitionRecord(
   await db.update(records).set({
     status: decision.next,
     submittedAt: decision.next === 'submitted' ? now : existing.submittedAt,
-    // A verification that is final (Publications) moves straight to approved: it is still a
-    // verification, and the database requires a verified record before an approved one.
-    verifiedAt: decision.next === 'verified' || action === 'verify' ? now : existing.verifiedAt,
-    verifiedBy: decision.next === 'verified' || action === 'verify' ? actor.id : existing.verifiedBy,
+    // A verification that is final (Publications) or an admin direct approval moves straight to approved:
+    // it is still a verification, and the database requires a verified record before an approved one.
+    verifiedAt: decision.next === 'verified' || decision.next === 'approved' || action === 'verify'
+      ? (existing.verifiedAt ?? now)
+      : existing.verifiedAt,
+    verifiedBy: decision.next === 'verified' || decision.next === 'approved' || action === 'verify'
+      ? (existing.verifiedBy ?? actor.id)
+      : existing.verifiedBy,
     approvedAt: decision.next === 'approved' ? now : null,
     approvedBy: decision.next === 'approved' ? actor.id : null,
     returnedRemark: decision.next === 'returned' ? remark!.trim().slice(0, 1000) : null,
