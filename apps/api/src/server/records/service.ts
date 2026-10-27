@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNull, sql, count } from 'drizzle-orm';
+import { and, or, asc, desc, eq, inArray, isNull, sql, count } from 'drizzle-orm';
 import { db } from '@/server/db';
 import { records, recordTransitions, cycles, users, departments, moduleDeclarations } from '@/server/db/schema';
 import { getModule } from '@darp/shared/modules';
@@ -99,7 +99,10 @@ export async function listRecords(actor: SessionUser, moduleKey: string, params:
   }
   if (params.q) {
     const needle = `%${params.q.trim().toLowerCase().slice(0, 100)}%`;
-    where = and(where, sql`${records.searchText} like ${needle}`)!;
+    where = and(
+      where,
+      or(sql`${records.searchText} like ${needle}`, sql`lower(${users.name}) like ${needle}`),
+    )!;
   }
 
   const pageSize = Math.min(Math.max(params.pageSize ?? 20, 5), 100);
@@ -133,7 +136,11 @@ export async function listRecords(actor: SessionUser, moduleKey: string, params:
     .limit(pageSize)
     .offset((page - 1) * pageSize);
 
-  const [totalRow] = await db.select({ n: count() }).from(records).where(where);
+  const [totalRow] = await db
+    .select({ n: count() })
+    .from(records)
+    .innerJoin(users, eq(users.id, records.ownerUserId))
+    .where(where);
 
   return {
     total: totalRow?.n ?? 0,
@@ -358,7 +365,7 @@ export async function createRecord(
   const badFiles = await unattachableFiles(actor.id, m, null, v.data);
   if (Object.keys(badFiles).length > 0) throw new ServiceError('VALIDATION', 'Some fields need attention.', badFiles);
 
-  const { data, naturalKey, searchText } = prepareForStorage(m, v.data, departmentId);
+  const { data, naturalKey, searchText } = prepareForStorage(m, v.data, departmentId, actor.name);
   const { periodYear, periodLabel } = resolvePeriod(m, v.data, cycle);
 
   await assertNoDuplicate(m, cycle.id, naturalKey, null);
@@ -438,7 +445,7 @@ export async function updateRecord(
   const badFiles = await unattachableFiles(actor.id, m, id, v.data);
   if (Object.keys(badFiles).length > 0) throw new ServiceError('VALIDATION', 'Some fields need attention.', badFiles);
 
-  const prepared = prepareForStorage(m, v.data, existing.departmentId);
+  const prepared = prepareForStorage(m, v.data, existing.departmentId, owner?.name ?? actor.name);
   // An encrypted field left blank on the form keeps its stored ciphertext.
   const stored = existing.data as Record<string, unknown>;
   for (const f of m.fields) {

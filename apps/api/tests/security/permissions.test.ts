@@ -128,8 +128,8 @@ describe('capabilities', () => {
 });
 
 describe('every module is reachable and verifiable by somebody', () => {
-  it('gives each of the 24 modules an owner role and a verifier', () => {
-    expect(MODULE_LIST).toHaveLength(24);
+  it('gives each of the 25 modules an owner role and a verifier', () => {
+    expect(MODULE_LIST).toHaveLength(25);
     for (const m of MODULE_LIST) {
       expect(m.ownerRoles.length, `${m.key} has no owner role`).toBeGreaterThan(0);
       expect(m.verifierRoles.length, `${m.key} has no verifier role`).toBeGreaterThan(0);

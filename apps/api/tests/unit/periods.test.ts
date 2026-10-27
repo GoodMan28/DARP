@@ -23,13 +23,13 @@ describe('period resolution', () => {
     expect(labelFor(2024, 'CY')).toBe('2024');
   });
 
-  it('prints the source field for all 24 modules — REVIEW THIS OUTPUT ONCE', () => {
+  it('prints the source field for all 25 modules — REVIEW THIS OUTPUT ONCE', () => {
     const table = MODULE_LIST.map((m) => {
       const src = periodSourceField(m);
       return `${m.key.padEnd(16)} ${m.periodType}  ${src ? `${src.kind}:${src.key}` : '(falls back to the cycle end)'}`;
     });
     console.error('\nPeriod source per module:\n' + table.join('\n'));
-    expect(table).toHaveLength(24);
+    expect(table).toHaveLength(25);
   });
 
   it('falls back to the cycle end year when a record has no usable date', () => {
