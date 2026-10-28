@@ -37,7 +37,7 @@ export const quality: ModuleConfig = {
       exportAs: { dofa: 'Orientation programme on quality issues for teachers and students organised by the institution, Date (From-To) (DD-MM-YYYY)' } },
 
     { key: 'evidence', label: 'Attach supporting documents', type: 'file',
-      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence' },
+      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Evidence' },
   ],
   listColumns: ['year'],
   defaultSort: { key: 'year', dir: 'desc' },

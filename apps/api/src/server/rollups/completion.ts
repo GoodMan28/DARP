@@ -16,6 +16,7 @@ import type {
   ComputedCounter, DeclaredCounter, CounterValues,
   ModuleProgress, ModuleStatusRow, DepartmentCompletionRow, VerificationQueueRow,
 } from '@darp/shared/contracts';
+import { rankingsFor, rankingItemOf } from '@/server/journals/ranking';
 
 // The result shapes live in the shared API contract; re-exported so callers keep one import.
 export type {
@@ -89,11 +90,16 @@ export async function counterValuesFor(actor: SessionUser, userId: string): Prom
   const baselines: Record<string, number> = {};
   for (const b of baselineRows) baselines[b.counterKey] = Number(b.value);
 
-  const countable: CountableRecord[] = rows.map((r) => ({
+  // Papers' journal rankings, for the indexing and quartile counters: worked out now, never stored.
+  const rankings = await rankingsFor(rows.flatMap((r, i) => (
+    r.moduleKey === 'publications' ? [rankingItemOf(String(i), (r.data ?? {}) as Record<string, unknown>)] : []
+  )));
+  const countable: CountableRecord[] = rows.map((r, i) => ({
     moduleKey: r.moduleKey,
     periodYear: r.periodYear,
     status: r.status,
     data: (r.data ?? {}) as Record<string, unknown>,
+    ranking: rankings.get(String(i)),
   }));
 
   const computed = computeCounters(countable, bounds, periodTypeOf, baselines);

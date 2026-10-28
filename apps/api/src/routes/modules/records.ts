@@ -21,11 +21,14 @@ export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async 
       dir: sp.get('dir') === 'desc' ? 'desc' : 'asc',
       page: Number(sp.get('page') ?? 1) || 1,
       pageSize: Number(sp.get('pageSize') ?? 20) || 20,
-      status: statusParam && STATUSES.has(statusParam as RecordStatus)
-        ? (statusParam as RecordStatus)
-        : undefined,
+      status: statusParam === 'none'
+        ? 'none'
+        : statusParam && STATUSES.has(statusParam as RecordStatus)
+          ? (statusParam as RecordStatus)
+          : undefined,
       periodYear: Number.isInteger(yearParam) && yearParam > 1950 ? yearParam : undefined,
       check: sp.get('check') === '1',
+      mine: sp.get('mine') === '1',
     }));
   } catch (e) {
     return toResponse(e);

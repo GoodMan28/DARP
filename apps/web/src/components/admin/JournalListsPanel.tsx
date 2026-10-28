@@ -6,18 +6,20 @@ import {
   Button, Card, CardHeader, EmptyState, Field, Input, Notice, Select, Table, Td, Th,
 } from '@/components/ui';
 import {
-  parseCsv, extractSjrRows, extractListRows, type JournalListRow,
+  parseCsv, extractSjrRows, extractListRows, extractJcrRows, type JournalListRow,
 } from '@darp/shared/journals';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { JournalListsPayload } from './types';
 
 /** Rows per request: well under the API's 1 MB JSON cap. */
 const BATCH = 4000;
 
-type Kind = 'sjr' | 'list';
+type Kind = 'sjr' | 'list' | 'jcr';
 
 /**
- * Where the quartile and indexing on Publications come from. IQAC downloads the yearly files and
- * loads them here; the file is read in the browser and only the ISSN rows are sent.
+ * Where the indexing, quartile and Impact Factor shown on Publications come from. IQAC downloads
+ * the yearly files and loads them here; the file is read in the browser and only the ISSN rows are
+ * sent. Nothing is stored on the papers, so a list loaded here counts for every paper at once.
  */
 export function JournalListsPanel() {
   const [data, setData] = useState<JournalListsPayload | null>(null);
@@ -26,8 +28,9 @@ export function JournalListsPanel() {
   const [kind, setKind] = useState<Kind>('sjr');
   const [listName, setListName] = useState('');
   const [year, setYear] = useState(String(new Date().getFullYear() - 1));
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
+  const [removing, setRemoving] = useState<{ k: Kind; y: number; name?: string } | null>(null);
   const [progress, setProgress] = useState<string | null>(null);
   const [result, setResult] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
 
@@ -41,7 +44,51 @@ export function JournalListsPanel() {
 
   useEffect(() => { void load(); }, [load]);
 
+  /** Several JCR exports (one per category, say) may be loaded together; each names its own year. */
+  async function importJcr() {
+    setBusy(true);
+    setResult(null);
+    const loaded: string[] = [];
+    for (const f of files) {
+      setProgress(`Reading ${f.name}…`);
+      const extracted = extractJcrRows(parseCsv(await f.text()));
+      if (!extracted.ok) {
+        setBusy(false);
+        setProgress(null);
+        setResult({ tone: 'danger', text: `${f.name}: ${extracted.message}` });
+        await load();
+        return;
+      }
+      const rows = extracted.rows;
+      for (let i = 0; i < rows.length; i += BATCH) {
+        setProgress(`${f.name}: saving ${Math.min(i + BATCH, rows.length).toLocaleString('en-IN')} of ${rows.length.toLocaleString('en-IN')} ISSNs…`);
+        const res = await apiJson('/api/admin/journal-lists', {
+          method: 'POST',
+          body: JSON.stringify({
+            action: 'importJcr', jifYear: extracted.jifYear, rows: rows.slice(i, i + BATCH),
+            last: i + BATCH >= rows.length, totalRows: rows.length, fileName: f.name,
+          }),
+        });
+        if (!res.ok) {
+          setBusy(false);
+          setProgress(null);
+          setResult({ tone: 'danger', text: `${f.name} stopped after ${i.toLocaleString('en-IN')} ISSNs: ${res.error.message}` });
+          await load();
+          return;
+        }
+      }
+      loaded.push(`${extracted.journals.toLocaleString('en-IN')} journals with JIF ${extracted.jifYear} from ${f.name}`);
+    }
+    setBusy(false);
+    setProgress(null);
+    setFiles([]);
+    setResult({ tone: 'success', text: `Loaded ${loaded.join('; ')}. Every paper in these journals now shows its Impact Factor.` });
+    await load();
+  }
+
   async function importFile() {
+    if (kind === 'jcr') { await importJcr(); return; }
+    const file = files[0];
     if (!file) return;
     const y = Number(year);
     if (!Number.isInteger(y) || y < 1999 || y > 2100) {
@@ -82,10 +129,10 @@ export function JournalListsPanel() {
 
     setBusy(false);
     setProgress(null);
-    setFile(null);
+    setFiles([]);
     setResult({
       tone: 'success',
-      text: `Loaded ${extracted.journals.toLocaleString('en-IN')} journals (${rows.length.toLocaleString('en-IN')} ISSNs) as ${kind === 'sjr' ? `SJR ${y}` : `${listName} ${y}`}. Fetch details now uses them.`,
+      text: `Loaded ${extracted.journals.toLocaleString('en-IN')} journals (${rows.length.toLocaleString('en-IN')} ISSNs) as ${kind === 'sjr' ? `SJR ${y}` : `${listName} ${y}`}. Every paper now uses it.`,
     });
     await load();
   }
@@ -118,9 +165,11 @@ export function JournalListsPanel() {
     await load();
   }
 
+  const labelOf = (k: Kind, y: number, name?: string) => (k === 'sjr' ? `SJR ${y}` : k === 'jcr' ? `JIF ${y}` : `${name} ${y}`);
+
   async function clear(k: Kind, y: number, name?: string) {
-    const label = k === 'sjr' ? `SJR ${y}` : `${name} ${y}`;
-    if (!window.confirm(`Remove ${label}? Records already saved keep their values.`)) return;
+    const label = labelOf(k, y, name);
+    setRemoving(null);
     setBusy(true);
     const res = await apiJson('/api/admin/journal-lists', {
       method: 'POST', body: JSON.stringify({ action: 'clear', kind: k, year: y, listName: name }),
@@ -133,7 +182,7 @@ export function JournalListsPanel() {
   if (loadError) return <Notice tone="danger" title="Journal lists could not be loaded">{loadError}</Notice>;
   if (!data) return <p className="text-sm text-ink-muted">Loading journal lists…</p>;
 
-  const nothingLoaded = data.sjr.length === 0 && data.lists.length === 0;
+  const nothingLoaded = data.sjr.length === 0 && data.lists.length === 0 && data.jcr.length === 0;
   const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August',
     'September', 'October', 'November', 'December'];
 
@@ -164,12 +213,12 @@ export function JournalListsPanel() {
           )}
           <p className="mt-2 text-xs text-ink-muted">
             Indexing “Scopus” is given only when Scopus covered the journal in the paper’s year — a journal Scopus
-            dropped after 2023 does not index a 2024 paper. The quartile applies SCImago’s method to the SJR values
+            dropped after 2023 does not index a 2024 paper. The quartile shown is always from the newest SJR year, and applies SCImago’s method to the SJR values
             in Elsevier’s list (rank within each subject category, best quartile). Elsevier’s list has SJR values only
             for journals still in Scopus, so this quartile is an estimate and is labelled “estimated”. Loading SCImago’s
             own file for each year below (SCImago blocks automatic downloads) replaces it with SCImago’s official
-            figures for that year. Web of Science (SCIE, SSCI, …) cannot be fetched automatically either — Clarivate
-            requires a login — so load those below.
+            figures for that year. Web of Science (SCIE, SSCI, …) and its Impact Factors cannot be fetched
+            automatically either — Clarivate requires a login — so load those below.
           </p>
         </div>
       </Card>
@@ -219,21 +268,21 @@ export function JournalListsPanel() {
 
       {nothingLoaded ? (
         <Notice tone="warning" title="No journal list is loaded yet">
-          Until one is, Publications cannot fill in the quartile or the indexing, and every paper goes to
-          DRIE for a manual check. Press “Refresh now” above.
+          Until one is, Publications show NA for the indexing, quartile and Impact Factor. Press “Refresh now” above.
         </Notice>
       ) : null}
 
       <Card padded={false}>
         <CardHeader
-          title="Load a journal list (optional)"
-          subtitle="For Web of Science, or SCImago's own quartiles. The file is read on this computer; only the ISSNs are sent."
+          title="Load a journal list"
+          subtitle="Web of Science collections, Impact Factors, or SCImago's own quartiles. The file is read on this computer; only the ISSNs are sent."
         />
         <div className="grid gap-4 p-4 sm:grid-cols-2">
           <Field label="List" htmlFor="jl-kind">
             <Select id="jl-kind" value={kind} disabled={busy} onChange={(e) => setKind(e.target.value as Kind)}>
+              <option value="list">An indexing list (Web of Science collection: SCIE, SSCI, AHCI, ESCI)</option>
+              <option value="jcr">Journal Citation Reports export (Impact Factor and JIF quartile)</option>
               <option value="sjr">SCImago Journal Rank (quartile, and Scopus coverage)</option>
-              <option value="list">An indexing list (Web of Science collection)</option>
             </Select>
           </Field>
           {kind === 'list' ? (
@@ -243,27 +292,34 @@ export function JournalListsPanel() {
               </Select>
             </Field>
           ) : null}
+          {kind !== 'jcr' ? (
+            <Field
+              label="Year"
+              htmlFor="jl-year"
+              help={kind === 'sjr' ? 'The SJR edition year chosen on the SCImago site.' : 'The year you downloaded the list.'}
+            >
+              <Input id="jl-year" inputMode="numeric" maxLength={4} value={year} disabled={busy}
+                onChange={(e) => setYear(e.target.value.replace(/\D/g, ''))} />
+            </Field>
+          ) : null}
           <Field
-            label="Year"
-            htmlFor="jl-year"
-            help={kind === 'sjr' ? 'The SJR edition year chosen on the SCImago site.' : 'The year you downloaded the list.'}
+            label={kind === 'jcr' ? 'CSV files' : 'CSV file'}
+            htmlFor="jl-file"
+            help={kind === 'jcr' ? 'One or more exports. The JIF year is read from each file ("2024 JIF").' : undefined}
           >
-            <Input id="jl-year" inputMode="numeric" maxLength={4} value={year} disabled={busy}
-              onChange={(e) => setYear(e.target.value.replace(/\D/g, ''))} />
-          </Field>
-          <Field label="CSV file" htmlFor="jl-file">
             <input
               id="jl-file"
               type="file"
               accept=".csv,text/csv"
+              multiple={kind === 'jcr'}
               disabled={busy}
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              onChange={(e) => setFiles([...(e.target.files ?? [])])}
               className="block w-full text-sm"
             />
           </Field>
         </div>
         <div className="flex flex-wrap items-center gap-3 border-t border-line px-4 py-3">
-          <Button type="button" disabled={busy || !file || (kind === 'list' && !listName)} onClick={() => void importFile()}>
+          <Button type="button" disabled={busy || files.length === 0 || (kind === 'list' && !listName)} onClick={() => void importFile()}>
             {busy ? 'Loading…' : 'Load list'}
           </Button>
           {progress ? <span className="text-sm text-ink-muted">{progress}</span> : null}
@@ -283,11 +339,17 @@ export function JournalListsPanel() {
             <strong>Web of Science:</strong> sign in at mjl.clarivate.com (free account), filter by one collection
             (SCIE, SSCI, AHCI or ESCI) and download the CSV. Load each collection under its own Index.
           </p>
+          <p className="mt-1">
+            <strong>Impact Factor:</strong> the library signs in to Journal Citation Reports with BIT’s subscription,
+            chooses the latest year and all editions, and exports CSV (several exports, one per category, are fine).
+            A journal not in the file shows NA. Clarivate does not allow automated downloading, so this is done by hand
+            once a year, after JCR is released in June.
+          </p>
         </div>
       </Card>
 
       <Card padded={false}>
-        <CardHeader title="Loaded lists" subtitle="Quartile uses the SJR edition of the publication year, else the nearest earlier one." />
+        <CardHeader title="Loaded lists" subtitle="Every paper uses the newest year of each list. Scopus also needs the journal to have been covered in the paper's own year." />
         {nothingLoaded ? (
           <EmptyState title="Nothing loaded yet">Load a file above.</EmptyState>
         ) : (
@@ -306,7 +368,18 @@ export function JournalListsPanel() {
                   <Td>
                     {s.source === 'scopus-list'
                       ? <span className="text-xs text-ink-muted">Refreshed automatically</span>
-                      : <Button type="button" variant="ghost" disabled={busy} onClick={() => void clear('sjr', s.year)}>Remove</Button>}
+                      : <Button type="button" variant="ghost" disabled={busy} onClick={() => setRemoving({ k: 'sjr', y: s.year })}>Remove</Button>}
+                  </Td>
+                </tr>
+              ))}
+              {data.jcr.map((j) => (
+                <tr key={`jcr-${j.jifYear}`}>
+                  <Td>Journal Citation Reports (Impact Factor)</Td>
+                  <Td>{j.jifYear}</Td>
+                  <Td>{j.issns.toLocaleString('en-IN')}</Td>
+                  <Td className="text-xs text-ink-muted">{j.withJif.toLocaleString('en-IN')} with an Impact Factor</Td>
+                  <Td>
+                    <Button type="button" variant="ghost" disabled={busy} onClick={() => setRemoving({ k: 'jcr', y: j.jifYear })}>Remove</Button>
                   </Td>
                 </tr>
               ))}
@@ -319,7 +392,7 @@ export function JournalListsPanel() {
                   <Td>
                     {l.source === 'scopus-list'
                       ? <span className="text-xs text-ink-muted">Refreshed automatically</span>
-                      : <Button type="button" variant="ghost" disabled={busy} onClick={() => void clear('list', l.year, l.listName)}>Remove</Button>}
+                      : <Button type="button" variant="ghost" disabled={busy} onClick={() => setRemoving({ k: 'list', y: l.year, name: l.listName })}>Remove</Button>}
                   </Td>
                 </tr>
               ))}
@@ -327,6 +400,16 @@ export function JournalListsPanel() {
           </Table>
         )}
       </Card>
+      <ConfirmDialog
+        open={removing !== null}
+        title={removing ? `Remove ${labelOf(removing.k, removing.y, removing.name)}?` : ''}
+        stayLabel="Keep it"
+        confirmLabel="Remove"
+        onConfirm={() => removing && void clear(removing.k, removing.y, removing.name)}
+        onCancel={() => setRemoving(null)}
+      >
+        Papers then show the next newest list, or NA.
+      </ConfirmDialog>
     </div>
   );
 }

@@ -105,6 +105,124 @@ export function extractSjrRows(table: string[][]): ExtractResult {
   return { ok: true, rows, journals: data.length };
 }
 
+/** One ISSN of a journal in a Journal Citation Reports export. */
+export interface JcrRow {
+  issn: string;                 // 8 characters, no hyphen, upper-case X
+  title: string;
+  /** As JCR prints it: "5.2", "<0.1"; null when JCR says N/A. */
+  jif: string | null;
+  /** Q1..Q4, the best across the journal's categories; null when JCR gives none. */
+  jifQuartile: string | null;
+  categories: string;
+  editions: string;
+}
+
+export type JcrExtractResult =
+  | { ok: true; jifYear: number; rows: JcrRow[]; journals: number }
+  | { ok: false; message: string };
+
+const QUARTILE_RANK: Record<string, number> = { Q1: 1, Q2: 2, Q3: 3, Q4: 4 };
+const better = (a: string | null, b: string | null) => (
+  a === null ? b : b === null ? a : (QUARTILE_RANK[a]! <= QUARTILE_RANK[b]! ? a : b)
+);
+const joinDistinct = (a: string, b: string) => (
+  [...new Set([...a.split('; '), ...b.split('; ')].filter(Boolean))].join('; ')
+);
+
+/**
+ * A Journal Citation Reports export (Clarivate, "Export → CSV"). Title lines come before the header
+ * row ("Journal name, …, ISSN, eISSN, Category, Edition, …, 2024 JIF, JIF Quartile, …") and a
+ * copyright line after the data. A journal listed once per category is merged into one row per
+ * ISSN with its best quartile, so several exports (one per category) can be loaded one after another.
+ */
+export function extractJcrRows(table: string[][]): JcrExtractResult {
+  const cell = (r: string[] | undefined, i: number) => (i >= 0 ? (r?.[i] ?? '').trim() : '');
+  const at = table.findIndex((r) => r.some((c) => c.trim().toLowerCase() === 'issn') && r.some((c) => /\bJIF\b/i.test(c)));
+  if (at < 0) {
+    const first = table.find((r) => r.some((c) => c.trim() !== '')) ?? [];
+    return {
+      ok: false,
+      message: `This is not a Journal Citation Reports export: it needs the columns ISSN and "<year> JIF". Found: ${first.slice(0, 8).join(', ')}…`,
+    };
+  }
+  const header = table[at]!.map((h) => h.trim());
+  const col = (test: (h: string) => boolean) => header.findIndex(test);
+  // "2024 JIF", not "5 Year JIF" or "JIF Without Self Cites".
+  const iJif = col((h) => /^(19|20)\d{2}\s+JIF$/i.test(h));
+  const iQ = col((h) => /^JIF Quartile$/i.test(h));
+  const iIssn = col((h) => h.toLowerCase() === 'issn');
+  const iEissn = col((h) => h.toLowerCase() === 'eissn');
+  const iTitle = col((h) => /^(journal name|journal title|full journal title|title)$/i.test(h));
+  const iCat = col((h) => /^categor(y|ies)$/i.test(h));
+  const iEd = col((h) => /^editions?$/i.test(h));
+  if (iJif < 0) return { ok: false, message: 'The Impact Factor column ("2024 JIF", for example) was not found in this file.' };
+  const jifYear = Number(header[iJif]!.slice(0, 4));
+
+  const byIssn = new Map<string, JcrRow>();
+  let journals = 0;
+  for (const r of table.slice(at + 1)) {
+    const issns = [...new Set([normIssn(cell(r, iIssn)), normIssn(cell(r, iEissn))].filter((x): x is string => x !== null))];
+    if (issns.length === 0) continue;        // a title, blank or copyright line
+    journals += 1;
+    const rawJif = cell(r, iJif);
+    const q = cell(r, iQ).toUpperCase();
+    const row: Omit<JcrRow, 'issn'> = {
+      title: cell(r, iTitle).slice(0, 500),
+      jif: /^<?\d{1,4}(\.\d{1,3})?$/.test(rawJif) ? rawJif : null,
+      jifQuartile: /^Q[1-4]$/.test(q) ? q : null,
+      categories: cell(r, iCat).slice(0, 500),
+      editions: cell(r, iEd).slice(0, 60),
+    };
+    for (const issn of issns) {
+      const seen = byIssn.get(issn);
+      byIssn.set(issn, seen
+        ? {
+          ...seen,
+          jif: seen.jif ?? row.jif,
+          jifQuartile: better(seen.jifQuartile, row.jifQuartile),
+          categories: joinDistinct(seen.categories, row.categories).slice(0, 500),
+          editions: joinDistinct(seen.editions, row.editions).slice(0, 60),
+        }
+        : { issn, ...row });
+    }
+  }
+  if (byIssn.size === 0) return { ok: false, message: 'No journal in this file has a valid ISSN.' };
+  return { ok: true, jifYear, rows: [...byIssn.values()], journals };
+}
+
+/* ───────────── a journal's standing, as shown to people ───────────── */
+
+/** Worked out from the journal's ISSN and the latest lists loaded; null = not found ("NA"). */
+export interface JournalRanking {
+  /** Every index the journal is in, in IQAC's Indexing order; [] = none. */
+  indexes: string[];
+  sjrQuartile: string | null;
+  sjrYear: number | null;
+  /** Computed from Elsevier's Scopus list rather than taken from SCImago's own file. */
+  sjrEstimated: boolean;
+  jif: string | null;
+  jifQuartile: string | null;
+  jifYear: number | null;
+}
+
+export const NOT_AVAILABLE = 'NA';
+
+/** Each derived column's text: "Scopus, SCIE", "Q1 (SJR 2024)", "5.2 (JIF 2024)", "NA". */
+export function rankingTexts(r: JournalRanking): Record<'indexes' | 'sjrQuartile' | 'jif' | 'jifQuartile' | 'ranking', string> {
+  const sjr = r.sjrQuartile ? `${r.sjrQuartile} (SJR ${r.sjrYear}${r.sjrEstimated ? ', estimated' : ''})` : NOT_AVAILABLE;
+  const jif = r.jif ? `${r.jif} (JIF ${r.jifYear})` : NOT_AVAILABLE;
+  const jifQ = r.jifQuartile ? `${r.jifQuartile} (JIF ${r.jifYear})` : NOT_AVAILABLE;
+  // A table cell: "Q1 SJR · IF 5.2".
+  const summary = [r.sjrQuartile ? `${r.sjrQuartile} SJR` : null, r.jif ? `IF ${r.jif}` : null].filter(Boolean).join(' · ');
+  return {
+    indexes: r.indexes.length > 0 ? r.indexes.join(', ') : NOT_AVAILABLE,
+    sjrQuartile: sjr,
+    jif,
+    jifQuartile: jifQ,
+    ranking: summary || NOT_AVAILABLE,
+  };
+}
+
 /** A Web of Science (Master Journal List) or Scopus source list: any column whose name has "ISSN". */
 export function extractListRows(table: string[][]): ExtractResult {
   const [header, ...data] = table;

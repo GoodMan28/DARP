@@ -181,12 +181,11 @@ describe('patents follow the same flow as publications', () => {
     expect(res.notes.join(' ')).toContain('the individual applicants were taken as the inventors');
   });
 
-  it('DRIE can return an approved patent; the resubmission goes to DRIE, whose Verify is final', async () => {
+  it('DRIE can return an approved patent; the corrected one is approved again', async () => {
     const [record] = (await listRecords(faculty, 'patents', { pageSize: 50 })).rows
       .filter((r) => r.data.applicationNo === PUBLISHED);
     expect((await transitionRecord(drie, 'patents', record!.id, 'return', 'Attach the grant certificate.')).status).toBe('returned');
     const again = await updateRecord(faculty, 'patents', record!.id, await fetched(PUBLISHED), 'submit');
-    expect(again.status).toBe('submitted');
-    expect((await transitionRecord(drie, 'patents', record!.id, 'verify')).status).toBe('approved');
+    expect(again.status).toBe('approved');
   });
 });

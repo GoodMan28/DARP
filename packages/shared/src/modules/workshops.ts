@@ -54,7 +54,7 @@ export const workshops: ModuleConfig = {
       exportAs: { hod: 'No. of students involved in research and consultancy undertaken by the college:' } },
 
     { key: 'evidence', label: 'Attach evidence', type: 'file', accept: ['pdf', 'jpg', 'jpeg', 'png'],
-      maxSizeMB: 5, colSpan: 2, section: 'Evidence',
+      maxSizeMB: 2, colSpan: 2, section: 'Evidence',
       help: 'Certificates, event reports, photographs, attendance sheets.',
       exportAs: { hod: 'Attach evidence (Certificates, event reports, photographs, attendance sheets)' } },
   ],

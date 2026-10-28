@@ -79,10 +79,18 @@ const SYSTEM_COLUMNS: Record<string, SheetPlan['systemColumns']> = {
   ],
 };
 
+/** A derived column (the journal's ranking) in a plan: worked out when exported, not read from the record. */
+export const DERIVED_PREFIX = 'derived:';
+
 function columnsFor(m: ModuleConfig, workbook: WorkbookKey) {
-  return m.fields
-    .filter((f) => f.exportAs?.[workbook])
-    .map((f) => ({ fieldKey: f.key, header: f.exportAs![workbook]! }));
+  return [
+    ...m.fields
+      .filter((f) => f.exportAs?.[workbook])
+      .map((f) => ({ fieldKey: f.key, header: f.exportAs![workbook]! })),
+    ...(m.derived ?? [])
+      .filter((d) => d.exportAs?.[workbook])
+      .map((d) => ({ fieldKey: `${DERIVED_PREFIX}${d.key}`, header: d.exportAs![workbook]! })),
+  ];
 }
 
 /** One plan per (module, workbook, sheet). Built from the configs, with the exceptions below. */

@@ -30,6 +30,12 @@ export function scopeFilter(actor: SessionUser, m: ModuleConfig, cycleId: string
     return and(base, eq(records.departmentId, actor.departmentId))!;
   }
 
+  // A faculty member viewing a department's module (MoUs) sees their own department's records only.
+  if (actor.role === 'faculty' && m.scope === 'department' && m.viewRoles.includes('faculty')) {
+    if (!actor.departmentId) return and(base, eq(records.id, MATCHES_NOTHING))!;
+    return and(base, eq(records.departmentId, actor.departmentId))!;
+  }
+
   // The owning office sees every record of the modules it owns or verifies.
   if (m.verifierRoles.includes(actor.role) || m.viewRoles.includes(actor.role)) return base;
 

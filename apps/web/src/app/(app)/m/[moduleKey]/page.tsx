@@ -14,6 +14,7 @@ import { getModule } from '@darp/shared/modules';
 import { displayValue, formatDateTime, truncate, STATUS_LABEL } from '@darp/shared/format';
 import type { RecordStatus } from '@darp/shared/modules/types';
 import { cx } from '@/lib/cx';
+import { ROLE_LABEL } from '@darp/shared/roles';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +31,7 @@ const PERIOD_WORD: Record<string, string> = {
   AY: 'academic year (July–June)',
 };
 
-const STATUS_ORDER: RecordStatus[] = ['draft', 'submitted', 'verified', 'approved', 'returned'];
+const STATUS_ORDER: RecordStatus[] = ['draft', 'approved', 'returned'];
 
 const CHIP_TONE: Record<RecordStatus, string> = {
   draft: 'border-line-strong bg-surface-inset text-ink-muted',
@@ -48,6 +49,8 @@ function one(v: string | string[] | undefined): string {
 function isStatus(v: string): v is RecordStatus {
   return (STATUS_ORDER as string[]).includes(v);
 }
+
+const NOT_FILLED = 'border-line-strong bg-surface-inset text-ink-muted';
 
 /** A query string that keeps the current filters and changes only what is passed. */
 function buildQuery(
@@ -90,7 +93,9 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
 
   const q = one(sp.q);
   const statusParam = one(sp.status);
-  const status = isStatus(statusParam) ? statusParam : '';
+  // The Faculty Profile lists every person in reach, so "not filled yet" is a status there.
+  const isRoster = m.key === 'profile' && user.role !== 'faculty';
+  const status = isStatus(statusParam) || (isRoster && statusParam === 'none') ? statusParam : '';
   const year = one(sp.year);
   const yearNum = /^\d{4}$/.test(year) ? Number(year) : 0;
   const pageParam = Number(one(sp.page));
@@ -147,8 +152,13 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
 
   const columns = m.listColumns.map((key) => {
     const field = m.fields.find((f) => f.key === key);
-    return { key, label: field?.label ?? key, type: field?.type ?? 'text' };
+    const derived = (m.derived ?? []).find((d) => d.key === key);
+    return { key, label: field?.label ?? derived?.label ?? key, type: field?.type ?? 'text', derived: !!derived };
   });
+  /** A cell's text: a stored field, or a value worked out by the server (the journal's ranking). */
+  const cellText = (row: (typeof list.rows)[number], c: (typeof columns)[number]) => (
+    c.derived ? row.derived[c.key] ?? '' : displayValue(row.data[c.key], c.type)
+  );
 
   return (
     <AppShell
@@ -198,6 +208,21 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
               </li>
             );
           })}
+          {isRoster ? (
+            <li>
+              <a
+                href={`/m/${m.key}${buildQuery(base, { status: status === 'none' ? '' : 'none', page: 1 })}`}
+                aria-current={status === 'none' ? 'true' : undefined}
+                className={cx(
+                  'inline-flex min-h-9 items-center gap-1.5 rounded-sm border px-2.5 py-1 text-xs font-semibold no-underline',
+                  NOT_FILLED,
+                  status === 'none' && 'ring-1 ring-primary',
+                )}
+              >
+                Not filled yet
+              </a>
+            </li>
+          ) : null}
           {m.lookup ? (
             <li>
               <a
@@ -241,6 +266,7 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
           status={status}
           year={year}
           periods={recordPeriods}
+          roster={isRoster}
         />
 
         {list.rows.length === 0 ? (
@@ -290,15 +316,17 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
                   <tr key={row.id} className="hover:bg-surface-2">
                     {columns.map((c, i) => (
                       <Td key={c.key}>
-                        {i === 0 ? (
+                        {i === 0 && row.noRecord ? (
+                          <span className="font-semibold">{displayValue(row.ownerName)}</span>
+                        ) : i === 0 ? (
                           <a
                             href={`/m/${m.key}/${row.id}`}
                             className="font-semibold text-primary underline-offset-2 hover:underline"
                           >
-                            {truncate(displayValue(row.data[c.key], c.type), 80)}
+                            {truncate(cellText(row, c), 80)}
                           </a>
                         ) : (
-                          truncate(displayValue(row.data[c.key], c.type), 60)
+                          truncate(cellText(row, c), 60)
                         )}
                       </Td>
                     ))}
@@ -306,7 +334,9 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
                       {row.periodLabel}
                     </Td>
                     <Td>
-                      <StatePill status={row.status} />
+                      {row.noRecord ? (
+                        <span className={cx('inline-flex rounded-sm border px-1.5 py-0.5 text-xs font-semibold', NOT_FILLED)}>Not filled yet</span>
+                      ) : <StatePill status={row.status} />}
                       {row.needsCheck ? (
                         <span
                           className="ml-1.5 inline-flex rounded-sm border border-warning-100 bg-warning-50 px-1.5 py-0.5 text-2xs font-semibold text-warning-700"
@@ -326,16 +356,18 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
                     </Td>
                   </tr>,
                   row.status === 'returned' && row.returnedRemark ? (
-                    <tr key={`${row.id}-remark`} className="bg-danger-50">
+                    <tr key={`${row.id}-remark`} className={row.isMine ? 'bg-danger-50' : 'bg-surface-2'}>
                       <td colSpan={span} className="border-b border-line px-3 py-2">
-                        <p className="flex items-start gap-1.5 text-xs text-danger-700">
+                        <p className={cx('flex items-start gap-1.5 text-xs', row.isMine ? 'text-danger-700' : 'text-ink-muted')}>
                           <IconAlert width={13} height={13} className="mt-0.5 shrink-0" />
                           <span>
-                            <span className="font-semibold">Returned for correction: </span>
-                            {row.returnedRemark}
-                            {' '}
-                            <a href={`/m/${m.key}/${row.id}`} className="font-semibold underline">
-                              Open and fix
+                            <span className="font-semibold">
+                              {row.isMine
+                                ? 'Returned for correction. '
+                                : `Returned to ${displayValue(row.ownerName)}${row.returnedByRole ? ` by ${ROLE_LABEL[row.returnedByRole]}` : ''}${row.returnedAt ? ` on ${formatDateTime(row.returnedAt)}` : ''}, waiting for them. `}
+                            </span>
+                            <a href={`/m/${m.key}/${row.id}#remark`} className="font-semibold underline">
+                              Click to see the remark
                             </a>
                           </span>
                         </p>

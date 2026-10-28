@@ -10,11 +10,11 @@ export const extawards: ModuleConfig = {
   bodies: ['NAAC'],
   description:
     'Awards recognising extension activities only — social outreach, NSS, NCC, socio-economic development. Do not repeat awards entered elsewhere.',
-  ownerRoles: ['faculty'],
+  ownerRoles: ['faculty', 'hod'],
   verifierRoles: ['dofa'],
   viewRoles: ['hod', 'dofa', 'admin'],
   scope: 'self',
-  naturalKey: ['awardName', 'awardYear'],
+  naturalKey: ['awardName', 'awardDate'],
   fields: [
     { key: 'activityName', label: 'Name of the activity', type: 'text', required: true,
       maxLength: 300, colSpan: 2, section: 'Activity',
@@ -32,21 +32,21 @@ export const extawards: ModuleConfig = {
         dofa: 'Name of the Awarding government/ government recognised bodies',
       } },
 
-    { key: 'awardYear', label: 'Year of award', type: 'year', required: true, min: 1990, max: 2100,
-      section: 'Award',
+    { key: 'awardDate', label: 'Date of award', type: 'date', required: true,
+      notFuture: true, periodSource: true, exportYear: true, section: 'Award', help: 'The date of the award letter.',
       exportAs: {
         faculty: 'Year of award  (starting from latest calendar year) (data for 2024, 2023, 2022)',
         dofa: 'Year of award  (starting from latest calendar year) (data for 2024, 2023, 2022)',
       } },
 
     { key: 'evidence', label: 'Attach documents (Award letters)', type: 'file',
-      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence',
+      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Evidence',
       exportAs: {
         faculty: 'Attach documents  (Award letters)', dofa: 'Attach documents  (Award letters)',
       } },
   ],
-  listColumns: ['awardName', 'activityName', 'awardingBody', 'awardYear'],
-  defaultSort: { key: 'awardYear', dir: 'desc' },
+  listColumns: ['awardName', 'activityName', 'awardingBody', 'awardDate'],
+  defaultSort: { key: 'awardDate', dir: 'desc' },
   exportTargets: [
     { workbook: 'faculty', sheet: 'Awards for Extn. activities' },
     { workbook: 'dofa', sheet: 'Awards for Extn. activities' },

@@ -108,7 +108,7 @@ export async function lookupForForm(
       ? 'Your name is not among the authors or editors of this book. If you wrote a chapter in it, or a paper in these proceedings, paste the DOI of that chapter or paper instead.'
       : `Your name is not in the ${personOf(m)} list of ${sourceOf(m)}. Add it if you are ${m.lookup.kind === 'patent' ? 'an inventor' : 'an author or editor'}; the record is then checked against your evidence.`);
   }
-  // A choice the lists could not answer (the quartile of a journal with no SJR value): say so, or
+  // A choice the register could not answer (a patent's status): say so, or
   // "everything matches" would hide an empty field the owner may need to fill.
   let mustType = false;
   for (const f of m.fields) {

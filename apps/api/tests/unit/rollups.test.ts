@@ -26,13 +26,15 @@ describe('counter catalogue', () => {
     expect(extra, `defined but no module feeds them: ${extra.join(', ')}`).toEqual([]);
   });
 
-  it('adds up to the 84 rows of the Faculty Profile sheet, plus the two conference-paper counters', () => {
+  it('adds up to the 84 rows of the Faculty Profile sheet, plus conference papers and journal rankings', () => {
     // The sheet has no conference-paper row; NAAC 3.4 counts them with books and chapters.
     expect(getModule('profile')!.fields).toHaveLength(22);
-    expect(COUNTERS).toHaveLength(51);
+    expect(COUNTERS).toHaveLength(57);
     expect(COUNTERS.filter((c) => c.key.startsWith('books.count.conference'))).toHaveLength(2);
+    // Papers by their journal's indexing and quartile (Scopus, Web of Science, Q1/Q2).
+    expect(COUNTERS.filter((c) => c.ranking)).toHaveLength(6);
     expect(DECLARED_COUNTERS).toHaveLength(13);
-    expect(22 + COUNTERS.length + DECLARED_COUNTERS.length).toBe(84 + 2);
+    expect(22 + COUNTERS.length + DECLARED_COUNTERS.length).toBe(84 + 2 + 6);
   });
 
   it('has unique keys, a known module and a sum field wherever it sums', () => {

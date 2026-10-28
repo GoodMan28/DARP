@@ -109,13 +109,14 @@ export interface AuditPayload {
   };
 }
 
-export type AdminTab = 'accounts' | 'lists' | 'journals' | 'cycle' | 'audit' | 'exports';
+export type AdminTab = 'accounts' | 'lists' | 'journals' | 'cycle' | 'deleted' | 'audit' | 'exports';
 
 export const ADMIN_TABS: ReadonlyArray<{ key: AdminTab; label: string }> = [
   { key: 'accounts', label: 'Accounts' },
   { key: 'lists', label: 'Master lists' },
   { key: 'journals', label: 'Journal lists' },
   { key: 'cycle', label: 'Cycle' },
+  { key: 'deleted', label: 'Deleted records' },
   { key: 'audit', label: 'Audit log' },
   { key: 'exports', label: 'Exports' },
 ];
@@ -130,6 +131,8 @@ export interface JournalListsPayload {
   sjr: Array<{ year: number; source: string; issns: number; ranked: number }>;
   /** source 'upload' = loaded by IQAC; 'scopus-list' = fetched automatically. */
   lists: Array<{ listName: string; year: number; source: string; issns: number }>;
+  /** Journal Citation Reports exports (Impact Factor), one entry per JIF year. */
+  jcr: Array<{ jifYear: number; issns: number; withJif: number }>;
   /** The automatic copy of Elsevier's public Scopus list, or null before the first fetch. */
   scopus: {
     file: string; listYear: number; listMonth: number; sjrYear: number;

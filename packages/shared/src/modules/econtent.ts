@@ -10,7 +10,7 @@ export const econtent: ModuleConfig = {
   bodies: ['NAAC'],
   description:
     'E-content modules you developed for e-PG Pathshala, CEC, SWAYAM, other MOOC platforms, government initiatives or the institutional LMS.',
-  ownerRoles: ['faculty'],
+  ownerRoles: ['faculty', 'hod'],
   verifierRoles: ['dugs'],
   viewRoles: ['hod', 'dugs', 'admin'],
   scope: 'self',

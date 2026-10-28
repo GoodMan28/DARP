@@ -14,15 +14,15 @@ import {
 } from './storage';
 
 /**
- * The hard ceiling. `MAX_UPLOAD_MB` may lower it but never raise it above 5 MB,
+ * The hard ceiling. `MAX_UPLOAD_MB` may lower or raise it, but never above 5 MB,
  * because the `evidence_size_rule` CHECK constraint in the database refuses more.
  */
 const DB_MAX_BYTES = 5_242_880;
 const DAILY_UPLOAD_LIMIT = 100;
 
 export function maxUploadBytes(): number {
-  const configured = Number(process.env.MAX_UPLOAD_MB ?? 5);
-  const mb = Number.isFinite(configured) && configured > 0 ? configured : 5;
+  const configured = Number(process.env.MAX_UPLOAD_MB ?? 2);
+  const mb = Number.isFinite(configured) && configured > 0 ? configured : 2;
   return Math.min(Math.floor(mb * 1024 * 1024), DB_MAX_BYTES);
 }
 

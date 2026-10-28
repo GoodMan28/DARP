@@ -10,8 +10,9 @@ import { scopeFilter } from '@/server/records/scope';
 import type { SessionUser } from '@/server/auth/session';
 import { decryptPii, isEncrypted, maskAadhaar, maskPan } from '@/server/crypto/pii';
 import { log } from '@/server/log';
+import { derivedValues } from '@/server/journals/ranking';
 import {
-  buildPlans, plannedHeaders, norm, amountInWords, EXPORTABLE_STATUSES, type SheetPlan,
+  buildPlans, plannedHeaders, norm, amountInWords, EXPORTABLE_STATUSES, DERIVED_PREFIX, type SheetPlan,
 } from './mapping';
 
 const TEMPLATE_DIR = process.env.EXPORT_TEMPLATE_DIR ?? 'templates';
@@ -153,6 +154,8 @@ export interface ExportRow {
   ownerName: string;
   department: string;
   profile: Record<string, string>;
+  /** The record's reporting year, written where a template asks for a year but the record holds a date. */
+  periodYear?: number;
 }
 
 interface PiiContext { includePii: boolean; revealed: number }
@@ -196,6 +199,7 @@ async function fetchExportRows(
   const rows = await db
     .select({
       data: records.data,
+      periodYear: records.periodYear,
       ownerUserId: records.ownerUserId,
       ownerName: users.name,
       department: departments.name,
@@ -240,6 +244,7 @@ async function fetchExportRows(
     data: r.data as Record<string, unknown>,
     ownerName: r.ownerName,
     department: r.department ?? '',
+    periodYear: r.periodYear,
     profile: profiles.get(r.ownerUserId) ?? {},
   }));
 }
@@ -269,6 +274,8 @@ async function renderValue(
     return divisor === 1 ? n : n / divisor;
   }
 
+  if (field?.exportYear && row.periodYear) return row.periodYear;
+  if (field?.type === 'decimal') return field.unit ? `${raw} ${field.unit}` : String(raw);
   if (field?.type === 'integer') return digits(raw);
 
   if (field?.type === 'file') {
@@ -338,16 +345,23 @@ export async function writeWorkbook(
     }
 
     const rows = await loadRows(plan);
+    // The journal's indexing, quartile and Impact Factor: worked out for the whole sheet at once.
+    const m = getModule(plan.moduleKey);
+    const derived = m && plan.columns.some((c) => c.fieldKey.startsWith(DERIVED_PREFIX))
+      ? await derivedValues(m, rows.map((r, i) => ({ key: String(i), data: r.data })))
+      : new Map<string, Record<string, string>>();
     let writeAt = firstEmptyRowAfter(sheet, headerRow);
     let serial = 1;
 
-    for (const r of rows) {
+    for (const [i, r] of rows.entries()) {
       const row = sheet.getRow(writeAt++);
 
       for (const col of plan.columns) {
         const at = index.get(norm(col.header));
         if (!at) continue;
-        row.getCell(at).value = await renderValue(plan, col.fieldKey, r, ctx);
+        row.getCell(at).value = col.fieldKey.startsWith(DERIVED_PREFIX)
+          ? derived.get(String(i))?.[col.fieldKey.slice(DERIVED_PREFIX.length)] ?? ''
+          : await renderValue(plan, col.fieldKey, r, ctx);
       }
 
       for (const col of plan.fromProfile ?? []) {

@@ -5,6 +5,7 @@ import { cx } from '@/lib/cx';
 import { AccountsPanel } from './AccountsPanel';
 import { MasterListsPanel } from './MasterListsPanel';
 import { JournalListsPanel } from './JournalListsPanel';
+import { DeletedRecordsPanel } from './DeletedRecordsPanel';
 import { CyclePanel } from './CyclePanel';
 import { AuditPanel } from './AuditPanel';
 import { ExportsPanel } from './ExportsPanel';
@@ -58,6 +59,7 @@ export function AdminConsole({
         {tab === 'lists' ? <MasterListsPanel /> : null}
         {tab === 'journals' ? <JournalListsPanel /> : null}
         {tab === 'cycle' ? <CyclePanel /> : null}
+        {tab === 'deleted' ? <DeletedRecordsPanel /> : null}
         {tab === 'audit' ? <AuditPanel /> : null}
         {tab === 'exports' ? <ExportsPanel /> : null}
       </div>

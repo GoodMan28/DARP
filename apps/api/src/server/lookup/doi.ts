@@ -4,7 +4,6 @@ import { getJson, MAILTO } from './http';
 import { clean, encodePath } from './text';
 import { fromCrossref, type CrossrefWork } from './crossref';
 import { namesMatch, BIT_ROR } from './names';
-import { journalFacts } from './journals';
 
 /** 'https://doi.org/10.1/X', 'doi:10.1/x', '10.1/X' → '10.1/x'; anything else → null. */
 export function normaliseDoiInput(raw: string): string | null {
@@ -105,17 +104,8 @@ export async function resolveDoi(doi: string): Promise<LookupResult> {
     r = fromDatacite(doi, dc.data.attributes);
   }
 
+  // The journal's indexing, quartile and Impact Factor are not part of the fetched record: they
+  // are worked out from its ISSN whenever shown (server/journals/ranking.ts).
   await enrichFromOpenAlex(doi, r);
-
-  if (r.rawType === 'journal-article') {
-    const facts = await journalFacts(r.identifiers.issn, r.values.year ? Number(r.values.year) : null);
-    r.values.quartile = facts.quartile;
-    r.values.quartileSource = facts.quartileSource;
-    r.values.indexing = facts.indexing;
-    r.flags.push(...facts.flags);
-  } else {
-    // Not a journal article: no journal quartile to look up; the owner may choose one by hand.
-    r.values.quartile = '';
-  }
   return r;
 }

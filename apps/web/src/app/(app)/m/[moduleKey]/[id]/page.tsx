@@ -8,6 +8,7 @@ import { IconArrowBack, IconLock } from '@/components/shell/Icon';
 import { RecordForm } from '@/components/form/RecordForm';
 import { ActionRail, type RailAction } from '@/components/records/ActionRail';
 import { DeleteRecord } from '@/components/records/DeleteRecord';
+import { Remark } from '@/components/records/Remark';
 import { lockedStrip } from '@/components/records/form-fields';
 import { requireMe, loadPageData } from '@/lib/api.server';
 import { LOOKUP_SOURCE_LABEL, type ModuleSchemaPayload, type RecordDetail } from '@darp/shared/contracts';
@@ -60,9 +61,8 @@ export default async function RecordPage({ params }: PageProps) {
   const record = loaded.data;
   const editable = record.canEdit && record.editValues !== null;
   const mayVerify = schema.data.canVerify;
-  // The owner's own draft or returned record: they correct and resubmit it, or delete it.
+  // The owner's own draft or returned record: they correct and resubmit it.
   const ownOpen = editable && record.isMine && (record.status === 'draft' || record.status === 'returned');
-  const isAdmin = user.role === 'admin';
 
   /*
    * Only the transitions this viewer may actually take are offered. The server re-checks
@@ -70,13 +70,9 @@ export default async function RecordPage({ params }: PageProps) {
    * so nobody is shown a button that will refuse them.
    */
   const rail: RailAction[] = [];
-  if (record.status === 'submitted' && mayVerify) rail.push('verify');
-  // Approved-on-submission modules are checked afterwards: the office and IQAC may return an approved record.
-  const returnable = record.status === 'submitted' || record.status === 'verified'
-    || (record.status === 'approved' && m.lookup?.autoApprove === 'always');
-  if (returnable && mayVerify) rail.push('return');
-  if (record.status === 'verified' && isAdmin) rail.push('approve');
-  if (record.status === 'approved' && isAdmin) rail.push('unlock');
+  // Records are approved on submission and checked afterwards: the office, IQAC and the department's
+  // HOD may send an approved record back with a remark. Nobody returns their own.
+  if (['submitted', 'verified', 'approved'].includes(record.status) && (mayVerify || user.role === 'hod') && !record.isMine) rail.push('return');
 
   const { fields } = schema.data;
   // "the publisher's record", "the Patent Office Journal" — and as a column head, "Publisher's record".
@@ -115,9 +111,14 @@ export default async function RecordPage({ params }: PageProps) {
       }
     >
       {record.status === 'returned' && record.returnedRemark ? (
-        <Notice tone="danger" title="Returned for correction" className="mb-4">
-          {record.returnedRemark}
-          {editable ? ' Correct the fields below and submit it again.' : null}
+        <Notice tone="danger" title={record.isMine ? 'Returned for correction' : `Returned to ${record.ownerName}`} className="mb-4 scroll-mt-4" id="remark">
+          <Remark text={record.returnedRemark} />
+          {record.isMine ? <p className="mt-1">Correct the fields below and submit it again.</p> : (
+            <p className="mt-1">
+              Sent back{record.returnedByRole ? ` by ${ROLE_LABEL[record.returnedByRole]}` : ''}
+              {record.returnedAt ? ` on ${formatDateTime(record.returnedAt)}` : ''}. It is waiting for the owner to correct it.
+            </p>
+          )}
         </Notice>
       ) : null}
 
@@ -125,9 +126,19 @@ export default async function RecordPage({ params }: PageProps) {
         <Notice tone="info" className="mb-4">
           <span className="inline-flex items-center gap-1.5">
             <IconLock width={13} height={13} />
-            This record is {(STATUS_LABEL[record.status] ?? record.status).toLowerCase()}, so it is
-            read-only. Ask the verifying office to return it if something needs changing.
+            {rail.includes('return')
+              ? 'You are viewing this record; only its owner can change it. If something is wrong, use “Return to owner” with a remark.'
+              : 'You are viewing this record; only its owner can change it.'}
           </span>
+        </Notice>
+      ) : null}
+
+      {record.estimatedDates.length > 0 || record.needsInput.length > 0 ? (
+        <Notice tone="warning" title="Please check this record" className="mb-4">
+          {record.estimatedDates.length > 0
+            ? 'A date was worked out from the year that was entered earlier. Open the record and enter the exact date.'
+            : null}
+          {record.needsInput.length > 0 ? ' A value could not be carried over and needs entering again.' : null}
         </Notice>
       ) : null}
 
@@ -166,11 +177,44 @@ export default async function RecordPage({ params }: PageProps) {
             recordId={record.id}
             initialValues={editable ? (record.editValues ?? {}) : record.data}
             lookup={schema.data.lookup}
+            showRanking={schema.data.derived.length > 0}
             initialLocked={record.lockedFields}
             initialProvenance={record.verification?.fields}
             locked={lockedStrip(m, user, record.periodLabel, record.ownerName, record)}
             readOnly={!editable}
+            approved={record.status === 'approved'}
+            estimatedDates={record.estimatedDates}
+            needsInput={record.needsInput}
           />
+          {record.edits.length > 0 && record.status !== 'draft' ? (
+            <details id="edit-history" open={!record.isMine} className="mt-4 rounded-sm border border-line bg-surface">
+              <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">
+                Edit history ({record.edits.length})
+              </summary>
+              <ul className="divide-y divide-line border-t border-line text-sm">
+                {record.edits.map((e, i) => (
+                  <li key={`${e.at}-${i}`} className="px-4 py-3">
+                    <p className="text-ink-muted">
+                      {formatDateTime(e.at)} · <strong className="text-ink">{e.actorName}</strong>
+                      {e.note ? ` · ${e.note}` : ''}
+                    </p>
+                    <ul className="mt-1 list-disc pl-5">
+                      {e.changes.map((c) => (
+                        <li key={c.key}><strong>{c.label}:</strong> {c.from || '(empty)'} → {c.to || '(empty)'}</li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
+
+          {rail.length > 0 ? (
+            <Card id="return" className="mt-4 scroll-mt-4">
+              <h2 className="mb-2 text-base font-semibold">Return to owner</h2>
+              <ActionRail moduleKey={m.key} recordId={record.id} actions={rail} />
+            </Card>
+          ) : null}
         </div>
 
         <aside className="space-y-4">
@@ -206,17 +250,26 @@ export default async function RecordPage({ params }: PageProps) {
             <div className="space-y-3 p-3">
               <StatePill status={record.status} />
               {rail.length > 0 ? (
-                <ActionRail moduleKey={m.key} recordId={record.id} actions={rail} verifyIsFinal={m.lookup?.autoApprove === 'always'} />
+                <a href="#return" className="inline-block text-sm font-semibold text-primary underline">
+                  Return this record (at the bottom of the page)
+                </a>
               ) : ownOpen ? (
                 <p className="text-xs text-ink-muted">
                   Correct the fields and press “Save and submit” below the form.
                 </p>
-              ) : (
+              ) : record.isMine ? (
                 <p className="text-xs text-ink-muted">
-                  No workflow action is available to you on this record right now.
+                  You can change this record at any time; every change is kept in its edit history.
                 </p>
-              )}
-              {ownOpen ? <DeleteRecord moduleKey={m.key} recordId={record.id} /> : null}
+              ) : null}
+              {record.canDelete ? (
+                <DeleteRecord
+                  moduleKey={m.key}
+                  recordId={record.id}
+                  needsReason={record.deleteNeedsReason}
+                  byIqac={!record.isMine}
+                />
+              ) : null}
             </div>
           </Card>
 
@@ -248,7 +301,7 @@ export default async function RecordPage({ params }: PageProps) {
                           {formatDateTime(h.at)}
                         </span>
                         {h.remark ? (
-                          <span className="mt-1 block text-xs text-ink-muted">“{h.remark}”</span>
+                          <Remark text={h.remark} className="mt-1 text-xs text-ink-muted" />
                         ) : null}
                       </Td>
                       <Td className="text-2xs text-ink-muted">

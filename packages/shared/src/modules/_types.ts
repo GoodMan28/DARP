@@ -13,6 +13,7 @@ export type RecordStatus =
 export type FieldType =
   | 'text' | 'textarea' | 'select' | 'multiselect' | 'checkbox'
   | 'integer' | 'money'                 // money = whole rupees, stored as string of digits
+  | 'decimal'                         // a number with at most one decimal place, e.g. 1.5 years
   | 'date' | 'year'
   | 'email' | 'phone' | 'url'
   | 'doi' | 'issn' | 'isbn' | 'pan' | 'aadhaar'
@@ -25,7 +26,7 @@ export type PiiLevel = 'none' | 'masked' | 'encrypted';
 /** Facts an external register can supply. Field configs name the one they take. */
 export type MetaKey =
   | 'doi' | 'title' | 'authors' | 'containerTitle' | 'issn' | 'year' | 'onlineYear' | 'volume' | 'issue' | 'pages'
-  | 'publisher' | 'workType' | 'quartile' | 'quartileSource' | 'indexing' | 'citation'
+  | 'publisher' | 'workType' | 'citation'
   | 'bookType' | 'bookTitle' | 'chapterTitle' | 'isbn' | 'eventName'
   // Patents (the Patent Office Journal)
   | 'inventors' | 'applicant' | 'country' | 'filedDate' | 'patentStatus' | 'statusDate';
@@ -87,7 +88,7 @@ export interface FieldConfig {
   /** Never include in list views, search indexes, logs or error messages. */
   sensitive?: boolean;
   accept?: string[];              // file: allowed extensions, e.g. ['pdf','jpg','png']
-  maxSizeMB?: number;             // file: default 5
+  maxSizeMB?: number;             // file: default 2
   /** Column header text in each original workbook sheet, used by the exporter. */
   exportAs?: Partial<Record<WorkbookKey, string>>;
   /**
@@ -100,17 +101,38 @@ export interface FieldConfig {
     locked: boolean;
     /**
      * Never typed by hand, even when nothing was fetched — for a field that states where a value
-     * came from (e.g. "SJR 2023 · Scopus list"), where a typed value would be a false claim.
+     * came from, where a typed value would be a false claim.
      */
     alwaysLocked?: boolean;
     /**
-     * For an `alwaysLocked` field that says where another field's value came from (quartileSource
-     * describes quartile): when the owner changes or types that field, this one says so instead.
+     * For an `alwaysLocked` field that says where another field's value came from: when the owner
+     * changes or types that field, this one says so instead.
      */
     describes?: string;
   };
+  /** A date or year that cannot be later than today (something that has already happened). */
+  notFuture?: boolean;
+  /** This date or year decides the record's reporting period (when a module has several dates). */
+  periodSource?: boolean;
+  /** Exports write the record's reporting year here instead of the date itself (the templates ask for a year). */
+  exportYear?: boolean;
+  /** Shown after a number input, e.g. 'years'. */
+  unit?: string;
   /** Server-side normalisation that needs other fields of the record. */
   normalise?: 'patentNumber';
+}
+
+/**
+ * A journal's standing, from its ISSN: every index it is in, the SJR quartile, the Web of Science
+ * Impact Factor and JIF quartile, and 'ranking' (a short summary for a table column).
+ */
+export type DerivedKey = 'indexes' | 'sjrQuartile' | 'jif' | 'jifQuartile' | 'ranking' | 'projectPeriod' | 'validUntil';
+
+export interface DerivedColumn {
+  key: DerivedKey;
+  label: string;
+  /** Column header text in each workbook sheet, as for a field. */
+  exportAs?: Partial<Record<WorkbookKey, string>>;
 }
 
 export interface ModuleConfig {
@@ -149,7 +171,13 @@ export interface ModuleConfig {
   lookup?: LookupConfig;
 
   fields: FieldConfig[];
-  listColumns: string[];          // field keys shown in the table
+  /**
+   * Values worked out whenever they are read, never stored on the record: the journal's indexing,
+   * quartile and Impact Factor, from its ISSN and the latest lists loaded (server/journals/ranking.ts).
+   * They may be named in `listColumns` and exported like fields.
+   */
+  derived?: DerivedColumn[];
+  listColumns: string[];          // field keys (or derived keys) shown in the table
   defaultSort?: { key: string; dir: 'asc' | 'desc' };
 
   /** Which original workbook sheets this module exports into. */

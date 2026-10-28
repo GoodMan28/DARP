@@ -9,7 +9,7 @@ import { MODULES } from '@darp/shared/modules';
 // validator falls back to "no list configured" and accepts anything.
 vi.mock('@/server/records/masterLists', () => ({
   getAllLists: async () => ({
-    indexingTypes: ['SCIE', 'Scopus', 'ESCI', 'SSCI', 'AHCI'],
+    awardLevels: ['International', 'National', 'State'],
     projectRoles: ['PI', 'Co-PI'],
     agencyCategories: ['Government', 'Non-Government'],
   }),
@@ -25,7 +25,6 @@ const paper = {
   title: 'A paper',
   authors: 'A, B',
   journal: 'FGCS',
-  indexing: 'SCIE',
   year: '2024',
   issn: '0167-739X',
   bibliographic: 'A, B. "A paper." FGCS (2024).',
@@ -50,8 +49,13 @@ describe('field validation', () => {
   });
 
   it('rejects a value that is not in the master list', async () => {
-    const r = await validateRecord(pubs, { ...paper, indexing: 'MADE-UP' }, 'submit');
-    expect(r.errors.indexing).toBeTruthy();
+    const r = await validateRecord(MODULES.awards!, { awardDate: '2024-05-01', awardName: 'X', level: 'MADE-UP', agency: 'Y' }, 'draft');
+    expect(r.errors.level).toBeTruthy();
+  });
+
+  it('refuses a ranking typed into a paper: it is worked out, never stored', async () => {
+    const r = await validateRecord(pubs, { ...paper, quartile: 'Q1' }, 'draft');
+    expect(r.errors.quartile).toBe('Unknown field.');
   });
 
   it('rejects unknown fields (JSONB injection guard)', async () => {
@@ -177,7 +181,8 @@ describe('the 24 module configs are internally consistent', () => {
   it('points every listColumn, naturalKey, defaultSort and showIf at a real field', () => {
     for (const m of all) {
       const keys = new Set(m.fields.map((f) => f.key));
-      for (const c of m.listColumns) expect(keys.has(c), `${m.key}.listColumns → ${c}`).toBe(true);
+      const shown = new Set([...keys, ...(m.derived ?? []).map((d) => d.key)]);
+      for (const c of m.listColumns) expect(shown.has(c), `${m.key}.listColumns → ${c}`).toBe(true);
       for (const c of m.naturalKey ?? []) expect(keys.has(c), `${m.key}.naturalKey → ${c}`).toBe(true);
       if (m.defaultSort) expect(keys.has(m.defaultSort.key), `${m.key}.defaultSort`).toBe(true);
       for (const f of m.fields) {

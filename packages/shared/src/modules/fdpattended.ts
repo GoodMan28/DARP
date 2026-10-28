@@ -10,7 +10,7 @@ export const fdpattended: ModuleConfig = {
   bodies: ['NAAC'],
   description:
     'Faculty and management development programmes you attended — online or face to face, including orientation, refresher and short-term courses.',
-  ownerRoles: ['faculty'],
+  ownerRoles: ['faculty', 'hod'],
   verifierRoles: ['dofa'],
   viewRoles: ['hod', 'dofa', 'admin'],
   scope: 'self',
@@ -40,7 +40,7 @@ export const fdpattended: ModuleConfig = {
       exportAs: { faculty: 'Duration (in No. of days)', dofa: 'Duration (in No. of days)' } },
 
     { key: 'evidence', label: 'Attach e-copy of Certificate', type: 'file',
-      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence',
+      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Evidence',
       exportAs: { faculty: 'Attach e-copy of Certificate', dofa: 'Attach e-copy of Certificate' } },
   ],
   listColumns: ['organisingInstitution', 'programType', 'startDate', 'durationDays'],

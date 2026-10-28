@@ -9,7 +9,7 @@ export const profile: ModuleConfig = {
   bodies: ['NAAC', 'NIRF'],
   description:
     'Your identity, qualifications and appointment details. Every count on your profile is computed from your records — nothing here is hand-counted.',
-  ownerRoles: ['faculty'],
+  ownerRoles: ['faculty', 'hod'],
   verifierRoles: ['dofa'],
   viewRoles: ['hod', 'dofa', 'admin'],
   scope: 'self',

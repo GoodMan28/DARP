@@ -9,7 +9,7 @@ export const seedmoney: ModuleConfig = {
   naacRef: '3.1',
   bodies: ['NAAC'],
   description: 'Seed money granted to you by the institute, 2022 onwards.',
-  ownerRoles: ['faculty'],
+  ownerRoles: ['faculty', 'hod'],
   verifierRoles: ['drie'],
   viewRoles: ['hod', 'drie', 'admin'],
   scope: 'self',
@@ -27,7 +27,7 @@ export const seedmoney: ModuleConfig = {
       } },
 
     { key: 'evidence', label: 'Attach sanction letter', type: 'file',
-      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence',
+      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Evidence',
       exportAs: { faculty: 'Attach sanction letter', drie: 'Attach sanction letter' } },
   ],
   listColumns: ['grantDate', 'amount'],

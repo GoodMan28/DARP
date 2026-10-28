@@ -153,6 +153,11 @@ export const records = pgTable('records', {
   approvedAt: timestamp('approved_at', { withTimezone: true }),
   approvedBy: uuid('approved_by').references(() => users.id, { onDelete: 'set null' }),
   returnedRemark: text('returned_remark'),
+  /**
+   * Set when a record that a reviewer returned is corrected and resubmitted: that reviewer's id, so
+   * the correction shows in their "Corrected after return" list until they acknowledge it.
+   */
+  correctionForUserId: uuid('correction_for_user_id').references(() => users.id, { onDelete: 'set null' }),
 
   createdBy: uuid('created_by').notNull().references(() => users.id, { onDelete: 'restrict' }),
   updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
@@ -160,6 +165,10 @@ export const records = pgTable('records', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   deletedBy: uuid('deleted_by').references(() => users.id, { onDelete: 'set null' }),
+  /** Why the record was deleted (required for an approved record, or when IQAC removes another's). */
+  deleteReason: text('delete_reason'),
+  /** Marks on fields after the October 2026 conversion: dates estimated from a year, values still to be entered. */
+  dataNotes: jsonb('data_notes').$type<{ estimated?: string[]; needsInput?: string[] }>().notNull().default({}),
 }, (t) => [
   index('records_module_cycle_idx').on(t.moduleKey, t.cycleId, t.status),
   index('records_owner_idx').on(t.ownerUserId, t.moduleKey),
@@ -196,6 +205,19 @@ export const recordTransitions = pgTable('record_transitions', {
   remark: text('remark'),
   at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index('record_transitions_record_idx').on(t.recordId, t.at)]);
+
+/**
+ * Every change to a record after it was first submitted: who, when and old → new for each field.
+ * userId is null for a change the system made (a patent moving on to Granted).
+ */
+export const recordEdits = pgTable('record_edits', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  recordId: uuid('record_id').notNull().references(() => records.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+  note: text('note'),
+  changes: jsonb('changes').notNull().$type<Array<{ key: string; label: string; from: string; to: string }>>(),
+}, (t) => [index('record_edits_record_idx').on(t.recordId, t.at)]);
 
 /* ───────────────────────── evidence files ──────────────────────── */
 
@@ -319,6 +341,22 @@ export const journalIndexListings = pgTable('journal_index_listings', {
   source: text('source').notNull().default('upload'),
   importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex('journal_index_issn_list_year_uq').on(t.issn, t.listName, t.year)]);
+
+/**
+ * Web of Science Impact Factors, from a Journal Citation Reports export IQAC uploads (the library
+ * makes it with BIT's subscription). One row per ISSN per JIF year; the best quartile across the
+ * journal's categories.
+ */
+export const journalJcr = pgTable('journal_jcr', {
+  issn: text('issn').notNull(),              // 8 characters, no hyphen, upper-case X
+  jifYear: integer('jif_year').notNull(),    // the year in the "2024 JIF" column
+  title: text('title').notNull().default(''),
+  jif: text('jif'),                          // as JCR prints it ("5.2", "<0.1"); null = N/A
+  jifQuartile: text('jif_quartile'),         // Q1..Q4, or null
+  categories: text('categories').notNull().default(''),
+  editions: text('editions').notNull().default(''),
+  importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.issn, t.jifYear] })]);
 
 /**
  * The years Scopus covered a journal, from Elsevier's list ('scopus-list': active titles, the last

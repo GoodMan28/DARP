@@ -1,5 +1,6 @@
 import type { PeriodType, RecordStatus } from '@darp/shared/modules/types';
 import type { CounterWindow, DeclaredCounterDef } from '@darp/shared/contracts';
+import type { JournalRanking } from '@darp/shared/journals';
 
 export type { CounterWindow, DeclaredCounterDef };
 
@@ -18,6 +19,8 @@ export interface CounterDef {
   sumField?: string;
   /** Only count records whose field is one of these values. */
   filter?: { field: string; in: string[] };
+  /** Only count papers whose journal ranking (worked out from the ISSN, never stored) passes this. */
+  ranking?: (r: JournalRanking) => boolean;
   /** How to show it: a plain number or rupees. */
   format: 'number' | 'money';
 }
@@ -36,8 +39,12 @@ function both(
   ];
 }
 
+const WOS_INDEXES = ['SCIE', 'SSCI', 'AHCI', 'ESCI'];
+const TOP_HALF = ['Q1', 'Q2'];
+
 /**
- * The 51 computed counters: the sheet's 49, plus papers in conference proceedings. These keys are
+ * The 57 computed counters: the sheet's 49, papers in conference proceedings, and papers by their
+ * journal's indexing and quartile. These keys are
  * exactly the `feedsCounters` values declared across the 24 module configs — tests/unit/rollups.test.ts fails if the two ever drift.
  */
 export const COUNTERS: CounterDef[] = [
@@ -45,6 +52,21 @@ export const COUNTERS: CounterDef[] = [
   ...both({
     keyBase: 'publications.count', moduleKey: 'publications', metric: 'count', format: 'number',
     label: 'Publications {CY}', labelSince: 'Publications since joining BIT',
+  }),
+  ...both({
+    keyBase: 'publications.count.scopus', moduleKey: 'publications', metric: 'count', format: 'number',
+    ranking: (r) => r.indexes.includes('Scopus'),
+    label: 'Publications in Scopus-indexed journals {CY}', labelSince: 'Publications in Scopus-indexed journals since joining BIT',
+  }),
+  ...both({
+    keyBase: 'publications.count.wos', moduleKey: 'publications', metric: 'count', format: 'number',
+    ranking: (r) => r.indexes.some((i) => WOS_INDEXES.includes(i)),
+    label: 'Publications in Web of Science journals {CY}', labelSince: 'Publications in Web of Science journals since joining BIT',
+  }),
+  ...both({
+    keyBase: 'publications.count.q1q2', moduleKey: 'publications', metric: 'count', format: 'number',
+    ranking: (r) => TOP_HALF.includes(r.sjrQuartile ?? '') || TOP_HALF.includes(r.jifQuartile ?? ''),
+    label: 'Publications in Q1 or Q2 journals (SJR or JIF) {CY}', labelSince: 'Publications in Q1 or Q2 journals since joining BIT',
   }),
 
   /* ── Patents ──────────────────────────────────────────────── */
@@ -232,6 +254,8 @@ export interface CountableRecord {
   periodYear: number;
   status: RecordStatus;
   data: Record<string, unknown>;
+  /** A paper's journal ranking, for the counters that need one. */
+  ranking?: JournalRanking;
 }
 
 /** A draft is not a claim: only these statuses are ever counted on a profile tile. */
@@ -299,6 +323,7 @@ export function computeCounters(
     for (const r of counted) {
       if (r.moduleKey !== def.moduleKey) continue;
       if (!matchesFilter(def, r.data)) continue;
+      if (def.ranking && !(r.ranking && def.ranking(r.ranking))) continue;
       if (def.window === 'cycle') {
         const [from, to] = bounds[periodTypeOf(def.moduleKey)];
         if (r.periodYear < from || r.periodYear > to) continue;

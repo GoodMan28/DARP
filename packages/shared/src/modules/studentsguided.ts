@@ -10,7 +10,7 @@ export const studentsguided: ModuleConfig = {
   bodies: ['NAAC', 'NIRF'],
   description:
     'Every UG, PG and PhD student for whom you are the Guide, with what they did after passing.',
-  ownerRoles: ['faculty'],
+  ownerRoles: ['faculty', 'hod'],
   verifierRoles: ['dofa'],
   viewRoles: ['hod', 'dofa', 'admin'],
   scope: 'self',
@@ -72,7 +72,7 @@ export const studentsguided: ModuleConfig = {
       } },
 
     { key: 'examScorecard', label: 'Scorecard', type: 'file', accept: ['pdf', 'jpg', 'jpeg', 'png'],
-      maxSizeMB: 5, colSpan: 2, section: 'Competitive exams',
+      maxSizeMB: 2, colSpan: 2, section: 'Competitive exams',
       showIf: { field: 'statusAfterPassing', in: ['Competitive exams'] } },
 
     { key: 'employerName', label: 'Name of Employer', type: 'text', required: true, maxLength: 200,
@@ -89,7 +89,7 @@ export const studentsguided: ModuleConfig = {
       } },
 
     { key: 'offerLetter', label: 'Offer letter', type: 'file', accept: ['pdf', 'jpg', 'jpeg', 'png'],
-      maxSizeMB: 5, colSpan: 2, section: 'Employment',
+      maxSizeMB: 2, colSpan: 2, section: 'Employment',
       showIf: { field: 'statusAfterPassing', in: ['Employed'] } },
 
     { key: 'institutionEnrolled', label: 'Name of institution enrolled in', type: 'text',
@@ -108,7 +108,7 @@ export const studentsguided: ModuleConfig = {
       } },
 
     { key: 'admissionLetter', label: 'Admission letter / ID card', type: 'file',
-      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Higher studies',
+      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Higher studies',
       showIf: { field: 'statusAfterPassing', in: ['Higher Studies'] } },
   ],
   listColumns: ['studentName', 'rollNo', 'level', 'yearOfPassing', 'statusAfterPassing'],

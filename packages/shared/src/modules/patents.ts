@@ -10,7 +10,7 @@ export const patents: ModuleConfig = {
   bodies: ['NAAC', 'NIRF'],
   description:
     'All patents you own, published or granted. Type the application number (or the patent number) and press Fetch details — an Indian patent\'s details are filled in from the Patent Office Journal. Each patent is entered once.',
-  ownerRoles: ['faculty'],
+  ownerRoles: ['faculty', 'hod'],
   verifierRoles: ['drie'],
   viewRoles: ['hod', 'drie', 'admin'],
   scope: 'self',
@@ -77,7 +77,7 @@ export const patents: ModuleConfig = {
       exportAs: { drie: 'Category of Patent (Engineering/Pharmacy/Management/Others)' } },
 
     { key: 'evidence', label: 'Attach documents (published/grant certificate)', type: 'file',
-      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence', required: true,
+      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Evidence', required: true,
       help: 'Required for every patent: the journal page or the grant certificate. DRIE and IQAC check it against the details above — especially anything you changed or typed yourself.',
       exportAs: {
         faculty: 'Attach documents (published/grant certificate)',

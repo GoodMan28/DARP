@@ -9,7 +9,7 @@ export const consultancy: ModuleConfig = {
   naacRef: '3.5',
   bodies: ['NAAC', 'NIRF'],
   description: 'Revenue generated from consultancy projects and from corporate training programmes.',
-  ownerRoles: ['faculty'],
+  ownerRoles: ['faculty', 'hod'],
   verifierRoles: ['drie'],
   viewRoles: ['hod', 'drie', 'admin'],
   scope: 'self',
@@ -52,7 +52,7 @@ export const consultancy: ModuleConfig = {
       exportAs: { faculty: 'Number of trainees', drie: 'Number of trainees' } },
 
     { key: 'evidence', label: 'Attach document', type: 'file',
-      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence',
+      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Evidence',
       help: 'Consultancy: letter from the beneficiary with the consultancy fee. Training: letter from the corporate with the fee paid.',
       exportAs: {
         faculty: 'Attach document (Letter from beneficiary of consultancy with details of consultancy fee)',

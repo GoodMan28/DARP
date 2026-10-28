@@ -124,6 +124,14 @@ export interface DashboardPayload {
   queue: VerificationQueueRow[];
   /** Completion by department. Empty for faculty. */
   departments: DepartmentCompletionRow[];
+  /** Records this person returned that have been corrected and are waiting for a second look. */
+  corrections: CorrectionRow[];
+}
+
+export interface CorrectionRow {
+  id: string; moduleKey: string; moduleName: string; title: string; ownerName: string; correctedAt: string;
+  /** Labels of the fields changed since the return; empty when resubmitted without changes. */
+  changed: string[];
 }
 
 /* ──────────────────────────────── profile ─────────────────────────────── */
@@ -184,6 +192,10 @@ export interface FormFieldDef {
   maxLength: number | null;
   accept: string[] | null;
   maxSizeMB: number | null;
+  /** A date or year that cannot be later than today. */
+  notFuture: boolean;
+  /** Shown after a number input, e.g. 'years'. */
+  unit: string | null;
   protected: boolean;
   /**
    * Filled from an external register. `locked` fields are shown locked after a lookup, with a
@@ -215,6 +227,8 @@ export interface ModuleSchemaPayload {
   /** Present when the module fetches its facts from a register (DOI / ISBN / patent number). */
   lookup: { kind: LookupKind; idFields: string[]; idLabel: string; sourceName: string } | null;
   fields: FormFieldDef[];
+  /** Values worked out when read, never typed (the journal's indexing, quartile, Impact Factor). */
+  derived: Array<{ key: string; label: string }>;
 }
 
 export interface RecordListRow {
@@ -229,6 +243,13 @@ export interface RecordListRow {
   data: Record<string, unknown>;
   /** Approved automatically, but with details that could not be confirmed: worth a look. */
   needsCheck: boolean;
+  /** The module's derived values as text, by key ("Q1 SJR · IF 5.2", "NA"); {} for a module with none. */
+  derived: Record<string, string>;
+  /** A returned record: who sent it back and when (so a viewer who is not the owner sees why it waits). */
+  returnedByRole: Role | null;
+  returnedAt: string | null;
+  /** A profile roster row for someone who has not saved a profile yet: `id` is then the person's user id. */
+  noRecord?: boolean;
 }
 
 /** GET /api/modules/:moduleKey/records */
@@ -270,6 +291,26 @@ export interface RecordDetail {
   verification: RecordVerification | null;
   /** Fields the edit form must show as locked. */
   lockedFields: string[];
+  /** The module's derived values as text, by key; {} for a module with none. */
+  derived: Record<string, string>;
+  /** Changes made after the first submission, newest first (everyone who can open the record). */
+  edits: RecordEditEntry[];
+  /** The server's answer: may this viewer delete the record, and must they say why? */
+  canDelete: boolean;
+  deleteNeedsReason: boolean;
+  /** A returned record: who sent it back and when. */
+  returnedByRole: Role | null;
+  returnedAt: string | null;
+  /** Fields whose date was estimated from a year, or that still need entering (after the October 2026 change). */
+  estimatedDates: string[];
+  needsInput: string[];
+}
+
+export interface RecordEditEntry {
+  at: string;
+  actorName: string;
+  note: string | null;
+  changes: Array<{ key: string; label: string; from: string; to: string }>;
 }
 
 /* ── automatic lookup (DOI / ISBN / patent number) ─────────────────── */

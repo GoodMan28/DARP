@@ -6,7 +6,7 @@ import { isEncrypted } from '@/server/crypto/pii';
 export type AuditAction =
   | 'auth.login.success' | 'auth.login.fail' | 'auth.logout' | 'auth.locked'
   | 'auth.password.change' | 'auth.password.reset.request' | 'auth.password.reset.complete'
-  | 'record.create' | 'record.update' | 'record.delete' | 'record.transition'
+  | 'record.create' | 'record.update' | 'record.delete' | 'record.restore' | 'record.transition'
   | 'evidence.upload' | 'evidence.download' | 'evidence.delete'
   | 'pii.reveal' | 'export.generate'
   | 'user.create' | 'user.update' | 'user.deactivate' | 'user.seed'

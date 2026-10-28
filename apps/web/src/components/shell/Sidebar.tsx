@@ -68,7 +68,7 @@ export function Sidebar({
       >
         <div className="flex items-center gap-2 border-b border-line px-3 py-2.5">
           <span className="min-w-0">
-            <span className="block truncate text-2xs font-bold uppercase tracking-wider text-ink-faint">
+            <span className="block truncate text-xs font-semibold text-ink-muted">
               Signed in as
             </span>
             <span className="block truncate text-sm font-semibold leading-tight text-ink">{roleLabel}</span>
@@ -116,7 +116,7 @@ export function Sidebar({
 
           {shown.map((group) => (
             <div key={group.name} className="mb-2">
-              <h2 className="px-2.5 pb-1 pt-2 text-2xs font-bold uppercase tracking-wider text-ink-faint">
+              <h2 className="px-2.5 pb-1 pt-2 text-xs font-semibold text-ink-muted">
                 {group.name}
               </h2>
               <ul className="space-y-px">

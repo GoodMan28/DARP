@@ -10,7 +10,8 @@
     "./format": "./src/format.ts",
     "./roles": "./src/roles.ts",
     "./contracts": "./src/contracts.ts",
-    "./journals": "./src/journals.ts"
+    "./journals": "./src/journals.ts",
+    "./projectPeriod": "./src/projectPeriod.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

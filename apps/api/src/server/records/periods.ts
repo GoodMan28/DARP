@@ -11,12 +11,14 @@ export interface CycleWindows {
  * Which field supplies the record's reporting period, resolved by convention so that
  * no module config has to declare it:
  *   1. none for a module that is not periodic (the Faculty Profile)
- *   2. a field whose type is 'year'
+ *   2. a field marked `periodSource`, else a field whose type is 'year'
  *   3. otherwise the first field whose type is 'date'
  *   4. otherwise null — the record is stamped with the cycle's final year
  */
 export function periodSourceField(m: ModuleConfig): { key: string; kind: 'year' | 'date' } | null {
   if (m.periodic === false) return null;
+  const flagged = m.fields.find((f) => f.periodSource && (f.type === 'year' || f.type === 'date'));
+  if (flagged) return { key: flagged.key, kind: flagged.type as 'year' | 'date' };
   const year = m.fields.find((f) => f.type === 'year');
   if (year) return { key: year.key, kind: 'year' };
   const date = m.fields.find((f) => f.type === 'date');

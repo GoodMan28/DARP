@@ -66,12 +66,15 @@ export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async 
         maxLength: f.maxLength ?? null,
         accept: f.accept ?? null,
         maxSizeMB: f.maxSizeMB ?? null,
+        notFuture: !!f.notFuture,
+        unit: f.unit ?? null,
         // The browser is told a field is protected, but never why or how.
         protected: f.pii === 'encrypted' || !!f.sensitive,
         autofill: f.autofill
           ? { locked: f.autofill.locked, alwaysLocked: !!f.autofill.alwaysLocked, generated: f.autofill.from === 'citation' }
           : null,
       })),
+      derived: (m.derived ?? []).map((d) => ({ key: d.key, label: d.label })),
     });
   } catch (e) {
     return toResponse(e);

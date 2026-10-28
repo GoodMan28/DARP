@@ -24,7 +24,7 @@ export default async function ProfilePage() {
   // The Faculty Profile is a record like any other: one per user per cycle. Office roles
   // that cannot open the profile module simply have none, so a refusal here is not an error.
   const profileList = cycle.id && profileModule
-    ? await apiGet<RecordListPayload>('/api/modules/profile/records?pageSize=1')
+    ? await apiGet<RecordListPayload>('/api/modules/profile/records?pageSize=1&mine=1')
     : null;
   if (profileList && !profileList.ok && profileList.error.code !== 'FORBIDDEN') {
     throw new Error(`GET profile records failed: ${profileList.error.code}`);
@@ -72,7 +72,7 @@ export default async function ProfilePage() {
               .filter((f) => f.type !== 'file')
               .map((f) => (
                 <div key={f.key} className="min-w-0">
-                  <div className="text-2xs font-semibold uppercase tracking-wider text-ink-faint">
+                  <div className="text-2xs font-semibold text-ink-muted">
                     {f.label}
                   </div>
                   <div className="truncate text-sm text-ink">
@@ -103,7 +103,7 @@ export default async function ProfilePage() {
             {[...byModule.entries()].map(([moduleName, list]) => (
               <div key={moduleName} className="p-4">
                 <div className="mb-2.5 flex items-center gap-2">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-ink-muted">
+                  <h3 className="text-xs font-bold  text-ink-muted">
                     {moduleName}
                   </h3>
                   <Link

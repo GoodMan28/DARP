@@ -36,6 +36,34 @@
       "when": 1791795207157,
       "tag": "0004_breezy_talos",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793209211661,
+      "tag": "0005_productive_cammi",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793211010566,
+      "tag": "0006_cynical_shard",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793226203439,
+      "tag": "0007_worried_khan",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793226229942,
+      "tag": "0008_spooky_pyro",
+      "breakpoints": true
     }
   ]
 }

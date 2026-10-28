@@ -6,6 +6,7 @@ import { cycles } from '@/server/db/schema';
 import { modulesOwnedBy } from '@darp/shared/modules';
 import type { DashboardPayload } from '@darp/shared/contracts';
 import { moduleStatusForUser, departmentCompletion, verificationQueue } from '@/server/rollups/completion';
+import { correctionsFor } from '@/server/records/service';
 
 export const GET = withRoute({ rate: { limit: 60, windowSeconds: 60 } }, async ({ actor }) => {
   try {
@@ -22,6 +23,7 @@ export const GET = withRoute({ rate: { limit: 60, windowSeconds: 60 } }, async (
         summary: { total: 0, notStarted: 0, inProgress: 0, done: 0, pct: 0 },
         queue: [],
         departments: [],
+        corrections: [],
       });
     }
 
@@ -50,6 +52,7 @@ export const GET = withRoute({ rate: { limit: 60, windowSeconds: 60 } }, async (
       // Only roles that verify get a queue, and only roles that oversee others get the table.
       queue: await verificationQueue(actor),
       departments: actor.role !== 'faculty' ? await departmentCompletion(actor) : [],
+      corrections: await correctionsFor(actor),
     });
   } catch (e) {
     return toResponse(e);

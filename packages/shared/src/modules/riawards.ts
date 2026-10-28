@@ -10,11 +10,11 @@ export const riawards: ModuleConfig = {
   bodies: ['NAAC'],
   description:
     'Awards for research or innovation only. Awards recorded in Awards & Recognition or Awards for Extension Activities must not be repeated here.',
-  ownerRoles: ['faculty'],
+  ownerRoles: ['faculty', 'hod'],
   verifierRoles: ['drie'],
   viewRoles: ['hod', 'drie', 'admin'],
   scope: 'self',
-  naturalKey: ['awardName', 'awardYear', 'awardeeName'],
+  naturalKey: ['awardName', 'awardDate', 'awardeeName'],
   fields: [
     { key: 'awardeeName', label: 'Name of the awardee', type: 'text', required: true,
       maxLength: 240, section: 'Award',
@@ -44,8 +44,8 @@ export const riawards: ModuleConfig = {
         hod: 'Category of award (innovation/techology transfer etc)',
       } },
 
-    { key: 'awardYear', label: 'Year of award', type: 'year', required: true, min: 1990, max: 2100,
-      section: 'Award',
+    { key: 'awardDate', label: 'Date of award', type: 'date', required: true,
+      notFuture: true, periodSource: true, exportYear: true, section: 'Award', help: 'The date of the award letter.',
       exportAs: {
         faculty: 'Year of award (starting from latest calendar year) (data for 2024, 2023, 2022)',
         drie: 'Year of award (starting from latest calendar year)',
@@ -61,14 +61,14 @@ export const riawards: ModuleConfig = {
       } },
 
     { key: 'evidence', label: 'Attach documents (Award letters)', type: 'file',
-      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence',
+      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Evidence',
       exportAs: {
         faculty: 'Attach documents  (Award letters)', drie: 'Attach documents  (Award letters)',
         hod: 'Attach documents  (Award letters)',
       } },
   ],
-  listColumns: ['awardName', 'awardeeName', 'awardingBody', 'awardCategory', 'awardYear'],
-  defaultSort: { key: 'awardYear', dir: 'desc' },
+  listColumns: ['awardName', 'awardeeName', 'awardingBody', 'awardCategory', 'awardDate'],
+  defaultSort: { key: 'awardDate', dir: 'desc' },
   exportTargets: [
     { workbook: 'faculty', sheet: 'Rsrch.&Innov. Award' },
     { workbook: 'drie', sheet: 'Rsrch.&Innov. Award' },

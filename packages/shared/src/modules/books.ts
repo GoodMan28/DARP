@@ -10,7 +10,7 @@ export const books: ModuleConfig = {
   bodies: ['NAAC'],
   description:
     'Books, chapters in edited volumes, and papers in conference proceedings. Paste the DOI (or the ISBN) and press Fetch details — the details are filled in from the publisher\'s record. Each entry is entered once.',
-  ownerRoles: ['faculty'],
+  ownerRoles: ['faculty', 'hod'],
   verifierRoles: ['drie'],
   viewRoles: ['hod', 'drie', 'admin'],
   scope: 'self',
@@ -99,7 +99,7 @@ export const books: ModuleConfig = {
       } },
 
     { key: 'evidence', label: 'Attach documents', type: 'file',
-      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence', required: true,
+      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Evidence', required: true,
       help: 'Required for every entry: the first page of the book, chapter or paper as a PDF or image. DRIE and IQAC check it against the details above — especially anything you changed or typed yourself.',
       exportAs: {
         faculty: 'Attach documents (link that opens directly to book/book chapter or 1st page of book/book chapter in pdf)',

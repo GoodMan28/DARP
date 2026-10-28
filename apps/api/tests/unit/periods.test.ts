@@ -46,7 +46,7 @@ describe('period resolution', () => {
   it("files a record under its own year, inside the cycle's window or not", () => {
     expect(resolvePeriod(MODULES.publications!, { year: '2019' }, cycle).periodLabel).toBe('2019');
     expect(resolvePeriod(MODULES.books!, { year: '2025' }, cycle).periodLabel).toBe('2025');
-    expect(resolvePeriod(MODULES.awards!, { awardYear: '2019' }, cycle).periodLabel).toBe('2019');
+    expect(resolvePeriod(MODULES.awards!, { awardDate: '2019-06-01' }, cycle).periodLabel).toBe('2019');
     expect(resolvePeriod(MODULES.patents!, { filedDate: '2018-05-01' }, cycle).periodLabel).toBe('2018');
   });
 
@@ -62,5 +62,16 @@ describe('period resolution', () => {
       expect(opts.length, `${m.key} has no period options`).toBeGreaterThan(0);
       for (const o of opts) expect(isInsideCycle(m, o.year, cycle)).toBe(true);
     }
+  });
+
+  it('files a grant by the financial year of its sanction date', () => {
+    const grants = MODULES.grants!;
+    expect(resolvePeriod(grants, { sanctionDate: '2025-02-12' }, cycle).periodLabel).toBe('FY 2024-25');
+    expect(resolvePeriod(grants, { sanctionDate: '2025-04-01' }, cycle).periodLabel).toBe('FY 2025-26');
+  });
+
+  it('uses the support date, not the conference dates, for financial support', () => {
+    const m = MODULES.finsupport!;
+    expect(resolvePeriod(m, { supportDate: '2023-05-10', startDate: '2021-01-01' }, cycle).periodLabel).toBe('FY 2023-24');
   });
 });

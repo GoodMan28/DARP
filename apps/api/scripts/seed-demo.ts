@@ -232,6 +232,8 @@ function valueFor(f: FieldConfig, ctx: GenContext): unknown {
       const max = Math.min(f.max ?? 120, 300);
       return String(min + Math.floor(rng() * Math.max(max - min, 1)));
     }
+    case 'decimal':
+      return String(1 + Math.floor(rng() * 3));
     case 'checkbox':
       return rng() > 0.5;
     case 'multiselect':
@@ -495,33 +497,24 @@ async function main() {
     return actors.get(role) ?? null;
   };
 
-  const iqac = actors.get('iqac')!;
-  let verified = 0; let approved = 0; let returned = 0;
+  let returned = 0;
 
+  // Records are approved on submission, so the only step left to show is a return.
   for (const [i, rec] of made.entries()) {
     const verifier = verifierOf(rec.moduleKey);
-    if (!verifier) continue;
+    if (!verifier || i % 9 !== 4) continue;
     try {
-      if (i % 9 === 4) {
-        await transitionRecord(verifier, rec.moduleKey, rec.id, 'return',
-          'The evidence attached does not match the figures entered. Please correct and resubmit.');
-        returned += 1;
-        continue;
-      }
-      await transitionRecord(verifier, rec.moduleKey, rec.id, 'verify');
-      verified += 1;
-      if (i % 2 === 0) {
-        await transitionRecord(iqac, rec.moduleKey, rec.id, 'approve');
-        approved += 1;
-      }
+      await transitionRecord(verifier, rec.moduleKey, rec.id, 'return',
+        'The evidence attached does not match the figures entered. Please correct and resubmit.');
+      returned += 1;
     } catch {
-      // Drafts cannot be verified — intentional variety, not an error.
+      // A draft cannot be returned: intentional variety, not an error.
     }
   }
 
   console.error('');
   console.error(`demo data ready: ${PEOPLE.length} accounts, ${made.length} records`);
-  console.error(`  ${verified} verified · ${approved} approved · ${returned} returned`);
+  console.error(`  ${returned} returned`);
   if (failures.size > 0) {
     console.error('  modules that produced no records (config needs a closer look):');
     for (const [k, msg] of failures) console.error(`    ${k}: ${msg}`);

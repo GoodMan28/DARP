@@ -10,7 +10,7 @@ export const publications: ModuleConfig = {
   bodies: ['NAAC', 'NIRF', 'QS'],
   description:
     'Research papers published in journals. Paste the DOI and press Fetch details — the paper\'s details are filled in from the publisher\'s record. Each paper is entered once.',
-  ownerRoles: ['faculty'],
+  ownerRoles: ['faculty', 'hod'],
   verifierRoles: ['drie'],
   viewRoles: ['hod', 'drie', 'admin'],
   scope: 'self',
@@ -56,11 +56,6 @@ export const publications: ModuleConfig = {
       colSpan: 2, section: 'Journal', autofill: { from: 'containerTitle', locked: true },
       exportAs: { faculty: 'Name of journal', drie: 'Name of journal' } },
 
-    { key: 'indexing', label: 'Indexing', type: 'select', required: true, listKey: 'indexingTypes',
-      section: 'Journal', autofill: { from: 'indexing', locked: true },
-      help: 'Filled in from the Scopus list (and any Web of Science list IQAC loads). If it could not be found, choose it yourself and attach evidence.',
-      exportAs: { faculty: 'Indexing', drie: 'Indexing' } },
-
     { key: 'year', label: 'Year of publication', type: 'year', required: true, min: 1960, max: 2100,
       section: 'Journal', autofill: { from: 'year', locked: true },
       help: 'The year of the journal issue the paper appeared in. A paper published online earlier still counts in its issue year; one not yet in an issue counts in the year it appeared online.',
@@ -71,6 +66,7 @@ export const publications: ModuleConfig = {
 
     { key: 'issn', label: 'ISSN number of Journal', type: 'issn', section: 'Journal',
       placeholder: '0167-739X', autofill: { from: 'issn', locked: true },
+      help: 'The journal\'s indexing, quartile and Impact Factor are looked up from this number.',
       exportAs: { faculty: 'ISSN number of Journal', drie: 'ISSN number of Journal' } },
 
     { key: 'volume', label: 'Volume', type: 'text', maxLength: 40, section: 'Journal',
@@ -79,14 +75,6 @@ export const publications: ModuleConfig = {
       autofill: { from: 'issue', locked: true } },
     { key: 'pages', label: 'Pages / article number', type: 'text', maxLength: 40, section: 'Journal',
       autofill: { from: 'pages', locked: true } },
-    { key: 'quartile', label: 'Journal quartile (SJR)', type: 'select', section: 'Journal',
-      options: ['Q1', 'Q2', 'Q3', 'Q4', 'Not ranked'],
-      autofill: { from: 'quartile', locked: true },
-      help: 'Filled in from SCImago Journal Rank data. If it could not be found, choose it yourself and attach evidence.' },
-    { key: 'quartileSource', label: 'Quartile source', type: 'text', maxLength: 90, section: 'Journal',
-      autofill: { from: 'quartileSource', locked: true, alwaysLocked: true, describes: 'quartile' },
-      help: 'Where the quartile came from, e.g. "SJR 2025 · SCImago". Says so when you chose or changed it yourself.' },
-
     { key: 'bibliographic',
       label: 'Bibliographic information of publication (Chicago reference style)',
       type: 'textarea', required: true, maxLength: 1200, colSpan: 2, section: 'Citation',
@@ -98,15 +86,28 @@ export const publications: ModuleConfig = {
       } },
 
     { key: 'evidence', label: 'Evidence (first page of the paper, or the acceptance letter)', type: 'file',
-      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence',
+      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Evidence',
       required: true,
       help: 'Required for every paper. DRIE and IQAC check it against the details above — especially anything you changed or typed yourself.' },
   ],
-  listColumns: ['title', 'journal', 'quartile', 'year', 'doi'],
+  // Not stored with the paper: worked out from the ISSN, from the latest lists, whenever shown.
+  derived: [
+    { key: 'indexes', label: 'Indexing', exportAs: { faculty: 'Indexing', drie: 'Indexing' } },
+    { key: 'sjrQuartile', label: 'Quartile (SJR)', exportAs: { faculty: 'Quartile (SJR)', drie: 'Quartile (SJR)' } },
+    { key: 'jif', label: 'Impact Factor (WoS)', exportAs: { faculty: 'Impact Factor (WoS)', drie: 'Impact Factor (WoS)' } },
+    { key: 'jifQuartile', label: 'JIF quartile (WoS)', exportAs: { faculty: 'JIF quartile (WoS)', drie: 'JIF quartile (WoS)' } },
+    { key: 'ranking', label: 'Ranking' },
+  ],
+  listColumns: ['title', 'journal', 'ranking', 'year', 'doi'],
   defaultSort: { key: 'year', dir: 'desc' },
   exportTargets: [
     { workbook: 'faculty', sheet: 'Publications' },
     { workbook: 'drie', sheet: 'Publications' },
   ],
-  feedsCounters: ['publications.count.cycle', 'publications.count.sinceJoining'],
+  feedsCounters: [
+    'publications.count.cycle', 'publications.count.sinceJoining',
+    'publications.count.scopus.cycle', 'publications.count.scopus.sinceJoining',
+    'publications.count.wos.cycle', 'publications.count.wos.sinceJoining',
+    'publications.count.q1q2.cycle', 'publications.count.q1q2.sinceJoining',
+  ],
 };

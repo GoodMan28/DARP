@@ -14,9 +14,6 @@ import type { LookupResult } from './types';
  */
 const FLAG_REASON: Record<string, string> = {
   retracted: 'The publisher has retracted this work.',
-  'not-indexed': 'The journal was not found in the Scopus list or in any Web of Science list IQAC has loaded.',
-  'no-journal-lists': 'The journal lists (Scopus, SJR) were not available, so indexing and quartile could not be checked.',
-  'no-issn': 'The publisher has not registered an ISSN for this journal.',
   'not-a-book': 'This DOI is not a book or a book chapter.',
   'parent-book-not-found': 'The book this chapter belongs to could not be found, so its title came from the chapter record.',
   'inventors-from-applicants': 'The Patent Office Journal lists no inventors for this application; the individual applicants were taken as the inventors.',
@@ -28,19 +25,10 @@ export const sourceOf = (m: ModuleConfig) => m.lookup?.sourceName ?? "the publis
 /** Who the owner must be among: "author", "inventor". */
 export const personOf = (m: ModuleConfig) => m.lookup?.personWord ?? 'author';
 
-/** A flag as a sentence. Some flags carry a value after a colon, e.g. "scopus-dropped:2023". */
-export function reasonForFlag(flag: string, year: string): string | null {
+/** A flag as a sentence. A flag may carry a value after a colon, which is not part of its name. */
+export function reasonForFlag(flag: string): string | null {
   const at = flag.indexOf(':');
-  const name = at < 0 ? flag : flag.slice(0, at);
-  const arg = at < 0 ? '' : flag.slice(at + 1);
-  const paper = year ? `a ${year} paper` : 'this paper';
-  if (name === 'scopus-dropped') {
-    return `Scopus covered this journal only until ${arg}, so ${paper} is not Scopus-indexed.`;
-  }
-  if (name === 'scopus-not-that-year') {
-    return `Scopus covers this journal for ${arg}, so ${paper} is not Scopus-indexed.`;
-  }
-  return FLAG_REASON[name] ?? null;
+  return FLAG_REASON[at < 0 ? flag : flag.slice(0, at)] ?? null;
 }
 
 export interface Applied {
@@ -163,7 +151,7 @@ export async function applyLookup(
   const typeNote = misplaced ? null : workTypeNote(m, r);
   if (typeNote) reasons.push(typeNote);
   for (const flag of r.flags) {
-    const reason = reasonForFlag(flag, r.values.year ?? '');
+    const reason = reasonForFlag(flag);
     if (reason) reasons.push(reason);
   }
   // Matched against the PUBLISHED author list, never the edited one (decision D3).

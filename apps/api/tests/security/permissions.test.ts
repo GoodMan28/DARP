@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  canReadRecord, canEditRecord, canDeleteRecord, canTransition, canCreateIn,
+  canReadRecord, canEditRecord, canDeleteRecord, deleteNeedsReason, canTransition, canCreateIn,
   canVerify, canViewModule, hasCapability,
 } from '@/server/auth/permissions';
 import type { SessionUser } from '@/server/auth/session';
@@ -41,12 +41,26 @@ describe('record visibility', () => {
 });
 
 describe('editing rules', () => {
-  it('blocks editing once submitted, and frees it again on return', () => {
-    expect(canEditRecord(user({}), mod, rec({ status: 'submitted' }))).toBe(false);
-    expect(canEditRecord(user({}), mod, rec({ status: 'verified' }))).toBe(false);
-    expect(canEditRecord(user({}), mod, rec({ status: 'approved' }))).toBe(false);
-    expect(canEditRecord(user({}), mod, rec({ status: 'returned' }))).toBe(true);
-    expect(canEditRecord(user({}), mod, rec({ status: 'draft' }))).toBe(true);
+  it('lets the owner edit at any stage, including after approval', () => {
+    for (const status of ['draft', 'submitted', 'verified', 'approved', 'returned'] as const) {
+      expect(canEditRecord(user({}), mod, rec({ status })), status).toBe(true);
+    }
+  });
+
+  it('lets the owner delete a record at any stage, asking for a reason once it is approved', () => {
+    for (const status of ['draft', 'returned', 'approved'] as const) {
+      expect(canDeleteRecord(user({}), mod, rec({ status })), status).toBe(true);
+    }
+    expect(deleteNeedsReason(user({}), rec({ status: 'draft' }))).toBe(false);
+    expect(deleteNeedsReason(user({}), rec({ status: 'approved' }))).toBe(true);
+  });
+
+  it('lets IQAC delete anyone’s record, always with a reason, and nobody else', () => {
+    const admin = user({ id: 'a', role: 'admin', departmentId: null });
+    expect(canDeleteRecord(admin, mod, rec({ status: 'draft' }))).toBe(true);
+    expect(deleteNeedsReason(admin, rec({ status: 'draft' }))).toBe(true);
+    expect(canDeleteRecord(user({ id: 'h', role: 'hod' }), mod, rec())).toBe(false);
+    expect(canDeleteRecord(user({ id: 'd', role: 'drie', departmentId: null }), mod, rec())).toBe(false);
   });
 
   it('never lets a non-owner faculty edit or delete', () => {
@@ -60,50 +74,54 @@ describe('editing rules', () => {
 });
 
 describe('workflow transitions', () => {
-  it('follows the locked lifecycle', () => {
+  it('approves on submission in every module, and lets the offices and the HOD return an approved record', () => {
     const owner = user({});
     const drie = user({ id: 'd', role: 'drie', departmentId: null });
+    const hod = user({ id: 'h', role: 'hod' });
+    const otherHod = user({ id: 'h2', role: 'hod', departmentId: 'dept-2' });
     const admin = user({ id: 'a', role: 'admin', departmentId: null });
 
-    // The general two-step lifecycle, on Consultancy (office verifies, IQAC approves).
+    for (const m of MODULE_LIST) {
+      expect(canTransition(owner, m, rec(), 'submit').next, m.key).toBe('approved');
+    }
     const classic = MODULES.consultancy!;
-    expect(canTransition(owner, classic, rec(), 'submit').next).toBe('submitted');
-    expect(canTransition(owner, classic, rec(), 'verify').allowed).toBe(false);
-    expect(canTransition(drie, classic, rec({ status: 'submitted' }), 'verify').next).toBe('verified');
-    expect(canTransition(drie, classic, rec({ status: 'verified' }), 'approve').allowed).toBe(false);
-    expect(canTransition(admin, classic, rec({ status: 'verified' }), 'approve').next).toBe('approved');
-    expect(canTransition(admin, classic, rec({ status: 'approved' }), 'unlock').next).toBe('verified');
-    expect(canTransition(drie, classic, rec({ status: 'approved' }), 'unlock').allowed).toBe(false);
-    expect(canTransition(drie, classic, rec({ status: 'approved' }), 'return').allowed).toBe(false);
+    expect(canTransition(drie, classic, rec({ status: 'approved' }), 'return').next).toBe('returned');
+    expect(canTransition(admin, classic, rec({ status: 'approved' }), 'return').next).toBe('returned');
+    expect(canTransition(owner, classic, rec({ status: 'approved' }), 'return').allowed).toBe(false);
+    expect(canTransition(hod, mod, rec({ status: 'approved' }), 'return').next).toBe('returned');
+    expect(canTransition(otherHod, mod, rec({ status: 'approved' }), 'return').allowed).toBe(false);
   });
 
-  it('makes the office\'s check final for publications, and lets it return an approved one', () => {
+  it('lets the offices return an approved record in publications, books and patents', () => {
     const drie = user({ id: 'd', role: 'drie', departmentId: null });
-    const admin = user({ id: 'a', role: 'admin', departmentId: null });
-    // Publications are approved on submission; a returned-and-resubmitted one is verified by DRIE alone.
-    expect(canTransition(drie, mod, rec({ status: 'submitted' }), 'verify').next).toBe('approved');
-    expect(canTransition(drie, mod, rec({ status: 'approved' }), 'return').next).toBe('returned');
-    expect(canTransition(admin, mod, rec({ status: 'approved' }), 'return').next).toBe('returned');
-  });
-
-  it('treats books, chapters and conference papers, and patents, the same way as publications', () => {
-    const drie = user({ id: 'd', role: 'drie', departmentId: null });
-    for (const key of ['books', 'patents']) {
-      const m = MODULES[key]!;
-      expect(canTransition(drie, m, rec({ status: 'submitted' }), 'verify').next).toBe('approved');
-      expect(canTransition(drie, m, rec({ status: 'approved' }), 'return').next).toBe('returned');
+    for (const key of ['publications', 'books', 'patents']) {
+      expect(canTransition(drie, MODULES[key]!, rec({ status: 'approved' }), 'return').next, key).toBe('returned');
     }
   });
 
-  it('refuses to verify a record that was never submitted', () => {
-    const drie = user({ id: 'd', role: 'drie', departmentId: null });
-    expect(canTransition(drie, mod, rec({ status: 'draft' }), 'verify').allowed).toBe(false);
-    expect(canTransition(drie, mod, rec({ status: 'approved' }), 'verify').allowed).toBe(false);
+  it('never lets anyone return their own record, a HOD’s own profile included', () => {
+    const hod = user({ id: 'h', role: 'hod' });
+    const profile = MODULES.profile!;
+    expect(canTransition(hod, profile, rec({ ownerUserId: 'h', status: 'approved' }), 'return').allowed).toBe(false);
+    expect(canTransition(hod, profile, rec({ status: 'approved' }), 'return').next).toBe('returned');
   });
 
-  it('does not let another office verify a module that is not theirs', () => {
+  it('lets a HOD own and create a profile', () => {
+    expect(canCreateIn(user({ id: 'h', role: 'hod' }), MODULES.profile!)).toBe(true);
+  });
+
+  it('does not let another office return a module that is not theirs', () => {
     const cdc = user({ id: 'c', role: 'cdc', departmentId: null });
-    expect(canTransition(cdc, mod, rec({ status: 'submitted' }), 'verify').allowed).toBe(false);
+    expect(canTransition(cdc, mod, rec({ status: 'approved' }), 'return').allowed).toBe(false);
+  });
+});
+
+describe('department modules', () => {
+  it('lets a faculty member read only their own department’s MoUs', () => {
+    const mous = MODULES.mous!;
+    const record = (departmentId: string) => ({ ownerUserId: 'hod-x', departmentId, status: 'approved' as const });
+    expect(canReadRecord(user({}), mous, record('d1'))).toBe(true);
+    expect(canReadRecord(user({}), mous, record('d2'))).toBe(false);
   });
 });
 
@@ -122,7 +140,8 @@ describe('capabilities', () => {
 
   it('only owner roles may create', () => {
     expect(canCreateIn(user({ role: 'faculty' }), mod)).toBe(true);
-    expect(canCreateIn(user({ role: 'hod' }), mod)).toBe(false);
+    expect(canCreateIn(user({ role: 'hod' }), mod)).toBe(true);        // a HOD is also a faculty member
+    expect(canCreateIn(user({ role: 'drie', departmentId: null }), mod)).toBe(false);
     expect(canCreateIn(user({ role: 'admin' }), mod)).toBe(true);
   });
 });

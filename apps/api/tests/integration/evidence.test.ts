@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { truncateAll, closeDb } from '../helpers/db';
 import { makeUser } from '../helpers/factories';
 import { createRecord, getRecord } from '@/server/records/service';
-import { uploadEvidence, getEvidenceForDownload } from '@/server/evidence/service';
+import { uploadEvidence, getEvidenceForDownload, maxUploadBytes } from '@/server/evidence/service';
 import type { SessionUser } from '@/server/auth/session';
 
 let owner: SessionUser;
@@ -77,6 +77,16 @@ describe('evidence files', () => {
     });
     await expect(createRecord(owner, 'patents', patent(offer.id), 'draft'))
       .rejects.toMatchObject({ code: 'VALIDATION' });
+  });
+
+  it('accepts a file of exactly the limit and refuses one byte more (2 MB unless MAX_UPLOAD_MB says otherwise)', async () => {
+    const pad = (n: number) => Buffer.concat([PDF, Buffer.alloc(n - PDF.length)]);
+    const send = (n: number) => uploadEvidence(owner, {
+      bytes: pad(n), fileName: 'big.pdf', declaredMime: 'application/pdf', fieldKey: 'evidence', moduleKey: 'patents',
+    });
+    const limit = maxUploadBytes();
+    await expect(send(limit)).resolves.toBeTruthy();
+    await expect(send(limit + 1)).rejects.toMatchObject({ code: 'VALIDATION' });
   });
 
   it('still refuses a file that is not really a PDF', async () => {

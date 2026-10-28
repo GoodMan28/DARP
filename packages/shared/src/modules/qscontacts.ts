@@ -9,7 +9,7 @@ export const qscontacts: ModuleConfig = {
   bodies: ['QS'],
   description:
     'Academic collaborators QS may contact for the Academic Reputation Survey. Consent must be obtained before a contact is submitted.',
-  ownerRoles: ['faculty'],
+  ownerRoles: ['faculty', 'hod'],
   verifierRoles: ['dofa'],
   viewRoles: ['hod', 'dofa', 'admin'],
   scope: 'self',
@@ -66,7 +66,7 @@ export const qscontacts: ModuleConfig = {
       section: 'Consent', showIf: { field: 'consentStatus', in: ['Consent received'] } },
 
     { key: 'consentEvidence', label: 'Consent email / reply', type: 'file',
-      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Consent',
+      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Consent',
       showIf: { field: 'consentStatus', in: ['Consent received'] } },
   ],
   listColumns: ['lastName', 'firstName', 'institution', 'country', 'consentStatus'],

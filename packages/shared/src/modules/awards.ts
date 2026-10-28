@@ -10,14 +10,14 @@ export const awards: ModuleConfig = {
   bodies: ['NAAC'],
   description:
     'Awards, recognitions and fellowships from government or government-recognised bodies. Research and extension awards belong in their own modules.',
-  ownerRoles: ['faculty'],
+  ownerRoles: ['faculty', 'hod'],
   verifierRoles: ['dofa'],
   viewRoles: ['hod', 'dofa', 'admin'],
   scope: 'self',
-  naturalKey: ['awardName', 'awardYear'],
+  naturalKey: ['awardName', 'awardDate'],
   fields: [
-    { key: 'awardYear', label: 'Year of Award', type: 'year', required: true, min: 1990, max: 2100,
-      section: 'Award',
+    { key: 'awardDate', label: 'Date of award', type: 'date', required: true,
+      notFuture: true, periodSource: true, exportYear: true, section: 'Award', help: 'The date of the award letter.',
       exportAs: {
         faculty: 'Year of Award (starting from latest calendar year) (data for 2024, 2023, 2022)',
         dofa: 'Year of Award (starting from latest calendar year) (data for 2024, 2023, 2022)',
@@ -40,14 +40,14 @@ export const awards: ModuleConfig = {
       exportAs: { faculty: 'Name of the Awarding Agency', dofa: 'Name of the Awarding Agency' } },
 
     { key: 'evidence', label: 'Attach documents (Certificate Award Letters)', type: 'file',
-      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence',
+      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Evidence',
       exportAs: {
         faculty: 'Attach documents (Certificate Award Letters )',
         dofa: 'Attach documents (Certificate Award Letters )',
       } },
   ],
-  listColumns: ['awardName', 'level', 'agency', 'awardYear'],
-  defaultSort: { key: 'awardYear', dir: 'desc' },
+  listColumns: ['awardName', 'level', 'agency', 'awardDate'],
+  defaultSort: { key: 'awardDate', dir: 'desc' },
   exportTargets: [
     { workbook: 'faculty', sheet: 'Awards' },
     { workbook: 'dofa', sheet: 'Awards' },
