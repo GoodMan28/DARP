@@ -13,10 +13,9 @@ const MATCHES_NOTHING = '00000000-0000-0000-0000-000000000000';
  * Never build a record query without calling this. There is a test
  * (tests/security/no-unscoped-queries.test.ts) that greps the codebase for violations.
  */
-export function scopeFilter(actor: SessionUser, m: ModuleConfig, cycleId: string): SQL {
+export function scopeFilter(actor: SessionUser, m: ModuleConfig): SQL {
   const base = and(
     eq(records.moduleKey, m.key),
-    eq(records.cycleId, cycleId),
     isNull(records.deletedAt),
   )!;
 

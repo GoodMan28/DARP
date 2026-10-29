@@ -2,199 +2,141 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { apiJson } from '@/lib/csrf-client';
-import { cx } from '@/lib/cx';
-import { formatDate, formatDateTime } from '@darp/shared/format';
-import {
-  Button, Card, CardHeader, Eyebrow, Field, Input, Notice, Table, Td, Th,
-} from '@/components/ui';
-import type { CycleRow, CyclesPayload } from './types';
+import { Button, Card, CardHeader, EmptyState, Field, Input, Notice, Table, Td, Th } from '@/components/ui';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import type { RangeRow, RangesPayload } from './types';
 
-/** A `datetime-local` value from a Date, in the browser's own zone. */
-function toLocalInput(value: string | null): string {
-  if (!value) return '';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '';
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
-function fromLocalInput(value: string): string | null {
-  if (!value) return null;
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
-}
-
-const WINDOWS: ReadonlyArray<{
-  code: 'CY' | 'FY' | 'AY';
-  label: string;
-  note: string;
-  start: 'cyStart' | 'fyStart' | 'ayStart';
-  end: 'cyEnd' | 'fyEnd' | 'ayEnd';
-}> = [
-  { code: 'CY', label: 'Calendar year', note: 'Publications, patents, awards', start: 'cyStart', end: 'cyEnd' },
-  { code: 'FY', label: 'Financial year', note: 'Grants, consultancy, seed money', start: 'fyStart', end: 'fyEnd' },
-  { code: 'AY', label: 'Academic year', note: 'Profile, teaching, students', start: 'ayStart', end: 'ayEnd' },
-];
-
+/**
+ * Saved year ranges: a name plus a first and last year. The one marked default is what profiles and
+ * reports start with. A range never hides a record: every year stays visible to the people allowed to see it.
+ */
 export function CyclePanel() {
-  const [cycles, setCycles] = useState<CycleRow[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [saved, setSaved] = useState(false);
+  const [ranges, setRanges] = useState<RangeRow[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-
-  const [deadline, setDeadline] = useState('');
-  const [entryOpens, setEntryOpens] = useState('');
+  const [editing, setEditing] = useState<string | 'new' | null>(null);
+  const [form, setForm] = useState({ name: '', from: '', to: '' });
+  const [removing, setRemoving] = useState<RangeRow | null>(null);
 
   const load = useCallback(async () => {
-    setLoadError(null);
-    const res = await apiJson<CyclesPayload>('/api/admin/cycles');
-    if (!res.ok) { setLoadError(res.error.message); return; }
-    setCycles(res.data.cycles);
-    const active = res.data.cycles.find((c) => c.isActive);
-    setDeadline(toLocalInput(active?.deadlineAt ?? null));
-    setEntryOpens(toLocalInput(active?.entryOpensAt ?? null));
+    const res = await apiJson<RangesPayload>('/api/admin/cycles');
+    if (res.ok) { setRanges(res.data.ranges); setError(null); } else setError(res.error.message);
   }, []);
-
   useEffect(() => { void load(); }, [load]);
 
-  const active = cycles?.find((c) => c.isActive) ?? null;
+  function startEdit(r: RangeRow | null) {
+    setEditing(r ? r.id : 'new');
+    const now = new Date().getFullYear();
+    setForm(r ? { name: r.name, from: String(r.from), to: String(r.to) } : { name: '', from: String(now - 2), to: String(now) });
+    setNote(null);
+  }
 
-  async function saveDates() {
-    if (!active) return;
+  async function save() {
     setBusy(true);
-    setSaveError(null);
-    setFieldErrors({});
-    setSaved(false);
-
-    const res = await apiJson<{ cycle: CycleRow }>('/api/admin/cycles', {
-      method: 'PATCH',
-      body: JSON.stringify({
-        id: active.id,
-        entryOpensAt: fromLocalInput(entryOpens),
-        deadlineAt: fromLocalInput(deadline),
-      }),
-    });
-
+    const body = { name: form.name.trim(), from: Number(form.from), to: Number(form.to) };
+    const res = editing === 'new'
+      ? await apiJson('/api/admin/cycles', { method: 'POST', body: JSON.stringify(body) })
+      : await apiJson('/api/admin/cycles', { method: 'PATCH', body: JSON.stringify({ id: editing, ...body }) });
     setBusy(false);
-    if (!res.ok) {
-      setFieldErrors(res.error.fields ?? {});
-      setSaveError(res.error.fields ? null : res.error.message);
-      return;
-    }
-    setSaved(true);
+    if (!res.ok) { setNote({ tone: 'danger', text: res.error.message }); return; }
+    setEditing(null);
+    setNote({ tone: 'success', text: 'Saved.' });
     await load();
   }
 
+  async function makeDefault(r: RangeRow) {
+    setBusy(true);
+    const res = await apiJson('/api/admin/cycles', { method: 'PATCH', body: JSON.stringify({ id: r.id, makeDefault: true }) });
+    setBusy(false);
+    setNote(res.ok ? { tone: 'success', text: `“${r.name}” is now the default.` } : { tone: 'danger', text: res.error.message });
+    await load();
+  }
+
+  async function remove(r: RangeRow) {
+    setRemoving(null);
+    setBusy(true);
+    const res = await apiJson('/api/admin/cycles', { method: 'DELETE', body: JSON.stringify({ id: r.id }) });
+    setBusy(false);
+    setNote(res.ok ? { tone: 'success', text: `“${r.name}” was removed. No record changed.` } : { tone: 'danger', text: res.error.message });
+    await load();
+  }
+
+  if (error) return <Notice tone="danger" title="Year ranges could not be loaded">{error}</Notice>;
+  if (!ranges) return <p className="text-sm text-ink-muted">Loading…</p>;
+
+  const digits = (v: string) => v.replace(/\D/g, '').slice(0, 4);
+
   return (
-    <div className="space-y-3">
-      {loadError ? <Notice tone="danger" title="The cycle could not be loaded">{loadError}</Notice> : null}
+    <div className="space-y-4">
+      <Notice tone="info">
+        A year range is a name and a first and last year, for example “NAAC Cycle 4” 2022 to 2024. The default range is what
+        profile totals and reports start with. It never hides a record, and a person can pick other years at any time.
+        If no range is marked default, the last three calendar years are used.
+      </Notice>
+      {note ? <Notice tone={note.tone}>{note.text}</Notice> : null}
 
-      {cycles && !active ? (
-        <Notice tone="warning" title="No active cycle">
-          Records cannot be filed until one cycle is marked active. The database allows exactly one.
-        </Notice>
-      ) : null}
-
-      {active ? (
-        <>
-          <Card padded={false}>
-            <CardHeader
-              title={active.name}
-              subtitle="The three reporting windows. Each module declares which one it reports against, so CY, FY and AY figures never mix."
-              actions={
-                <span className="inline-flex items-center rounded-xs border border-success-100 bg-success-50 px-1.5 py-0.5 text-2xs font-semibold text-success-700">
-                  Active cycle
-                </span>
-              }
-            />
-            <div className="grid gap-3 p-4 md:grid-cols-3">
-              {WINDOWS.map((w) => (
-                <div key={w.code} className="rounded-sm border border-line bg-surface-2 px-3 py-2.5">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <Eyebrow>{w.label}</Eyebrow>
-                    <span className="font-mono text-2xs font-bold text-maroon-700">{w.code}</span>
-                  </div>
-                  <div className="mt-1.5 font-mono text-sm tabular-nums text-ink">
-                    {formatDate(active[w.start])} → {formatDate(active[w.end])}
-                  </div>
-                  <div className="mt-0.5 text-2xs text-ink-muted">{w.note}</div>
-                </div>
-              ))}
+      <Card padded={false}>
+        <CardHeader
+          title="Year ranges"
+          actions={<Button type="button" variant="secondary" disabled={busy} onClick={() => startEdit(null)}>Add a range</Button>}
+        />
+        {editing ? (
+          <div className="grid gap-3 border-b border-line p-4 sm:grid-cols-[2fr_1fr_1fr_auto]">
+            <Field label="Name" htmlFor="r-name">
+              <Input id="r-name" value={form.name} maxLength={160} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            </Field>
+            <Field label="First year" htmlFor="r-from">
+              <Input id="r-from" inputMode="numeric" value={form.from} onChange={(e) => setForm({ ...form, from: digits(e.target.value) })} />
+            </Field>
+            <Field label="Last year" htmlFor="r-to">
+              <Input id="r-to" inputMode="numeric" value={form.to} onChange={(e) => setForm({ ...form, to: digits(e.target.value) })} />
+            </Field>
+            <div className="flex items-end gap-2">
+              <Button type="button" disabled={busy || form.name.trim().length < 3} onClick={() => void save()}>Save</Button>
+              <Button type="button" variant="ghost" onClick={() => setEditing(null)}>Cancel</Button>
             </div>
-          </Card>
-
-          <Card padded={false}>
-            <CardHeader
-              title="Entry window"
-              subtitle="When faculty may file, and the date the portal shows as the deadline."
-            />
-            <div className="grid gap-3 p-4 md:grid-cols-2">
-              <Field label="Entry opens" error={fieldErrors.entryOpensAt} help="Leave empty to keep entry open now." htmlFor="cy-opens">
-                <Input
-                  id="cy-opens"
-                  type="datetime-local"
-                  value={entryOpens}
-                  onChange={(e) => setEntryOpens(e.target.value)}
-                />
-              </Field>
-              <Field label="Deadline" error={fieldErrors.deadlineAt} help="Shown on every dashboard and in the footer countdown." htmlFor="cy-deadline">
-                <Input
-                  id="cy-deadline"
-                  type="datetime-local"
-                  value={deadline}
-                  aria-invalid={fieldErrors.deadlineAt ? true : undefined}
-                  onChange={(e) => setDeadline(e.target.value)}
-                />
-              </Field>
-            </div>
-            {saveError ? <div className="px-4 pb-3"><Notice tone="danger">{saveError}</Notice></div> : null}
-            {saved ? <div className="px-4 pb-3"><Notice tone="success">The cycle dates were saved and logged.</Notice></div> : null}
-            <div className="flex items-center justify-between gap-2 border-t border-line px-4 py-3">
-              <p className="text-xs text-ink-muted">
-                Currently: {active.deadlineAt ? formatDateTime(active.deadlineAt) : 'no deadline set'}.
-              </p>
-              <Button disabled={busy} onClick={() => void saveDates()}>
-                {busy ? 'Saving…' : 'Save dates'}
-              </Button>
-            </div>
-          </Card>
-        </>
-      ) : null}
-
-      {cycles && cycles.length > 1 ? (
-        <Card padded={false}>
-          <CardHeader title="All cycles" subtitle="Past and future cycles are kept; only one may be active." />
+          </div>
+        ) : null}
+        {ranges.length === 0 ? (
+          <EmptyState title="No saved ranges">The last three calendar years are used until you add one.</EmptyState>
+        ) : (
           <Table>
-            <thead>
-              <tr>
-                <Th>Cycle</Th>
-                <Th>CY</Th>
-                <Th>FY</Th>
-                <Th>AY</Th>
-                <Th>Deadline</Th>
-                <Th>State</Th>
-              </tr>
-            </thead>
+            <thead><tr><Th>Name</Th><Th>Years</Th><Th>&nbsp;</Th><Th className="text-right">&nbsp;</Th></tr></thead>
             <tbody>
-              {cycles.map((c) => (
-                <tr key={c.id} className={cx(!c.isActive && 'bg-surface-inset')}>
-                  <Td className="font-semibold">{c.name}</Td>
-                  <Td className="font-mono text-2xs tabular-nums text-ink-muted">{formatDate(c.cyStart)} → {formatDate(c.cyEnd)}</Td>
-                  <Td className="font-mono text-2xs tabular-nums text-ink-muted">{formatDate(c.fyStart)} → {formatDate(c.fyEnd)}</Td>
-                  <Td className="font-mono text-2xs tabular-nums text-ink-muted">{formatDate(c.ayStart)} → {formatDate(c.ayEnd)}</Td>
-                  <Td className="tabular-nums text-ink-muted">{c.deadlineAt ? formatDateTime(c.deadlineAt) : '—'}</Td>
-                  <Td>{c.isActive ? 'Active' : 'Closed'}</Td>
+              {ranges.map((r) => (
+                <tr key={r.id}>
+                  <Td className="font-semibold">{r.name}</Td>
+                  <Td>{r.from === r.to ? r.from : `${r.from} to ${r.to}`}</Td>
+                  <Td>
+                    {r.isDefault ? (
+                      <span className="rounded-sm border border-success-100 bg-success-50 px-1.5 py-0.5 text-xs font-semibold text-success-700">Default</span>
+                    ) : null}
+                  </Td>
+                  <Td className="text-right">
+                    <span className="inline-flex flex-wrap justify-end gap-1">
+                      {!r.isDefault ? <Button type="button" variant="secondary" disabled={busy} onClick={() => void makeDefault(r)}>Make default</Button> : null}
+                      <Button type="button" variant="ghost" disabled={busy} onClick={() => startEdit(r)}>Edit</Button>
+                      <Button type="button" variant="ghost" disabled={busy} onClick={() => setRemoving(r)}>Delete</Button>
+                    </span>
+                  </Td>
                 </tr>
               ))}
             </tbody>
           </Table>
-        </Card>
-      ) : null}
+        )}
+      </Card>
 
-      {cycles === null ? <p className="px-4 py-10 text-center text-sm text-ink-muted">Loading the cycle…</p> : null}
+      <ConfirmDialog
+        open={removing !== null}
+        title={removing ? `Delete “${removing.name}”?` : ''}
+        stayLabel="Keep it"
+        confirmLabel="Delete"
+        onConfirm={() => removing && void remove(removing)}
+        onCancel={() => setRemoving(null)}
+      >
+        Only the saved range is removed. No record changes.
+      </ConfirmDialog>
     </div>
   );
 }

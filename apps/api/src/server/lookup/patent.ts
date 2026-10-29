@@ -6,8 +6,12 @@ import { notFound, type LookupResult, type Person } from './types';
 import { personName } from './patentJournal';
 
 /** The Status of Patent master list's values. */
+export const PATENT_APPLIED = 'Applied';
 export const PATENT_PUBLISHED = 'Published';
-export const PATENT_GRANTED = 'Awarded/Granted';
+export const PATENT_GRANTED = 'Granted';
+
+/** Applied → Published → Granted: a record only ever moves forward. */
+export const PATENT_STAGE: Record<string, number> = { Applied: 0, Published: 1, Granted: 2 };
 
 /** An applicant printed as "THUBERT, Pascal" is a person; "Cisco Technology, Inc." is not. */
 const COMPANY = /\b(inc|ltd|limited|llc|llp|corp|corporation|co|company|gmbh|ag|sa|university|institute|college|pvt|private|technologies|industries|foundation|trust|council|centre|center)\b/i;
@@ -15,7 +19,8 @@ const COMPANY = /\b(inc|ltd|limited|llc|llp|corp|corporation|co|company|gmbh|ag|
 /**
  * An Indian patent from the local index of the Patent Office Journal (patentIndex.ts), by its
  * application number or its patent number. Published only → status "Published", dated the day the
- * journal published it; granted → "Awarded/Granted", dated the issue that published the grant.
+ * journal published it; granted → "Granted", dated the issue that published the grant. A pending
+ * application is secret until it is published, so "Applied" can never be fetched: it is entered by hand.
  * Never touches the network.
  */
 export async function resolvePatent(raw: string): Promise<LookupResult> {
@@ -62,6 +67,11 @@ export async function resolvePatent(raw: string): Promise<LookupResult> {
       filedDate: app?.filedDate ?? grant?.filedDate ?? '',
       patentStatus: grant ? PATENT_GRANTED : PATENT_PUBLISHED,
       statusDate: grant ? grant.grantPublishedDate : (app?.publishedDate ?? ''),
+      // The application number always wins over a grant number typed in its place.
+      applicationNo: app?.applicationNo ?? grant?.applicationNo ?? number,
+      patentNo: grant?.patentNo ?? '',
+      publishedDate: app?.publishedDate ?? grant?.publishedDate ?? '',
+      grantDate: grant?.grantPublishedDate ?? '',
       workType: grant ? 'Granted patent' : 'Published patent application',
     },
     people,

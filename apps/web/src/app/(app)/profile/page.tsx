@@ -6,17 +6,31 @@ import type { CounterValues, RecordListPayload } from '@darp/shared/contracts';
 import { getModule } from '@darp/shared/modules';
 import { formatRupees, displayValue, formatDate } from '@darp/shared/format';
 import { DeclaredCounters } from './DeclaredCounters';
+import { RangeFilter } from './RangeFilter';
 
 export const dynamic = 'force-dynamic';
 export const metadata = { title: 'My profile · DARP' };
 
-export default async function ProfilePage() {
+interface PageProps {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}
+
+const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] ?? '' : v ?? '');
+
+export default async function ProfilePage({ searchParams }: PageProps) {
+  const sp = await searchParams;
   const { user, cycle, groups } = await requireMe();
   const profileModule = getModule('profile');
 
-  let counters: CounterValues = { userId: user.id, computed: [], declared: [] };
+  const thisYear = new Date().getFullYear();
+  let counters: CounterValues = {
+    userId: user.id, range: { from: thisYear - 2, to: thisYear }, minYear: thisYear - 10, maxYear: thisYear, computed: [], declared: [],
+  };
   if (cycle.id) {
-    const r = await loadPageData<CounterValues>('/api/profile/rollups');
+    const from = /^\d{4}$/.test(one(sp.from)) ? one(sp.from) : '';
+    const to = /^\d{4}$/.test(one(sp.to)) ? one(sp.to) : '';
+    const qs = from && to ? `?from=${from}&to=${to}` : '';
+    const r = await loadPageData<CounterValues>(`/api/profile/rollups${qs}`);
     if (!r.ok) throw new Error(r.message);
     counters = r.data;
   }
@@ -87,6 +101,8 @@ export default async function ProfilePage() {
           </p>
         </Card>
       ) : null}
+
+      <RangeFilter from={counters.range.from} to={counters.range.to} minYear={counters.minYear} maxYear={counters.maxYear} />
 
       {/* computed counters */}
       <Card className="mb-4" padded={false}>

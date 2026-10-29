@@ -111,7 +111,7 @@ describe('where the ranking is shown', () => {
   });
 
   it('exports them, with NA for a journal in no list', async () => {
-    const { workbook } = await generateWorkbookFromRows('faculty', { cycleId: 'test-cycle', includePii: false }, {
+    const { workbook } = await generateWorkbookFromRows('faculty', { includePii: false }, {
       publications: [
         { data: { ...paper, doi: '10.5555/a', title: 'T' }, ownerName: 'Dr X', department: 'CSE', profile: {} },
         { data: { issn: '9999-0005', year: '2024', doi: '10.5555/b', title: 'U' }, ownerName: 'Dr X', department: 'CSE', profile: {} },

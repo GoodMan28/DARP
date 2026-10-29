@@ -89,8 +89,8 @@ describe('computation', () => {
   it('splits on a filter field', () => {
     const out = computeCounters([
       rec({ moduleKey: 'patents', data: { status: 'Published' } }),
-      rec({ moduleKey: 'patents', data: { status: 'Awarded/Granted' } }),
-      rec({ moduleKey: 'patents', data: { status: 'Awarded/Granted' } }),
+      rec({ moduleKey: 'patents', data: { status: 'Granted' } }),
+      rec({ moduleKey: 'patents', data: { status: 'Granted' } }),
     ], bounds, pt);
     expect(out['patents.count.published.cycle']).toBe(1);
     expect(out['patents.count.granted.cycle']).toBe(2);

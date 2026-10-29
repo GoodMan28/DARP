@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  periodSourceField, resolvePeriod, yearOfPeriod, labelFor, isInsideCycle, periodOptions,
+  periodSourceField, resolvePeriod, yearsOf, yearOfPeriod, labelFor, isInsideCycle, periodOptions,
 } from '@/server/records/periods';
 import { MODULES, MODULE_LIST } from '@darp/shared/modules';
 
@@ -47,7 +47,7 @@ describe('period resolution', () => {
     expect(resolvePeriod(MODULES.publications!, { year: '2019' }, cycle).periodLabel).toBe('2019');
     expect(resolvePeriod(MODULES.books!, { year: '2025' }, cycle).periodLabel).toBe('2025');
     expect(resolvePeriod(MODULES.awards!, { awardDate: '2019-06-01' }, cycle).periodLabel).toBe('2019');
-    expect(resolvePeriod(MODULES.patents!, { filedDate: '2018-05-01' }, cycle).periodLabel).toBe('2018');
+    expect(resolvePeriod(MODULES.patents!, { statusDate: '2018-05-01' }, cycle).periodLabel).toBe('2018');
   });
 
   it("files the Faculty Profile under the cycle's last year: its dates are not reporting periods", () => {
@@ -73,5 +73,27 @@ describe('period resolution', () => {
   it('uses the support date, not the conference dates, for financial support', () => {
     const m = MODULES.finsupport!;
     expect(resolvePeriod(m, { supportDate: '2023-05-10', startDate: '2021-01-01' }, cycle).periodLabel).toBe('FY 2023-24');
+  });
+
+  it('dates a patent by its publish/grant date, not its filing date', () => {
+    const r = resolvePeriod(MODULES.patents!, { filedDate: '2021-05-01', statusDate: '2024-03-10' }, cycle);
+    expect(r.periodYear).toBe(2024);
+  });
+
+  it('keeps all three year types for a dated record', () => {
+    const r = resolvePeriod(MODULES.grants!, { sanctionDate: '2025-02-12' }, cycle);
+    expect(r).toMatchObject({ cyYear: 2025, fyYear: 2024, ayYear: 2024 });
+  });
+});
+
+describe('yearsOf', () => {
+  it('places a date in all three year types', () => {
+    expect(yearsOf({ date: '2024-03-31' }, 'CY')).toEqual({ cy: 2024, fy: 2023, ay: 2023 });
+    expect(yearsOf({ date: '2024-04-01' }, 'CY').fy).toBe(2024);
+    expect(yearsOf({ date: '2024-07-01' }, 'CY').ay).toBe(2024);
+  });
+  it('fills only the own type for a year alone', () => {
+    expect(yearsOf({ year: 2024 }, 'FY')).toEqual({ cy: null, fy: 2024, ay: null });
+    expect(yearsOf({ year: 2024 }, 'AY')).toEqual({ cy: null, fy: null, ay: 2024 });
   });
 });

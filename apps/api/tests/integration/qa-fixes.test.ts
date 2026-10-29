@@ -3,8 +3,9 @@ import { truncateAll, closeDb } from '../helpers/db';
 import { makeUser } from '../helpers/factories';
 import {
   createRecord, updateRecord, getRecord, listRecords, transitionRecord, deleteRecord,
-  correctionsFor, listDeletedRecords, restoreRecord,
+  correctionsFor, listDeletedRecords, restoreRecord, setNilDeclaration, getNilDeclarations,
 } from '@/server/records/service';
+import { counterValuesFor } from '@/server/rollups/completion';
 import type { SessionUser } from '@/server/auth/session';
 
 let faculty: SessionUser;
@@ -195,5 +196,34 @@ describe('a HOD is also a faculty member', () => {
   it('does not show a HOD the records of another department', async () => {
     const theirs = await createRecord(meTech, 'grants', grant('me-dept'), 'submit');
     await expect(getRecord(hod, 'grants', theirs.id)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+describe('year ranges never hide a record', () => {
+  it('lists records of every year, whatever the default range is', async () => {
+    const old = await createRecord(faculty, 'grants', grant('old-2012', { sanctionDate: '2012-05-20' }), 'submit');
+    const ids = (await listRecords(faculty, 'grants', { pageSize: 100 })).rows.map((r) => r.id);
+    expect(ids).toContain(old.id);
+    const read = await getRecord(faculty, 'grants', old.id);
+    expect(read.periodLabel).toBe('FY 2012-13');
+  });
+
+  it('counts only the chosen years on the profile, but all years since joining', async () => {
+    const mk = (tag: string, date: string) => createRecord(quiet, 'grants', grant(tag, { sanctionDate: date, amount: '100' }), 'submit');
+    await mk('range-2021', '2021-06-01');
+    await mk('range-2023', '2023-06-01');
+    const pick = (v: Awaited<ReturnType<typeof counterValuesFor>>, key: string) => v.computed.find((c) => c.key === key)!.value;
+    const inYear = await counterValuesFor(quiet, quiet.id, { from: 2021, to: 2021 });
+    const wide = await counterValuesFor(quiet, quiet.id, { from: 2021, to: 2024 });
+    expect(pick(inYear, 'grants.count.pi.cycle')).toBe(1);
+    expect(pick(wide, 'grants.count.pi.cycle')).toBe(2);
+    expect(pick(inYear, 'grants.count.pi.sinceJoining')).toBe(pick(wide, 'grants.count.pi.sinceJoining'));
+    expect(inYear.computed.find((c) => c.key === 'grants.count.pi.cycle')!.label).toMatch(/FY 2021/);
+  });
+
+  it('keeps a profile and a nil declaration per person and per year', async () => {
+    await setNilDeclaration(faculty, 'patents', true, 2022);
+    expect(await getNilDeclarations(faculty, 'patents')).toContain(2022);
+    await setNilDeclaration(faculty, 'patents', false, 2022);
   });
 });

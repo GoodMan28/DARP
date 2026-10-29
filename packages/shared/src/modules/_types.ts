@@ -29,7 +29,8 @@ export type MetaKey =
   | 'publisher' | 'workType' | 'citation'
   | 'bookType' | 'bookTitle' | 'chapterTitle' | 'isbn' | 'eventName'
   // Patents (the Patent Office Journal)
-  | 'inventors' | 'applicant' | 'country' | 'filedDate' | 'patentStatus' | 'statusDate';
+  | 'inventors' | 'applicant' | 'country' | 'filedDate' | 'patentStatus' | 'statusDate'
+  | 'applicationNo' | 'patentNo' | 'publishedDate' | 'grantDate';
 
 /** Which register a module's records are fetched from. */
 export type LookupKind = 'doi' | 'book' | 'patent';
@@ -110,6 +111,8 @@ export interface FieldConfig {
      */
     describes?: string;
   };
+  /** Shown as "NA" (list, record, export) while empty, e.g. a patent number before the patent is granted. */
+  naWhenEmpty?: boolean;
   /** A date or year that cannot be later than today (something that has already happened). */
   notFuture?: boolean;
   /** This date or year decides the record's reporting period (when a module has several dates). */

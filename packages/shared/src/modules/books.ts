@@ -63,7 +63,7 @@ export const books: ModuleConfig = {
       help: 'For a conference paper, the title of the paper.',
       exportAs: { faculty: 'Title of the chapters  published', drie: 'Title of the chapters  published' } },
 
-    { key: 'year', label: 'Year of publication', type: 'year', required: true, min: 1960, max: 2100,
+    { key: 'year', label: 'Year of publication', type: 'year', required: true, periodSource: true, min: 1960, max: 2100,
       section: 'Publication', autofill: { from: 'year', locked: true },
       help: 'The year the book or proceedings volume was published (its print year). A chapter that appeared online earlier still counts in that year.',
       exportAs: {

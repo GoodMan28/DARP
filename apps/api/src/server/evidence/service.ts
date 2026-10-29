@@ -64,7 +64,6 @@ async function assertMayAttach(actor: SessionUser, moduleKey: string, recordId: 
   const [row] = await db
     .select({
       id: records.id,
-      cycleId: records.cycleId,
       ownerUserId: records.ownerUserId,
       departmentId: records.departmentId,
       status: records.status,
@@ -78,7 +77,7 @@ async function assertMayAttach(actor: SessionUser, moduleKey: string, recordId: 
   const [scoped] = await db
     .select({ id: records.id })
     .from(records)
-    .where(and(scopeFilter(actor, m, row.cycleId), eq(records.id, recordId)))
+    .where(and(scopeFilter(actor, m), eq(records.id, recordId)))
     .limit(1);
   if (!scoped) throw new ServiceError('NOT_FOUND', 'Record not found.');
 
@@ -228,7 +227,6 @@ async function assertMayAccess(actor: SessionUser, row: EvidenceRow, mode: Acces
   const [rec] = await db
     .select({
       moduleKey: records.moduleKey,
-      cycleId: records.cycleId,
       ownerUserId: records.ownerUserId,
       departmentId: records.departmentId,
       status: records.status,
@@ -244,7 +242,7 @@ async function assertMayAccess(actor: SessionUser, row: EvidenceRow, mode: Acces
   const [scoped] = await db
     .select({ id: records.id })
     .from(records)
-    .where(and(scopeFilter(actor, m, rec.cycleId), eq(records.id, row.recordId)))
+    .where(and(scopeFilter(actor, m), eq(records.id, row.recordId)))
     .limit(1);
   if (!scoped) throw new ServiceError('NOT_FOUND', 'Not found.');
 

@@ -21,6 +21,8 @@
     "db:seed": "tsx --env-file=.env.local scripts/seed.ts",
     "db:seed:demo": "tsx --env-file=.env.local scripts/seed-demo.ts",
     "db:approve-pending": "tsx --env-file=.env.local scripts/approve-pending.ts",
+    "db:backfill-years": "tsx --env-file=.env.local scripts/backfill-years.ts",
+    "db:patent-status": "tsx --env-file=.env.local scripts/patent-status-rename.ts",
     "db:year-to-date": "tsx --env-file=.env.local scripts/year-to-date.ts",
     "db:reset": "tsx --env-file=.env.local scripts/reset.ts",
     "db:setup": "npm run db:migrate && npm run db:harden && npm run db:seed",

@@ -4,159 +4,106 @@ import { db } from '@/server/db';
 import { cycles } from '@/server/db/schema';
 import { withRoute, ok, fail } from '@/server/http/handler';
 import { audit } from '@/server/audit/log';
+import { windowsOfRange, MIN_YEAR, MAX_YEAR } from '@/server/records/range';
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use the date picker.');
-const isoDateTime = z.string().datetime({ offset: true });
+/*
+ * Saved year ranges. A range is only a name and a first and last year; the one marked default is what
+ * profiles and reports start with. No range ever hides a record.
+ */
 
-/* ─────────────────────────────── GET ──────────────────────────────── */
+const year = z.number().int().min(MIN_YEAR).max(MAX_YEAR);
+
+function shape(r: typeof cycles.$inferSelect) {
+  return {
+    id: r.id,
+    name: r.name,
+    isDefault: r.isActive,
+    from: Number(r.cyStart.slice(0, 4)),
+    to: Number(r.cyEnd.slice(0, 4)),
+    createdAt: r.createdAt,
+  };
+}
+
+function windows(from: number, to: number) {
+  const w = windowsOfRange({ from, to }, '');
+  return { cyStart: w.cyStart, cyEnd: w.cyEnd, fyStart: w.fyStart, fyEnd: w.fyEnd, ayStart: w.ayStart, ayEnd: w.ayEnd };
+}
 
 export const GET = withRoute(
   { roles: ['admin'], capability: 'manageCycle', rate: { limit: 60, windowSeconds: 60 } },
   async () => {
-    const rows = await db
-      .select({
-        id: cycles.id,
-        name: cycles.name,
-        isActive: cycles.isActive,
-        cyStart: cycles.cyStart,
-        cyEnd: cycles.cyEnd,
-        fyStart: cycles.fyStart,
-        fyEnd: cycles.fyEnd,
-        ayStart: cycles.ayStart,
-        ayEnd: cycles.ayEnd,
-        entryOpensAt: cycles.entryOpensAt,
-        deadlineAt: cycles.deadlineAt,
-        createdAt: cycles.createdAt,
-      })
-      .from(cycles)
-      .orderBy(desc(cycles.isActive), desc(cycles.createdAt));
-
-    return ok({ cycles: rows });
+    const rows = await db.select().from(cycles).orderBy(desc(cycles.isActive), desc(cycles.createdAt));
+    return ok({ ranges: rows.map(shape) });
   },
 );
 
-/* ─────────────────────────────── PATCH ────────────────────────────── */
+const createSchema = z.object({
+  name: z.string().trim().min(3).max(160),
+  from: year,
+  to: year,
+  makeDefault: z.boolean().optional(),
+});
+
+export const POST = withRoute(
+  { roles: ['admin'], capability: 'manageCycle', schema: createSchema, rate: { limit: 30, windowSeconds: 300 } },
+  async ({ actor, body, ip, userAgent }) => {
+    if (body.from > body.to) {
+      return fail('VALIDATION', { message: 'The first year cannot be after the last.', fields: { to: 'Choose a year on or after the first.' } });
+    }
+    const created = await db.transaction(async (tx) => {
+      if (body.makeDefault) await tx.update(cycles).set({ isActive: false });
+      const [row] = await tx.insert(cycles).values({
+        name: body.name, isActive: !!body.makeDefault, ...windows(body.from, body.to),
+      }).returning();
+      return row!;
+    });
+    await audit({ actor, action: 'cycle.update', entity: 'cycle', entityId: created.id, after: shape(created), ip, userAgent });
+    return ok(shape(created));
+  },
+);
 
 const patchSchema = z.object({
   id: z.string().uuid(),
   name: z.string().trim().min(3).max(160).optional(),
-  cyStart: isoDate.optional(),
-  cyEnd: isoDate.optional(),
-  fyStart: isoDate.optional(),
-  fyEnd: isoDate.optional(),
-  ayStart: isoDate.optional(),
-  ayEnd: isoDate.optional(),
-  /** null clears the date; omit the key to leave it untouched. */
-  entryOpensAt: isoDateTime.nullable().optional(),
-  deadlineAt: isoDateTime.nullable().optional(),
-  /** Only `true` is meaningful: the schema forbids two active cycles, and a
-   *  portal with no active cycle has nowhere to file records. */
-  isActive: z.literal(true).optional(),
+  from: year.optional(),
+  to: year.optional(),
+  /** Only `true` is meaningful: one range is the default at a time. */
+  makeDefault: z.literal(true).optional(),
 });
-
-const WINDOWS: ReadonlyArray<{ label: string; start: 'cyStart' | 'fyStart' | 'ayStart'; end: 'cyEnd' | 'fyEnd' | 'ayEnd' }> = [
-  { label: 'calendar year', start: 'cyStart', end: 'cyEnd' },
-  { label: 'financial year', start: 'fyStart', end: 'fyEnd' },
-  { label: 'academic year', start: 'ayStart', end: 'ayEnd' },
-];
 
 export const PATCH = withRoute(
   { roles: ['admin'], capability: 'manageCycle', schema: patchSchema, rate: { limit: 30, windowSeconds: 300 } },
   async ({ actor, body, ip, userAgent }) => {
-    const [current] = await db
-      .select({
-        id: cycles.id,
-        name: cycles.name,
-        isActive: cycles.isActive,
-        cyStart: cycles.cyStart,
-        cyEnd: cycles.cyEnd,
-        fyStart: cycles.fyStart,
-        fyEnd: cycles.fyEnd,
-        ayStart: cycles.ayStart,
-        ayEnd: cycles.ayEnd,
-        entryOpensAt: cycles.entryOpensAt,
-        deadlineAt: cycles.deadlineAt,
-      })
-      .from(cycles)
-      .where(eq(cycles.id, body.id))
-      .limit(1);
-
+    const [current] = await db.select().from(cycles).where(eq(cycles.id, body.id)).limit(1);
     if (!current) return fail('NOT_FOUND');
-
-    const merged = {
-      cyStart: body.cyStart ?? current.cyStart,
-      cyEnd: body.cyEnd ?? current.cyEnd,
-      fyStart: body.fyStart ?? current.fyStart,
-      fyEnd: body.fyEnd ?? current.fyEnd,
-      ayStart: body.ayStart ?? current.ayStart,
-      ayEnd: body.ayEnd ?? current.ayEnd,
-    };
-
-    const fields: Record<string, string> = {};
-    for (const w of WINDOWS) {
-      if (merged[w.start] >= merged[w.end]) {
-        fields[w.end] = `The ${w.label} must end after it starts.`;
-      }
+    const cur = shape(current);
+    const from = body.from ?? cur.from;
+    const to = body.to ?? cur.to;
+    if (from > to) {
+      return fail('VALIDATION', { message: 'The first year cannot be after the last.', fields: { to: 'Choose a year on or after the first.' } });
     }
-    if (Object.keys(fields).length > 0) {
-      return fail('VALIDATION', { message: 'Check the reporting windows.', fields });
-    }
-
-    const entryOpensAt = body.entryOpensAt === undefined
-      ? current.entryOpensAt
-      : body.entryOpensAt === null ? null : new Date(body.entryOpensAt);
-    const deadlineAt = body.deadlineAt === undefined
-      ? current.deadlineAt
-      : body.deadlineAt === null ? null : new Date(body.deadlineAt);
-
-    if (entryOpensAt && deadlineAt && entryOpensAt >= deadlineAt) {
-      return fail('VALIDATION', {
-        message: 'The deadline must come after entry opens.',
-        fields: { deadlineAt: 'Choose a date after entry opens.' },
-      });
-    }
-
-    const nextActive = body.isActive === true ? true : current.isActive;
-
     const updated = await db.transaction(async (tx) => {
-      // The unique partial index allows only one active cycle, so the others are
-      // stood down inside the same transaction rather than failing the update.
-      if (body.isActive === true && !current.isActive) {
-        await tx.update(cycles).set({ isActive: false }).where(ne(cycles.id, body.id));
-      }
-      const rows = await tx
-        .update(cycles)
-        .set({
-          ...(body.name ? { name: body.name } : {}),
-          ...merged,
-          entryOpensAt,
-          deadlineAt,
-          isActive: nextActive,
-        })
-        .where(eq(cycles.id, body.id))
-        .returning({
-          id: cycles.id,
-          name: cycles.name,
-          isActive: cycles.isActive,
-          cyStart: cycles.cyStart,
-          cyEnd: cycles.cyEnd,
-          fyStart: cycles.fyStart,
-          fyEnd: cycles.fyEnd,
-          ayStart: cycles.ayStart,
-          ayEnd: cycles.ayEnd,
-          entryOpensAt: cycles.entryOpensAt,
-          deadlineAt: cycles.deadlineAt,
-        });
-      return rows[0];
+      if (body.makeDefault && !current.isActive) await tx.update(cycles).set({ isActive: false }).where(ne(cycles.id, body.id));
+      const [row] = await tx.update(cycles).set({
+        name: body.name ?? current.name,
+        isActive: body.makeDefault ? true : current.isActive,
+        ...windows(from, to),
+      }).where(eq(cycles.id, body.id)).returning();
+      return row!;
     });
+    await audit({ actor, action: 'cycle.update', entity: 'cycle', entityId: body.id, before: cur, after: shape(updated), ip, userAgent });
+    return ok(shape(updated));
+  },
+);
 
-    if (!updated) return fail('INTERNAL');
-
-    await audit({
-      actor, action: 'cycle.update', entity: 'cycle', entityId: updated.id,
-      ip, userAgent, before: current, after: updated,
-    });
-
-    return ok({ cycle: updated });
+export const DELETE = withRoute(
+  { roles: ['admin'], capability: 'manageCycle', schema: z.object({ id: z.string().uuid() }), rate: { limit: 30, windowSeconds: 300 } },
+  async ({ actor, body, ip, userAgent }) => {
+    const [current] = await db.select().from(cycles).where(eq(cycles.id, body.id)).limit(1);
+    if (!current) return fail('NOT_FOUND');
+    // Records keep their own years; deleting a saved range only forgets the name.
+    await db.delete(cycles).where(eq(cycles.id, body.id));
+    await audit({ actor, action: 'cycle.update', entity: 'cycle', entityId: body.id, before: shape(current), meta: { deleted: true }, ip, userAgent });
+    return ok({ id: body.id, deleted: true });
   },
 );

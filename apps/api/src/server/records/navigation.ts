@@ -1,6 +1,7 @@
 import { and, count, eq, isNull } from 'drizzle-orm';
+import { defaultRange } from './range';
 import { db } from '@/server/db';
-import { records, cycles } from '@/server/db/schema';
+import { records } from '@/server/db/schema';
 import type { SessionUser } from '@/server/auth/session';
 import { modulesForRole, groupModules } from '@darp/shared/modules';
 import type { SidebarGroup } from '@darp/shared/contracts';
@@ -18,27 +19,20 @@ export interface ActiveCycleInfo {
 }
 
 export async function getActiveCycle(): Promise<ActiveCycleInfo> {
-  const [c] = await db.select().from(cycles).where(eq(cycles.isActive, true)).limit(1);
-  if (!c) return { id: '', name: 'No active cycle', deadlineAt: null };
-  return { id: c.id, name: c.name, deadlineAt: c.deadlineAt };
+  const r = await defaultRange();
+  return { id: r.id, name: r.name, deadlineAt: null };
 }
 
 /**
  * The sidebar for this user: their modules, grouped, each with the number of
  * records they can see. Counts go through scopeFilter like every other query.
  */
-export async function getSidebarGroups(user: SessionUser, cycleId: string): Promise<SidebarGroup[]> {
+export async function getSidebarGroups(user: SessionUser): Promise<SidebarGroup[]> {
   const mods = modulesForRole(user.role);
-  if (!cycleId) {
-    return groupModules(mods).map((g) => ({
-      name: g.group,
-      items: g.modules.map((m) => ({ key: m.key, name: m.name, href: `/m/${m.key}` })),
-    }));
-  }
 
   const counts = new Map<string, number>();
   await Promise.all(mods.map(async (m) => {
-    const [row] = await db.select({ n: count() }).from(records).where(scopeFilter(user, m, cycleId));
+    const [row] = await db.select({ n: count() }).from(records).where(scopeFilter(user, m));
     counts.set(m.key, row?.n ?? 0);
   }));
 
@@ -54,13 +48,12 @@ export async function getSidebarGroups(user: SessionUser, cycleId: string): Prom
 }
 
 /** Records awaiting this user's verification, per module — drives the queue badges. */
-export async function getPendingCounts(user: SessionUser, cycleId: string, moduleKeys: string[]) {
+export async function getPendingCounts(user: SessionUser, moduleKeys: string[]) {
   const out = new Map<string, number>();
-  if (!cycleId) return out;
   const mods = modulesForRole(user.role).filter((m) => moduleKeys.includes(m.key));
   await Promise.all(mods.map(async (m) => {
     const [row] = await db.select({ n: count() }).from(records).where(and(
-      scopeFilter(user, m, cycleId),
+      scopeFilter(user, m),
       eq(records.status, 'submitted'),
       isNull(records.deletedAt),
     ));

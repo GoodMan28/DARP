@@ -69,7 +69,7 @@ describe.skipIf(!hasDb)('export contents', () => {
     const { generateWorkbookFromRows } = await import('@/server/export/excel');
     const result = await generateWorkbookFromRows(
       'drie',
-      { cycleId: 'test-cycle', includePii: false },
+      { includePii: false },
       {
         seedmoney: [{
           data: { grantDate: '2023-04-01', amount: '450000' },
@@ -94,7 +94,7 @@ describe.skipIf(!hasDb)('export contents', () => {
     const { generateWorkbookFromRows } = await import('@/server/export/excel');
     const result = await generateWorkbookFromRows(
       'drie',
-      { cycleId: 'test-cycle', includePii: false },
+      { includePii: false },
       {
         publications: [{
           data: { doi: '10.1/live', title: 'Verified paper', year: '2024' },
@@ -121,7 +121,7 @@ describe.skipIf(!hasDb)('export contents', () => {
     };
 
     const masked = await generateWorkbookFromRows(
-      'faculty', { cycleId: 'test-cycle', includePii: false }, rows,
+      'faculty', { includePii: false }, rows,
     );
     const maskedText = sheetText(masked.workbook.getWorksheet('Profile'));
     expect(maskedText).not.toContain('ABCDE1234F');
@@ -130,7 +130,7 @@ describe.skipIf(!hasDb)('export contents', () => {
     expect(masked.piiRevealed).toBe(0);
 
     const revealed = await generateWorkbookFromRows(
-      'faculty', { cycleId: 'test-cycle', includePii: true }, rows,
+      'faculty', { includePii: true }, rows,
     );
     expect(sheetText(revealed.workbook.getWorksheet('Profile'))).toContain('ABCDE1234F');
     // The caller writes one 'pii.reveal' audit entry when this is above zero.
@@ -144,7 +144,7 @@ describe.skipIf(!hasDb)('export contents', () => {
 
     const before = hasTemplate('drie') ? statSync(templatePath('drie')).mtimeMs : null;
     const result = await generateWorkbookFromRows(
-      'drie', { cycleId: 'test-cycle', includePii: false }, {},
+      'drie', { includePii: false }, {},
     );
     expect(result.mode).toBe(hasTemplate('drie') ? 'template' : 'generated');
     if (before !== null && existsSync(templatePath('drie'))) {
@@ -156,7 +156,7 @@ describe.skipIf(!hasDb)('export contents', () => {
     const { generateWorkbookFromRows } = await import('@/server/export/excel');
     for (const key of WORKBOOK_KEYS) {
       const result = await generateWorkbookFromRows(
-        key, { cycleId: 'test-cycle', includePii: false }, {},
+        key, { includePii: false }, {},
       );
       expect(result.sheetsWritten, `${key} produced no sheets`).toBeGreaterThan(0);
       const buffer = await result.workbook.xlsx.writeBuffer();

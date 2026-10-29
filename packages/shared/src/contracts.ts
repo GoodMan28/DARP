@@ -113,7 +113,8 @@ export interface VerificationQueueRow {
 
 /** GET /api/dashboard */
 export interface DashboardPayload {
-  cycle: { name: string; deadlineAt: string | null; entryOpensAt: string | null } | null;
+  /** The default year range (a saved range, else the last three years). It never hides a record. */
+  cycle: { name: string; from: number; to: number };
   role: Role;
   /** Whether this role fills in any module itself (faculty, HOD, the offices — not every role). */
   ownsModules: boolean;
@@ -126,6 +127,13 @@ export interface DashboardPayload {
   departments: DepartmentCompletionRow[];
   /** Records this person returned that have been corrected and are waiting for a second look. */
   corrections: CorrectionRow[];
+  /** Patents the journal moved forward in the last 30 days. */
+  autoUpdates: AutoUpdateRow[];
+}
+
+/** A patent the Patent Office Journal moved forward by itself (shown on its owner's dashboard). */
+export interface AutoUpdateRow {
+  id: string; moduleKey: string; at: string; text: string;
 }
 
 export interface CorrectionRow {
@@ -164,6 +172,11 @@ export interface DeclaredCounter extends DeclaredCounterDef {
 /** GET /api/profile/rollups */
 export interface CounterValues {
   userId: string;
+  /** The years counted ("cycle" figures); "since joining" figures ignore it. */
+  range: { from: number; to: number };
+  /** The first year a range can start from: the oldest record, or ten years back. */
+  minYear: number;
+  maxYear: number;
   computed: ComputedCounter[];
   declared: DeclaredCounter[];
 }
@@ -223,7 +236,10 @@ export interface ModuleSchemaPayload {
   /** Every period the records the caller can see are filed under, the cycle's or not, newest first. */
   recordPeriods: PeriodOption[];
   counts: StatusCounts;
-  declaredNil: boolean;
+  /** Years this person declared "nothing to report" for in this module. */
+  declaredYears: number[];
+  /** The years the declaration can be made for (the default range's years, newest first). */
+  declarableYears: number[];
   /** Present when the module fetches its facts from a register (DOI / ISBN / patent number). */
   lookup: { kind: LookupKind; idFields: string[]; idLabel: string; sourceName: string } | null;
   fields: FormFieldDef[];

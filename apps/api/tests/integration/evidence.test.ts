@@ -20,7 +20,7 @@ const patent = (evidence: string) => ({
   applicationNo: `20233101${String(2000 + (n += 1)).padStart(4, '0')}`,
   title: 'A patented thing',
   status: 'Published',
-  statusDate: '2023-05-01',
+  publishedDate: '2023-05-01',
   evidence,
 });
 

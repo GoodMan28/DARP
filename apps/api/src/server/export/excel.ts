@@ -1,12 +1,13 @@
 import ExcelJS from 'exceljs';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, between, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from '@/server/db';
 import { records, users, departments, evidenceFiles } from '@/server/db/schema';
 import type { WorkbookKey } from '@darp/shared/modules/types';
 import { getModule } from '@darp/shared/modules';
 import { scopeFilter } from '@/server/records/scope';
+import type { YearRange } from '@/server/records/range';
 import type { SessionUser } from '@/server/auth/session';
 import { decryptPii, isEncrypted, maskAadhaar, maskPan } from '@/server/crypto/pii';
 import { log } from '@/server/log';
@@ -26,7 +27,8 @@ const TEMPLATE_DIR = process.env.EXPORT_TEMPLATE_DIR ?? 'templates';
 export type ExportMode = 'template' | 'generated';
 
 export interface ExportOptions {
-  cycleId: string;
+  /** Only records whose reporting year falls in this range (default: every year). */
+  range?: YearRange;
   /** Plaintext Aadhaar/PAN. Admin only, audited by the caller, and never the default. */
   includePii: boolean;
   /** Restrict to one department (used by an HOD export). */
@@ -184,16 +186,19 @@ async function fetchExportRows(
 ): Promise<ExportRow[]> {
   const where = [
     eq(records.moduleKey, plan.moduleKey),
-    eq(records.cycleId, opts.cycleId),
     isNull(records.deletedAt),
     inArray(records.status, EXPORTABLE_STATUSES),
   ];
+  // The Faculty Profile is not dated: it is one record per person, whatever the range.
+  if (opts.range && getModule(plan.moduleKey)?.periodic !== false) {
+    where.push(between(records.periodYear, opts.range.from, opts.range.to));
+  }
   if (opts.departmentId) where.push(eq(records.departmentId, opts.departmentId));
   // Deny-by-default: the exporter sees no more than the caller's own scope.
   if (opts.actor) {
     const m = getModule(plan.moduleKey);
     if (!m) return [];
-    where.push(scopeFilter(opts.actor, m, opts.cycleId));
+    where.push(scopeFilter(opts.actor, m));
   }
 
   const rows = await db
@@ -226,7 +231,6 @@ async function fetchExportRows(
         .from(records)
         .where(and(
           eq(records.moduleKey, 'profile'),
-          eq(records.cycleId, opts.cycleId),
           isNull(records.deletedAt),
           inArray(records.ownerUserId, owners),
         ));
@@ -262,7 +266,7 @@ async function renderValue(
   const m = getModule(plan.moduleKey);
   const field = m?.fields.find((f) => f.key === fieldKey);
   const raw = row.data[fieldKey];
-  if (raw === undefined || raw === null || raw === '') return '';
+  if (raw === undefined || raw === null || raw === '') return field?.naWhenEmpty ? 'NA' : '';
 
   if (field?.pii === 'encrypted') {
     return presentPii(raw, field.type === 'pan' ? 'pan' : 'aadhaar', ctx);

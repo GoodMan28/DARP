@@ -64,6 +64,20 @@
       "when": 1793226229942,
       "tag": "0008_spooky_pyro",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793231584387,
+      "tag": "0009_perpetual_mother_askani",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793231590935,
+      "tag": "0010_abnormal_lilith",
+      "breakpoints": true
     }
   ]
 }

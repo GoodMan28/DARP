@@ -77,7 +77,7 @@ export const COUNTERS: CounterDef[] = [
   }),
   ...both({
     keyBase: 'patents.count.granted', moduleKey: 'patents', metric: 'count', format: 'number',
-    filter: { field: 'status', in: ['Awarded/Granted'] },
+    filter: { field: 'status', in: ['Granted'] },
     label: 'Patents granted {CY}', labelSince: 'Patents granted since joining BIT',
   }),
 
@@ -196,7 +196,7 @@ export const COUNTERS: CounterDef[] = [
   /* ── E-content ────────────────────────────────────────────── */
   ...both({
     keyBase: 'econtent.count', moduleKey: 'econtent', metric: 'count', format: 'number',
-    label: 'E-content modules developed, {AY}',
+    label: 'E-content modules developed, {CY}',
     labelSince: 'E-content modules developed since joining BIT',
   }),
 

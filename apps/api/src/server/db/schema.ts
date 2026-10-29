@@ -99,8 +99,8 @@ export const loginAttempts = pgTable('login_attempts', {
 ]);
 
 /* ────────────────────────────── cycles ─────────────────────────── */
-/** Decision #1: one active cycle — NAAC Cycle 4, data years 2022–2024,
- *  with a window per period type so CY/FY/AY never get mixed up. */
+/** Saved year ranges (October 2026): a name plus a window per period type so CY/FY/AY never get mixed up.
+ *  The active one is the DEFAULT range for profiles and reports; it never hides any record. */
 export const cycles = pgTable('cycles', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),                    // 'NAAC Cycle 4 · 2022–2024'
@@ -124,7 +124,8 @@ export const cycles = pgTable('cycles', {
 export const records = pgTable('records', {
   id: uuid('id').primaryKey().defaultRandom(),
   moduleKey: text('module_key').notNull(),
-  cycleId: uuid('cycle_id').notNull().references(() => cycles.id, { onDelete: 'restrict' }),
+  /** Legacy: the cycle a record was entered in. Not set on new records and never used to scope them. */
+  cycleId: uuid('cycle_id').references(() => cycles.id, { onDelete: 'set null' }),
 
   /** Who owns the record. Always set — even office-scoped modules have a creating user. */
   ownerUserId: uuid('owner_user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
@@ -169,26 +170,36 @@ export const records = pgTable('records', {
   deleteReason: text('delete_reason'),
   /** Marks on fields after the October 2026 conversion: dates estimated from a year, values still to be entered. */
   dataNotes: jsonb('data_notes').$type<{ estimated?: string[]; needsInput?: string[] }>().notNull().default({}),
+  /**
+   * The record's year in each year type. A full date fills all three; a year alone fills only the
+   * module's own type (a year cannot place a record in a different FY or AY).
+   */
+  cyYear: integer('cy_year'),
+  fyYear: integer('fy_year'),
+  ayYear: integer('ay_year'),
 }, (t) => [
-  index('records_module_cycle_idx').on(t.moduleKey, t.cycleId, t.status),
+  index('records_module_status_idx').on(t.moduleKey, t.status),
+  index('records_cy_year_idx').on(t.moduleKey, t.cyYear),
+  index('records_fy_year_idx').on(t.moduleKey, t.fyYear),
+  index('records_ay_year_idx').on(t.moduleKey, t.ayYear),
   index('records_owner_idx').on(t.ownerUserId, t.moduleKey),
   index('records_dept_idx').on(t.departmentId, t.moduleKey),
   index('records_status_idx').on(t.status),
-  index('records_live_idx').on(t.moduleKey, t.cycleId).where(sql`${t.deletedAt} is null`),
+  index('records_live_idx').on(t.moduleKey).where(sql`${t.deletedAt} is null`),
   index('records_data_gin').using('gin', t.data),
   index('records_search_trgm').using('gin', sql`${t.searchText} gin_trgm_ops`),
-  // Duplicate guard: one live record per natural key per module per cycle.
+  // Duplicate guard: one live record per natural key per module.
   uniqueIndex('records_natural_key_uq')
-    .on(t.moduleKey, t.cycleId, t.naturalKey)
+    .on(t.moduleKey, t.naturalKey)
     .where(sql`${t.naturalKey} is not null and ${t.deletedAt} is null`),
-  // Exactly one profile record per user per cycle.
+  // Exactly one profile record per user.
   uniqueIndex('records_one_profile_uq')
-    .on(t.ownerUserId, t.cycleId)
+    .on(t.ownerUserId)
     .where(sql`${t.moduleKey} = 'profile' and ${t.deletedAt} is null`),
-  // Curriculum Feedback (1.4.1) is one answer per department per cycle — the HOD
+  // Curriculum Feedback (1.4.1) is one answer per department per academic year — the HOD
   // picks one option from A–E, so a second row would be a contradiction.
   uniqueIndex('records_one_feedback_uq')
-    .on(t.departmentId, t.cycleId)
+    .on(t.departmentId, t.ayYear)
     .where(sql`${t.moduleKey} = 'feedback' and ${t.deletedAt} is null`),
   check('records_period_year_rule', sql`${t.periodYear} between 1950 and 2100`),
 ]);
@@ -261,12 +272,13 @@ export const masterListItems = pgTable('master_list_items', {
 export const moduleDeclarations = pgTable('module_declarations', {
   id: uuid('id').primaryKey().defaultRandom(),
   moduleKey: text('module_key').notNull(),
-  cycleId: uuid('cycle_id').notNull().references(() => cycles.id, { onDelete: 'cascade' }),
+  /** The year the declaration is for: "nothing to report for 2024". */
+  periodYear: integer('period_year').notNull(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   declaredNil: boolean('declared_nil').notNull().default(true),
   declaredAt: timestamp('declared_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
-  uniqueIndex('module_declarations_uq').on(t.moduleKey, t.cycleId, t.userId),
+  uniqueIndex('module_declarations_uq').on(t.userId, t.moduleKey, t.periodYear),
 ]);
 
 /* ───────────────────────── profile baselines ───────────────────── */

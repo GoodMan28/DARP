@@ -3,7 +3,7 @@ import { truncateAll, closeDb } from '../helpers/db';
 import { makeUser } from '../helpers/factories';
 import {
   createRecord, updateRecord, getRecord, listRecords, transitionRecord, deleteRecord,
-  setNilDeclaration, getNilDeclaration, statusCounts, correctionsFor, acknowledgeCorrection,
+  setNilDeclaration, getNilDeclarations, statusCounts, correctionsFor, acknowledgeCorrection,
 } from '@/server/records/service';
 import { departmentCompletion, verificationQueue } from '@/server/rollups/completion';
 import type { SessionUser } from '@/server/auth/session';
@@ -213,12 +213,14 @@ describe('workflow', () => {
 });
 
 describe('nil returns', () => {
-  it('records and clears "nothing to report this cycle"', async () => {
-    expect(await getNilDeclaration(faculty, 'patents')).toBe(false);
-    await setNilDeclaration(faculty, 'patents', true);
-    expect(await getNilDeclaration(faculty, 'patents')).toBe(true);
-    await setNilDeclaration(faculty, 'patents', false);
-    expect(await getNilDeclaration(faculty, 'patents')).toBe(false);
+  it('records and clears "nothing to report" for a year', async () => {
+    expect(await getNilDeclarations(faculty, 'patents')).toEqual([]);
+    await setNilDeclaration(faculty, 'patents', true, 2023);
+    await setNilDeclaration(faculty, 'patents', true, 2024);
+    expect(await getNilDeclarations(faculty, 'patents')).toEqual([2024, 2023]);
+    await setNilDeclaration(faculty, 'patents', false, 2023);
+    await setNilDeclaration(faculty, 'patents', false, 2024);
+    expect(await getNilDeclarations(faculty, 'patents')).toEqual([]);
   });
 
   it('does not let somebody declare a module that is not theirs to own', async () => {

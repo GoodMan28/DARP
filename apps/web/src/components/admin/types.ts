@@ -61,23 +61,16 @@ export interface MasterListsPayload {
   lists: MasterListGroup[];
 }
 
-export interface CycleRow {
+export interface RangeRow {
   id: string;
   name: string;
-  isActive: boolean;
-  cyStart: string;
-  cyEnd: string;
-  fyStart: string;
-  fyEnd: string;
-  ayStart: string;
-  ayEnd: string;
-  entryOpensAt: string | null;
-  deadlineAt: string | null;
-  createdAt?: string;
+  isDefault: boolean;
+  from: number;
+  to: number;
 }
 
-export interface CyclesPayload {
-  cycles: CycleRow[];
+export interface RangesPayload {
+  ranges: RangeRow[];
 }
 
 export interface AuditEntry {
@@ -115,7 +108,7 @@ export const ADMIN_TABS: ReadonlyArray<{ key: AdminTab; label: string }> = [
   { key: 'accounts', label: 'Accounts' },
   { key: 'lists', label: 'Master lists' },
   { key: 'journals', label: 'Journal lists' },
-  { key: 'cycle', label: 'Cycle' },
+  { key: 'cycle', label: 'Year ranges' },
   { key: 'deleted', label: 'Deleted records' },
   { key: 'audit', label: 'Audit log' },
   { key: 'exports', label: 'Exports' },

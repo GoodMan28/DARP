@@ -5,6 +5,7 @@ import { log } from '@/server/log';
 import { JournalReader, isoDate } from './patentJournal';
 import { pdfPages } from './patentPdf';
 import { istClock } from './scopusList';
+import { refreshPatentRecords } from '@/server/records/patentRefresh';
 
 /**
  * Keeps a local index of the Patent Office Journal, so a patent's details can be fetched by its
@@ -231,6 +232,8 @@ async function runUpdate({ maxParts = Infinity }: { maxParts?: number }) {
       }
       await new Promise((r) => setTimeout(r, PAUSE_MS));
     }
+    // Saved patents move forward (Applied → Published → Granted) as the index catches up.
+    await refreshPatentRecords();
   } catch (e) {
     const error = e instanceof Error ? e.message : String(e);
     log.warn('patent journal update failed', { error });

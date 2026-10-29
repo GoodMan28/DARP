@@ -140,7 +140,6 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
   const { counts, recordPeriods, canCreate } = schema.data;
   // A module kept on its own page (the Faculty Profile) is never added to from the list.
   const mayCreate = canCreate && !m.managedAt;
-  const declaredNil = mayCreate && schema.data.declaredNil;
   const managedLink = m.managedAt && m.ownerRoles.includes(user.role) ? m.managedAt : null;
 
   const base = { q, status, year, page, check };
@@ -157,7 +156,9 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
   });
   /** A cell's text: a stored field, or a value worked out by the server (the journal's ranking). */
   const cellText = (row: (typeof list.rows)[number], c: (typeof columns)[number]) => (
-    c.derived ? row.derived[c.key] ?? '' : displayValue(row.data[c.key], c.type)
+    c.derived ? row.derived[c.key] ?? ''
+      : (row.data[c.key] === undefined || row.data[c.key] === '') && m.fields.find((f) => f.key === c.key)?.naWhenEmpty ? 'NA'
+      : displayValue(row.data[c.key], c.type)
   );
 
   return (
@@ -413,7 +414,7 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
         ) : null}
 
         {mayCreate ? (
-          <NilDeclaration moduleKey={m.key} moduleName={m.name} declared={declaredNil} />
+          <NilDeclaration moduleKey={m.key} moduleName={m.name} declaredYears={schema.data.declaredYears} years={schema.data.declarableYears} />
         ) : null}
       </Card>
     </AppShell>

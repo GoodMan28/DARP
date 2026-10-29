@@ -41,11 +41,30 @@ export function labelFor(year: number, type: PeriodType): string {
   return type === 'FY' ? `FY ${year}-${next}` : `AY ${year}-${next}`;
 }
 
+export interface YearTypes { cy: number | null; fy: number | null; ay: number | null }
+
+/**
+ * A record's year in each year type. A full date fills all three; a year alone fills only the
+ * module's own type, because a year cannot place a record in an FY or AY that differs from it.
+ */
+export function yearsOf(value: { date?: string | null; year?: number | null }, own: PeriodType): YearTypes {
+  if (value.date) {
+    const d = new Date(value.date);
+    if (!Number.isNaN(d.getTime())) {
+      return { cy: yearOfPeriod(d, 'CY'), fy: yearOfPeriod(d, 'FY'), ay: yearOfPeriod(d, 'AY') };
+    }
+  }
+  const out: YearTypes = { cy: null, fy: null, ay: null };
+  if (value.year != null) out[own.toLowerCase() as 'cy' | 'fy' | 'ay'] = value.year;
+  return out;
+}
+
 export function resolvePeriod(
   m: ModuleConfig, data: Record<string, unknown>, cycle: CycleWindows,
-): { periodYear: number; periodLabel: string } {
+): { periodYear: number; periodLabel: string; cyYear: number | null; fyYear: number | null; ayYear: number | null } {
   const src = periodSourceField(m);
   let year: number | null = null;
+  let dated: string | null = null;
 
   if (src) {
     const raw = data[src.key];
@@ -58,7 +77,7 @@ export function resolvePeriod(
       const d = new Date(raw);
       if (!Number.isNaN(d.getTime())) {
         const y = yearOfPeriod(d, m.periodType);
-        if (y >= 1950 && y <= 2100) year = y;
+        if (y >= 1950 && y <= 2100) { year = y; dated = raw; }
       }
     }
   }
@@ -71,9 +90,11 @@ export function resolvePeriod(
   // The record keeps its own year, inside the cycle's window or not: IQAC chooses the years
   // when pulling records. Only a record with no usable year or date (or a module that is not
   // periodic) is filed under the cycle's last year.
+  const fallback = year === null;
   if (year === null) year = endYear;
 
-  return { periodYear: year, periodLabel: labelFor(year, m.periodType) };
+  const t = yearsOf(fallback ? { year } : { date: dated, year }, m.periodType);
+  return { periodYear: year, periodLabel: labelFor(year, m.periodType), cyYear: t.cy, fyYear: t.fy, ayYear: t.ay };
 }
 
 /** Is a period year inside the cycle's window for its module? (The profile's cycle counters.) */

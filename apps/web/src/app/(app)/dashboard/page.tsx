@@ -1,13 +1,13 @@
 import Link from 'next/link';
 import { AppShell } from '@/components/shell/AppShell';
 import {
-  Card, CardHeader, Table, Th, Td, StatTile, Notice, EmptyState, LinkButton,
+  Card, CardHeader, Table, Th, Td, StatTile, EmptyState, LinkButton,
 } from '@/components/ui';
 import { CorrectionActions } from '@/components/records/CorrectionActions';
 import { requireMe, loadPageData } from '@/lib/api.server';
 import type { DashboardPayload, ModuleProgress } from '@darp/shared/contracts';
 import { ROLE_PURPOSE } from '@darp/shared/roles';
-import { formatDate, plural } from '@darp/shared/format';
+import { plural } from '@darp/shared/format';
 import type { Role } from '@darp/shared/modules/types';
 
 export const dynamic = 'force-dynamic';
@@ -48,7 +48,7 @@ export default async function DashboardPage() {
   const dashboard = await loadPageData<DashboardPayload>('/api/dashboard');
   if (!dashboard.ok) throw new Error(dashboard.message);
 
-  const { ownsModules, modules: myModules, departments, corrections } = dashboard.data;
+  const { ownsModules, modules: myModules, departments, corrections, autoUpdates } = dashboard.data;
   const showDepartments = user.role !== 'faculty';
 
   const totals = myModules.reduce(
@@ -82,19 +82,6 @@ export default async function DashboardPage() {
           : null
       }
     >
-      {!cycle.id ? (
-        <Notice tone="warning" title="No active reporting cycle" className="mb-4">
-          IQAC has not opened a cycle yet. Records cannot be entered until one is active.
-        </Notice>
-      ) : null}
-
-      {cycle.deadlineAt ? (
-        <Notice tone="warning" className="mb-4">
-          <strong>Data entry closes {formatDate(cycle.deadlineAt)}.</strong>{' '}
-          Records still in draft after that date are not counted.
-        </Notice>
-      ) : null}
-
       {/* summary tiles */}
       <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {ownsModules ? (
@@ -201,6 +188,23 @@ export default async function DashboardPage() {
                 ))}
               </tbody>
             </Table>
+          </Card>
+        ) : null}
+
+        {/* patents the Patent Office Journal moved forward */}
+        {autoUpdates.length > 0 ? (
+          <Card className={ownsModules ? 'lg:col-span-3' : 'lg:col-span-2'} padded={false}>
+            <CardHeader
+              title="Updated automatically (last 30 days)"
+              subtitle="The Patent Office Journal moved these patents forward. You do not need to do anything."
+            />
+            <ul className="divide-y divide-line text-sm">
+              {autoUpdates.map((u) => (
+                <li key={`${u.id}-${u.at}`} className="px-4 py-2.5">
+                  <Link href={`/m/${u.moduleKey}/${u.id}#edit-history`} className="font-medium text-primary hover:underline">{u.text}</Link>
+                </li>
+              ))}
+            </ul>
           </Card>
         ) : null}
 

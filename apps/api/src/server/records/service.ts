@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql, count } from 'drizzle-orm';
 import { db } from '@/server/db';
-import { records, recordTransitions, recordEdits, cycles, users, departments, moduleDeclarations } from '@/server/db/schema';
+import { records, recordTransitions, recordEdits, users, departments, moduleDeclarations } from '@/server/db/schema';
 import { getModule } from '@darp/shared/modules';
 import type { ModuleConfig, RecordStatus, Role } from '@darp/shared/modules/types';
 import type { SessionUser } from '@/server/auth/session';
@@ -11,6 +11,7 @@ import {
 import { validateRecord } from './validate';
 import { prepareForStorage, presentForRead, presentForEdit } from './prepare';
 import { resolvePeriod, type CycleWindows } from './periods';
+import { defaultRange, windowsOfRange } from './range';
 import { audit } from '@/server/audit/log';
 import { derivedValues } from '@/server/journals/ranking';
 import { applyLookup, ownerMissingFromAuthors, evidenceMissing } from '@/server/lookup/apply';
@@ -59,15 +60,13 @@ export function mustGetModule(key: string): ModuleConfig {
   return m;
 }
 
+/**
+ * The year windows records are counted and labelled against: the default saved range (Administration →
+ * Year ranges), else the last three calendar years. It never hides a record: every year is visible.
+ */
 export async function activeCycle(): Promise<CycleWindows> {
-  const [c] = await db.select().from(cycles).where(eq(cycles.isActive, true)).limit(1);
-  if (!c) throw new ServiceError('VALIDATION', 'No active reporting cycle has been configured.');
-  return {
-    id: c.id,
-    cyStart: c.cyStart, cyEnd: c.cyEnd,
-    fyStart: c.fyStart, fyEnd: c.fyEnd,
-    ayStart: c.ayStart, ayEnd: c.ayEnd,
-  };
+  const r = await defaultRange();
+  return windowsOfRange(r, r.id);
 }
 
 /* ─────────────────────────────── list ─────────────────────────────── */
@@ -106,7 +105,7 @@ async function returnedInfo(ids: string[]): Promise<Map<string, { role: Role; at
  * The Faculty Profile as a department roster: every active faculty member and HOD the caller may see,
  * with their profile record if they have saved one ("not filled in yet" otherwise).
  */
-async function listProfileRoster(actor: SessionUser, m: ModuleConfig, cycleId: string, params: ListParams): Promise<ListResult> {
+async function listProfileRoster(actor: SessionUser, m: ModuleConfig, params: ListParams): Promise<ListResult> {
   const pageSize = Math.min(Math.max(params.pageSize ?? 20, 5), 100);
   const page = Math.max(params.page ?? 1, 1);
   let who = and(inArray(users.role, ['faculty', 'hod']), eq(users.isActive, true))!;
@@ -121,7 +120,7 @@ async function listProfileRoster(actor: SessionUser, m: ModuleConfig, cycleId: s
   else if (params.status) who = and(who, eq(records.status, params.status))!;
 
   const onProfile = and(
-    eq(records.ownerUserId, users.id), eq(records.moduleKey, m.key), eq(records.cycleId, cycleId), isNull(records.deletedAt),
+    eq(records.ownerUserId, users.id), eq(records.moduleKey, m.key), isNull(records.deletedAt),
   );
 
   const rows = await db.select({
@@ -159,13 +158,12 @@ async function listProfileRoster(actor: SessionUser, m: ModuleConfig, cycleId: s
 
 export async function listRecords(actor: SessionUser, moduleKey: string, params: ListParams): Promise<ListResult> {
   const m = mustGetModule(moduleKey);
-  const cycle = await activeCycle();
 
   if (m.key === 'profile' && actor.role !== 'faculty' && !params.check && !params.periodYear && !params.mine) {
-    return listProfileRoster(actor, m, cycle.id, params);
+    return listProfileRoster(actor, m, params);
   }
 
-  let where = scopeFilter(actor, m, cycle.id);
+  let where = scopeFilter(actor, m);
   if (params.status && params.status !== 'none') where = and(where, eq(records.status, params.status))!;
   if (params.periodYear) where = and(where, eq(records.periodYear, params.periodYear))!;
   if (params.mine) where = and(where, eq(records.ownerUserId, actor.id))!;
@@ -244,21 +242,19 @@ export async function listRecords(actor: SessionUser, moduleKey: string, params:
 /** The periods this caller's records are filed under, in the cycle's window or not — for the year filter. */
 export async function periodsInUse(actor: SessionUser, moduleKey: string): Promise<number[]> {
   const m = mustGetModule(moduleKey);
-  const cycle = await activeCycle();
   const rows = await db.selectDistinct({ year: records.periodYear })
     .from(records)
-    .where(scopeFilter(actor, m, cycle.id));
+    .where(scopeFilter(actor, m));
   return rows.map((r) => r.year);
 }
 
 /** Counts per status for the module header chips — one query, same scope. */
 export async function statusCounts(actor: SessionUser, moduleKey: string) {
   const m = mustGetModule(moduleKey);
-  const cycle = await activeCycle();
   const rows = await db
     .select({ status: records.status, n: count() })
     .from(records)
-    .where(scopeFilter(actor, m, cycle.id))
+    .where(scopeFilter(actor, m))
     .groupBy(records.status);
 
   const out: Record<RecordStatus, number> = {
@@ -311,7 +307,6 @@ async function recordEditsFor(recordId: string) {
 
 export async function getRecord(actor: SessionUser, moduleKey: string, id: string) {
   const m = mustGetModule(moduleKey);
-  const cycle = await activeCycle();
 
   // The scope filter comes first; the id is an additional condition, never the only one.
   const [found] = await db
@@ -319,7 +314,7 @@ export async function getRecord(actor: SessionUser, moduleKey: string, id: strin
     .from(records)
     .innerJoin(users, eq(users.id, records.ownerUserId))
     .leftJoin(departments, eq(departments.id, records.departmentId))
-    .where(and(scopeFilter(actor, m, cycle.id), eq(records.id, id)))
+    .where(and(scopeFilter(actor, m), eq(records.id, id)))
     .limit(1);
 
   if (!found) throw new ServiceError('NOT_FOUND', 'Record not found.');
@@ -465,9 +460,9 @@ export async function createRecord(
   if (Object.keys(badFiles).length > 0) throw new ServiceError('VALIDATION', 'Some fields need attention.', badFiles);
 
   const { data, naturalKey, searchText } = prepareForStorage(m, v.data, departmentId);
-  const { periodYear, periodLabel } = resolvePeriod(m, v.data, cycle);
+  const { periodYear, periodLabel, cyYear, fyYear, ayYear } = resolvePeriod(m, v.data, cycle);
 
-  await assertNoDuplicate(m, cycle.id, naturalKey, null);
+  await assertNoDuplicate(m, naturalKey, null);
 
   const auto = approvesNow(mode);
   const system = auto ? await systemActor() : null;
@@ -476,7 +471,6 @@ export async function createRecord(
 
   const [created] = await db.insert(records).values({
     moduleKey: m.key,
-    cycleId: cycle.id,
     ownerUserId: actor.id,
     departmentId,
     status: auto ? 'approved' : mode === 'submit' ? 'submitted' : 'draft',
@@ -487,6 +481,7 @@ export async function createRecord(
     approvedBy: system?.id ?? null,
     periodLabel,
     periodYear,
+    cyYear, fyYear, ayYear,
     naturalKey,
     data,
     searchText,
@@ -550,7 +545,7 @@ export async function updateRecord(
   const cycle = await activeCycle();
 
   const [existing] = await db.select().from(records)
-    .where(and(scopeFilter(actor, m, cycle.id), eq(records.id, id)))
+    .where(and(scopeFilter(actor, m), eq(records.id, id)))
     .limit(1);
   if (!existing) throw new ServiceError('NOT_FOUND', 'Record not found.');
 
@@ -594,8 +589,8 @@ export async function updateRecord(
     }
   }
 
-  const { periodYear, periodLabel } = resolvePeriod(m, v.data, cycle);
-  await assertNoDuplicate(m, cycle.id, prepared.naturalKey, id);
+  const { periodYear, periodLabel, cyYear, fyYear, ayYear } = resolvePeriod(m, v.data, cycle);
+  await assertNoDuplicate(m, prepared.naturalKey, id);
 
   // A date estimated from a year stays marked until the owner changes it; a value still to enter, until it is entered.
   const notes = {
@@ -621,6 +616,7 @@ export async function updateRecord(
     naturalKey: prepared.naturalKey,
     periodYear,
     periodLabel,
+    cyYear, fyYear, ayYear,
     status: nextStatus,
     submittedAt: auto ? now : existing.submittedAt,
     returnedRemark: auto ? null : existing.returnedRemark,
@@ -659,10 +655,9 @@ export async function updateRecord(
 
 export async function deleteRecord(actor: SessionUser, moduleKey: string, id: string, reason?: string) {
   const m = mustGetModule(moduleKey);
-  const cycle = await activeCycle();
 
   const [existing] = await db.select().from(records)
-    .where(and(scopeFilter(actor, m, cycle.id), eq(records.id, id)))
+    .where(and(scopeFilter(actor, m), eq(records.id, id)))
     .limit(1);
   if (!existing) throw new ServiceError('NOT_FOUND', 'Record not found.');
 
@@ -724,7 +719,7 @@ export async function restoreRecord(actor: SessionUser, id: string) {
   if (!row) throw new ServiceError('NOT_FOUND', 'Deleted record not found.');
   const m = mustGetModule(row.moduleKey);
   const prepared = prepareForStorage(m, row.data as Record<string, unknown>, row.departmentId);
-  await assertNoDuplicate(m, row.cycleId, prepared.naturalKey, id);
+  await assertNoDuplicate(m, prepared.naturalKey, id);
   await db.update(records)
     .set({ deletedAt: null, deletedBy: null, deleteReason: null, naturalKey: prepared.naturalKey, updatedBy: actor.id })
     .where(eq(records.id, id)).catch((e) => asConflict(e, m));
@@ -738,10 +733,9 @@ export async function transitionRecord(
   actor: SessionUser, moduleKey: string, id: string, action: WorkflowAction, remark?: string,
 ) {
   const m = mustGetModule(moduleKey);
-  const cycle = await activeCycle();
 
   const [existing] = await db.select().from(records)
-    .where(and(scopeFilter(actor, m, cycle.id), eq(records.id, id)))
+    .where(and(scopeFilter(actor, m), eq(records.id, id)))
     .limit(1);
   if (!existing) throw new ServiceError('NOT_FOUND', 'Record not found.');
 
@@ -872,9 +866,8 @@ export async function correctionsFor(actor: SessionUser): Promise<CorrectionRow[
 /** "Looks fine": the returner has seen the correction. Only the person it is flagged for, or IQAC. */
 export async function acknowledgeCorrection(actor: SessionUser, moduleKey: string, id: string) {
   const m = mustGetModule(moduleKey);
-  const cycle = await activeCycle();
   const [existing] = await db.select({ flagged: records.correctionForUserId }).from(records)
-    .where(and(scopeFilter(actor, m, cycle.id), eq(records.id, id))).limit(1);
+    .where(and(scopeFilter(actor, m), eq(records.id, id))).limit(1);
   if (!existing) throw new ServiceError('NOT_FOUND', 'Record not found.');
   if (existing.flagged !== actor.id && actor.role !== 'admin') {
     throw new ServiceError('FORBIDDEN', 'This correction was not flagged for you.');
@@ -915,12 +908,11 @@ export async function getEncryptedFieldForReveal(
   // Not a reveal-able field: say nothing about why.
   if (!field || field.pii !== 'encrypted') throw new ServiceError('NOT_FOUND', 'Not found.');
 
-  const cycle = await activeCycle();
   const [found] = await db
     .select({ record: records, ownerName: users.name })
     .from(records)
     .innerJoin(users, eq(users.id, records.ownerUserId))
-    .where(and(scopeFilter(actor, m, cycle.id), eq(records.id, recordId)))
+    .where(and(scopeFilter(actor, m), eq(records.id, recordId)))
     .limit(1);
 
   if (!found) throw new ServiceError('NOT_FOUND', 'Not found.');
@@ -947,45 +939,56 @@ export async function getEncryptedFieldForReveal(
   };
 }
 
-/* ─────────────── nil returns ("nothing to report this cycle") ─────────────── */
+/* ─────────────── nil returns ("nothing to report for a year") ─────────────── */
 
-export async function setNilDeclaration(actor: SessionUser, moduleKey: string, declared: boolean) {
+/** The years someone may declare "nothing to report" for: the default range's years, newest first. */
+export async function declarableYears(): Promise<number[]> {
+  const r = await defaultRange();
+  const out: number[] = [];
+  for (let y = r.to; y >= r.from; y--) out.push(y);
+  return out;
+}
+
+export async function setNilDeclaration(actor: SessionUser, moduleKey: string, declared: boolean, year?: number) {
   const m = mustGetModule(moduleKey);
   if (!canCreateIn(actor, m)) throw new ServiceError('FORBIDDEN', 'This module is not yours to declare.');
   // A one-per-owner module (the Faculty Profile) is filled in, never declared empty.
   if (m.managedAt) throw new ServiceError('VALIDATION', 'This module cannot be declared empty.');
-  const cycle = await activeCycle();
+  const periodYear = year ?? (await defaultRange()).to;
+  if (!Number.isInteger(periodYear) || periodYear < 1990 || periodYear > 2100) {
+    throw new ServiceError('VALIDATION', 'Choose a year between 1990 and 2100.');
+  }
 
   if (declared) {
     await db.insert(moduleDeclarations)
-      .values({ moduleKey: m.key, cycleId: cycle.id, userId: actor.id, declaredNil: true })
+      .values({ moduleKey: m.key, periodYear, userId: actor.id, declaredNil: true })
       .onConflictDoUpdate({
-        target: [moduleDeclarations.moduleKey, moduleDeclarations.cycleId, moduleDeclarations.userId],
+        target: [moduleDeclarations.userId, moduleDeclarations.moduleKey, moduleDeclarations.periodYear],
         set: { declaredNil: true, declaredAt: new Date() },
       });
   } else {
     await db.delete(moduleDeclarations).where(and(
       eq(moduleDeclarations.moduleKey, m.key),
-      eq(moduleDeclarations.cycleId, cycle.id),
+      eq(moduleDeclarations.periodYear, periodYear),
       eq(moduleDeclarations.userId, actor.id),
     ));
   }
 
   await audit({
     actor, action: 'declaration.update', entity: 'declaration', entityId: m.key,
-    after: { declaredNil: declared },
+    after: { declaredNil: declared, year: periodYear },
   });
-  return { moduleKey: m.key, declaredNil: declared };
+  return { moduleKey: m.key, declaredNil: declared, year: periodYear };
 }
 
-export async function getNilDeclaration(actor: SessionUser, moduleKey: string): Promise<boolean> {
-  const cycle = await activeCycle();
-  const [row] = await db.select().from(moduleDeclarations).where(and(
+/** The years this person declared "nothing to report" for in a module. */
+export async function getNilDeclarations(actor: SessionUser, moduleKey: string): Promise<number[]> {
+  const rows = await db.select({ y: moduleDeclarations.periodYear }).from(moduleDeclarations).where(and(
     eq(moduleDeclarations.moduleKey, moduleKey),
-    eq(moduleDeclarations.cycleId, cycle.id),
     eq(moduleDeclarations.userId, actor.id),
-  )).limit(1);
-  return !!row?.declaredNil;
+    eq(moduleDeclarations.declaredNil, true),
+  ));
+  return rows.map((r) => r.y).sort((a, b) => b - a);
 }
 
 /* ─────────────────────────────── helpers ──────────────────────────── */
@@ -996,7 +999,7 @@ function departmentForRecord(actor: SessionUser, m: ModuleConfig): string | null
 }
 
 async function assertNoDuplicate(
-  m: ModuleConfig, cycleId: string, naturalKey: string | null, excludeId: string | null,
+  m: ModuleConfig, naturalKey: string | null, excludeId: string | null,
 ) {
   if (!naturalKey) return;
   const rows = await db.select({ id: records.id, owner: users.name })
@@ -1004,7 +1007,6 @@ async function assertNoDuplicate(
     .innerJoin(users, eq(users.id, records.ownerUserId))
     .where(and(
       eq(records.moduleKey, m.key),
-      eq(records.cycleId, cycleId),
       eq(records.naturalKey, naturalKey),
       isNull(records.deletedAt),
     ))
@@ -1016,7 +1018,7 @@ async function assertNoDuplicate(
     throw new ServiceError(
       'CONFLICT',
       `This ${keyLabel} is already recorded (entered by ${hit.owner}). Each item is entered once — ask them to add you instead of creating a second copy.`,
-      Object.fromEntries((m.naturalKey ?? []).map((k) => [k, 'Already recorded in this cycle.'])),
+      Object.fromEntries((m.naturalKey ?? []).map((k) => [k, 'Already recorded.'])),
     );
   }
 }

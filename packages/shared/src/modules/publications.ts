@@ -56,7 +56,7 @@ export const publications: ModuleConfig = {
       colSpan: 2, section: 'Journal', autofill: { from: 'containerTitle', locked: true },
       exportAs: { faculty: 'Name of journal', drie: 'Name of journal' } },
 
-    { key: 'year', label: 'Year of publication', type: 'year', required: true, min: 1960, max: 2100,
+    { key: 'year', label: 'Year of publication', type: 'year', required: true, periodSource: true, min: 1960, max: 2100,
       section: 'Journal', autofill: { from: 'year', locked: true },
       help: 'The year of the journal issue the paper appeared in. A paper published online earlier still counts in its issue year; one not yet in an issue counts in the year it appeared online.',
       exportAs: {

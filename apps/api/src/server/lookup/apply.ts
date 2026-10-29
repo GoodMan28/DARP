@@ -60,7 +60,26 @@ const ownerFields = (m: ModuleConfig, except: string | null) => m.fields.filter(
   f.autofill && !f.autofill.alwaysLocked && f.autofill.from !== 'citation' && f.key !== except
 ));
 
+/**
+ * A patent's date for the current stage, from its status: filed (Applied), published (Published) or
+ * granted (Granted). It dates the record, so it is always worked out, never typed.
+ */
+export function patentStatusDate(data: Record<string, unknown>): string {
+  const pick = { Applied: 'filedDate', Published: 'publishedDate', Granted: 'grantDate' }[text(data.status)];
+  return pick ? text(data[pick]) : '';
+}
+
 export async function applyLookup(
+  m: ModuleConfig,
+  input: Record<string, unknown>,
+  ctx: { ownerName: string },
+): Promise<Applied> {
+  const applied = await applyLookupCore(m, input, ctx);
+  if (m.lookup?.kind === 'patent') applied.data.statusDate = patentStatusDate(applied.data);
+  return applied;
+}
+
+async function applyLookupCore(
   m: ModuleConfig,
   input: Record<string, unknown>,
   ctx: { ownerName: string },
@@ -140,6 +159,9 @@ export async function applyLookup(
         : `Changed by the faculty member; ${fetched || 'the lists'} gave ${described.fetched}`;
     data[f.key] = text(data[f.key]).slice(0, f.maxLength ?? undefined);
   }
+
+  // A patent found by its grant number is saved under its application number, so one patent is one record.
+  if (m.lookup.kind === 'patent' && idKey && r.authoritative && r.values.applicationNo) data[idKey] = r.values.applicationNo;
 
   const citation = m.fields.find((f) => f.autofill?.from === 'citation');
   if (citation) data[citation.key] = buildCitation(m, data, r).slice(0, citation.maxLength ?? 1200);
