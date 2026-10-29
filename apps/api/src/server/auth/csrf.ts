@@ -1,6 +1,6 @@
 import { createHmac, randomBytes } from 'node:crypto';
 import type { Request, Response } from 'express';
-import { CSRF_COOKIE, CSRF_HEADER, appOrigin, isProd } from './constants';
+import { CSRF_COOKIE, CSRF_HEADER, appOrigin, allowedOrigins, isProd } from './constants';
 import { safeEqual } from '@/server/crypto/pii';
 import { readCookie } from '@/server/http/cookies';
 
@@ -54,11 +54,30 @@ export function checkSameOrigin(req: Request): OriginCheckDetail {
   const origin = req.get('origin') ?? null;
   const referer = req.get('referer') ?? null;
   const expected = appOrigin();
+  const allowed = allowedOrigins();
+
+  const isMatch = (val: string | null) => {
+    if (!val) return false;
+    if (allowed.includes(val)) return true;
+    for (const exp of allowed) {
+      if (exp.includes('.vercel.app')) {
+        try {
+          const host = new URL(val).hostname;
+          if (host.endsWith('.vercel.app') && host.startsWith('darp')) {
+            return true;
+          }
+        } catch {
+          // ignore invalid url
+        }
+      }
+    }
+    return false;
+  };
 
   if (!UNSAFE.has(req.method.toUpperCase())) return { ok: true, origin, referer, expected };
-  if (origin) return { ok: origin === expected, origin, referer, expected };
+  if (origin) return { ok: isMatch(origin), origin, referer, expected };
   if (referer) {
-    try { return { ok: new URL(referer).origin === expected, origin, referer, expected }; }
+    try { return { ok: isMatch(new URL(referer).origin), origin, referer, expected }; }
     catch { return { ok: false, origin, referer, expected }; }
   }
   return { ok: false, origin, referer, expected };

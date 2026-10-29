@@ -26,7 +26,20 @@ export const RESET_TOKEN_TTL_MINUTES = 30;
 export function appOrigin(): string {
   const url = process.env.APP_URL;
   if (!url) throw new Error('APP_URL is not set — CSRF origin checks require it');
-  return new URL(url).origin;
+  const first = (url.split(',')[0] ?? url).trim();
+  return new URL(first).origin;
+}
+
+export function allowedOrigins(): string[] {
+  const url = process.env.APP_URL;
+  if (!url) throw new Error('APP_URL is not set — CSRF origin checks require it');
+  return url.split(',').map((u) => {
+    try {
+      return new URL(u.trim()).origin;
+    } catch {
+      return u.trim();
+    }
+  });
 }
 
 export function isProd(): boolean {
