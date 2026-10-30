@@ -3,8 +3,23 @@
 import { useId, useState } from 'react';
 import { apiJson } from '@/lib/csrf-client';
 import { Button, Input, Notice } from '@/components/ui';
+import { IconAlert, IconCheck } from '@/components/shell/Icon';
 import { formatDateTime } from '@darp/shared/format';
 import type { IdentityPayload } from '@darp/shared/contracts';
+
+const LINE_TONE = { success: 'text-success-700', warning: 'text-warning-700', danger: 'text-danger-700', neutral: 'text-ink-muted' } as const;
+
+/** One check result: a tick or a warning sign, then a few words. */
+function Line({ tone, children }: { tone: keyof typeof LINE_TONE; children: React.ReactNode }) {
+  return (
+    <li className={`flex items-start gap-1.5 ${LINE_TONE[tone]}`}>
+      {tone === 'success' ? <IconCheck width={13} height={13} className="mt-px shrink-0" />
+        : tone === 'neutral' ? <span className="w-[13px] shrink-0 text-center">–</span>
+          : <IconAlert width={13} height={13} className="mt-px shrink-0" />}
+      <span>{children}</span>
+    </li>
+  );
+}
 
 /**
  * The person's ORCID iD. Saving checks it with ORCID's public record: when that record carries the
@@ -58,28 +73,25 @@ export function OrcidBox({ initial }: { initial: IdentityPayload }) {
         </Button>
         {identity.orcid ? <Button variant="ghost" disabled={busy} onClick={() => void remove()}>Remove</Button> : null}
       </div>
-      <p className="mt-1 text-xs text-ink-muted">
-        Papers that list your ORCID iD are marked “Confirmed by ORCID”, so DRIE and IQAC need not check them.
-        Find yours on orcid.org.
-      </p>
+      <p className="mt-1 text-xs text-ink-muted">Papers that list your ORCID iD are confirmed automatically.</p>
       {error ? <Notice tone="danger" className="mt-2">{error}</Notice> : null}
       {identity.orcid && c ? (
-        <ul className="mt-2 space-y-0.5 text-xs">
+        <ul className="mt-2 space-y-1 text-xs">
           {c.unchecked ? (
-            <li className="text-warning-700">ORCID could not be reached. Press “Check and save” again later; until then the iD is not used.</li>
+            <Line tone="warning">ORCID could not be reached. Try again later.</Line>
           ) : (
             <>
-              <li className={c.nameMatches ? 'text-success-700' : 'text-danger-700'}>
-                {c.nameMatches
-                  ? `Name on ORCID: ${c.orcidName}. It matches your account, so the iD is used to confirm authorship.`
-                  : `Name on ORCID: ${c.orcidName || 'not shown'}. It does not match your account name, so the iD is not used. Ask IQAC to correct your name, or fix it on orcid.org.`}
-              </li>
-              <li className={c.bitEmployment ? 'text-success-700' : 'text-ink-muted'}>
-                {c.bitEmployment ? 'BIT Mesra is listed as your employer on ORCID.' : 'BIT Mesra is not listed as your employer on ORCID (optional, but worth adding there).'}
-              </li>
+              {c.nameMatches ? (
+                <Line tone="success">Name matches ORCID ({c.orcidName})</Line>
+              ) : (
+                <Line tone="danger">
+                  Name on ORCID ({c.orcidName || 'not shown'}) does not match your account. Ask IQAC to correct your name, or fix it on orcid.org.
+                </Line>
+              )}
+              {c.bitEmployment ? <Line tone="success">BIT Mesra listed as your employer</Line> : <Line tone="neutral">BIT Mesra not listed as your employer (optional)</Line>}
             </>
           )}
-          <li className="text-ink-faint">Checked {formatDateTime(c.checkedAt)}</li>
+          <li className="pl-5 text-ink-faint">Checked {formatDateTime(c.checkedAt)}</li>
         </ul>
       ) : null}
     </div>
