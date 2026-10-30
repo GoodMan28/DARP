@@ -83,12 +83,12 @@ describe('Scopus Author ID', () => {
     await expect(saveResearchIds(other, { scopusAuthorId: '57200000001' })).rejects.toMatchObject({ fields: { scopusAuthorId: expect.stringContaining('Another DARP account') } });
   });
 
-  it('stores nothing from a Scopus profile under another name, and says whose it is', async () => {
+  it('keeps the figures of a Scopus profile under another name, flagged not verified, and says whose it is', async () => {
     process.env.ELSEVIER_API_KEY = 'test-key';
     elsevier({ given: 'Zed', surname: 'Nobody' });
     const p = await refreshNow(verma, verma.id);
     expect(p.scopusCheck).toMatchObject({ nameMatches: false, scopusName: 'Zed Nobody' });
-    expect(p.scopus).toBeNull();
+    expect(p.scopus).toMatchObject({ documents: 12, verified: false });
   });
 
   it('stores the figures from the person’s own profile, with and without self-citations', async () => {
@@ -129,17 +129,17 @@ describe('Scopus Author ID', () => {
     elsevierSearchOnly(7);
     const p = await refreshNow(spelled, spelled.id);
     expect(p.scopusCheck).toMatchObject({ nameMatches: true, nameShare: 0.7 });
-    expect(p.scopus).toMatchObject({ documents: 3 });
+    expect(p.scopus).toMatchObject({ documents: 3, verified: true });
   });
 
-  it('stores nothing when too few of the ID’s papers carry the person’s name', async () => {
+  it('flags the figures not verified when too few of the ID’s papers carry the person’s name', async () => {
     process.env.ELSEVIER_API_KEY = 'test-key';
     const stranger = await makeUser({ role: 'faculty', dept: 'CSE' });
     await db.update(users).set({ scopusAuthorId: '57200000778', firstName: 'Test', lastName: 'Faculty' }).where(eq(users.id, stranger.id));
     elsevierSearchOnly(2);
     const p = await refreshNow(stranger, stranger.id);
     expect(p.scopusCheck).toMatchObject({ nameMatches: false, nameShare: 0.2 });
-    expect(p.scopus).toBeNull();
+    expect(p.scopus).toMatchObject({ documents: 3, verified: false });
   });
 
   it('refreshes about a thirtieth of the people each night, oldest first', async () => {
@@ -221,13 +221,13 @@ describe('IDs and figures from the ORCID iD', () => {
         metricsAllTime: { hIndex: 28, documents: { count: 120 }, totalTimesCited: 2900, totalTimesCitedWithoutSelf: 2600 },
       }), { status: 200, headers: { 'content-type': 'application/json' } });
     }));
-    wos([]);                                                  // a stranger's profile: nothing kept
+    wos([]);                                                  // a stranger's profile: kept, but not verified
     let p = await refreshNow(ghosh, ghosh.id);
-    expect(p.wos).toBeNull();
+    expect(p.wos).toMatchObject({ documents: 120, verified: false });
     expect(p.scopusCheck?.wos).toMatchObject({ nameMatches: false, wosName: 'Zed Nobody' });
     wos([ORCID]);                                             // the profile lists their ORCID iD: it is theirs
     p = await refreshNow(ghosh, ghosh.id);
-    expect(p.wos).toMatchObject({ documents: 120, citations: 2900, citationsExclSelf: 2600, hIndex: 28, typed: false });
+    expect(p.wos).toMatchObject({ documents: 120, citations: 2900, citationsExclSelf: 2600, hIndex: 28, typed: false, verified: true });
     expect(p.wosConnected).toBe(true);
     await expect(saveWos(ghosh, { documents: 1, citationsExclSelf: 1, hIndex: 1, asOf: '2026-10-01', evidenceId: '00000000-0000-0000-0000-000000000000' }))
       .rejects.toMatchObject({ message: expect.stringContaining('fetched automatically') });

@@ -168,7 +168,15 @@ export function ResearchQualityPanel({ isAdmin }: { isAdmin: boolean }) {
           <tbody>
             {rows.map((r) => (
               <tr key={r.userId}>
-                <Td className="font-semibold">{r.name}</Td>
+                <Td className="font-semibold">
+                  {r.name}
+                  {r.scopus?.verified === false || r.wos?.verified === false ? (
+                    <span className="ml-1 rounded-xs border border-warning-100 bg-warning-50 px-1 text-2xs font-semibold text-warning-700"
+                      title="The Scopus or Web of Science ID could not be matched to this person's name. Check it.">
+                      not verified
+                    </span>
+                  ) : null}
+                </Td>
                 <Td className="text-xs text-ink-muted">{r.department}</Td>
                 {(['documents', 'citations', 'hIndex'] as const).map((k) => (
                   <Td key={k} className="whitespace-nowrap text-right font-mono tabular-nums">

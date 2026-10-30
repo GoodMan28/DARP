@@ -1,18 +1,67 @@
 'use client';
 
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { apiJson } from '@/lib/csrf-client';
 import { Button, Card, CardHeader, FileInput, Input, Notice, Table, Td, Th } from '@/components/ui';
+import { IconAlert, IconCheck } from '@/components/shell/Icon';
+import { cx } from '@/lib/cx';
 import { formatDate } from '@darp/shared/format';
 import { QUALITY_LABEL, type MetricsRow, type ResearchProfile } from '@darp/shared/research';
 
 const n = (v: number | null | undefined) => (v === null || v === undefined ? 'NA' : v.toLocaleString('en-IN'));
 const pct = (v: number | null) => (v === null ? 'NA' : `${v}%`);
 
+type Tone = 'success' | 'warning' | 'neutral';
+const TONE: Record<Tone, string> = {
+  success: 'border-success-100 bg-success-50 text-success-700',
+  warning: 'border-warning-100 bg-warning-50 text-warning-700',
+  neutral: 'border-line bg-surface-2 text-ink-muted',
+};
+
+function Badge({ tone, children }: { tone: Tone; children: ReactNode }) {
+  const Glyph = tone === 'success' ? IconCheck : tone === 'warning' ? IconAlert : null;
+  return (
+    <span className={cx('inline-flex items-center gap-1 rounded-xs border px-1.5 py-0.5 text-2xs font-semibold', TONE[tone])}>
+      {Glyph ? <Glyph width={11} height={11} /> : null}
+      {children}
+    </span>
+  );
+}
+
+/** Three figures of one source, as tiles. */
+function Tiles({ row }: { row: MetricsRow | null }) {
+  return (
+    <dl className="grid grid-cols-3 gap-2">
+      {([['Documents', row?.documents], ['Citations', row?.citations], ['h-index', row?.hIndex]] as const).map(([label, v]) => (
+        <div key={label} className="rounded-sm border border-line bg-surface-2 px-2 py-2">
+          <dt className="text-2xs font-semibold text-ink-muted">{label}</dt>
+          <dd className="mt-0.5 font-mono text-xl font-semibold tabular-nums">{row ? n(v) : '—'}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function SourceCard({ title, status, row, note, children }: {
+  title: string; status: { tone: Tone; text: string }; row: MetricsRow | null; note?: string; children?: ReactNode;
+}) {
+  return (
+    <section className="flex flex-col gap-3 rounded-sm border border-line p-3" aria-label={title}>
+      <div>
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <div className="mt-1"><Badge tone={status.tone}>{status.text}</Badge></div>
+      </div>
+      <Tiles row={row} />
+      {note ? <p className="text-2xs text-ink-muted">{note}</p> : null}
+      {children}
+    </section>
+  );
+}
+
 /**
- * A researcher's figures from Scopus, Web of Science and OpenAlex, side by side. The Scopus Author ID
- * and ResearcherID are read from the person's ORCID record ("Other IDs"); OpenAlex is found by the
- * ORCID iD itself. An ID can still be typed when it is not on ORCID.
+ * A researcher's figures from Scopus, Web of Science and OpenAlex. Connecting the IDs to ORCID is the
+ * best route: DARP then reads them from ORCID and they count as verified. An ID can still be typed;
+ * the figures are then fetched and verified by comparing the person's surname with the papers.
  */
 export function ResearchCard({ initial }: { initial: ResearchProfile }) {
   const id = useId();
@@ -45,140 +94,176 @@ export function ResearchCard({ initial }: { initial: ResearchProfile }) {
 
   const c = p.scopusCheck;
   const s = p.signal;
-  /** A column's state when it has no figures: why not. */
-  const missing = (source: 'scopus' | 'wos' | 'openalex'): string => {
-    if (source === 'openalex') return p.orcid ? (p.orcidTrusted ? 'Not found on OpenAlex yet' : 'Your ORCID iD is not confirmed') : 'Add your ORCID iD';
-    if (source === 'scopus') {
-      if (!p.scopusAuthorId) return 'No Scopus Author ID';
-      if (!p.scopusConnected) return 'Not connected yet (Elsevier key)';
-      if (c && !c.nameMatches && !c.unchecked) {
-        return c.nameShare !== undefined ? 'The papers of this ID do not carry your name' : `This ID belongs to ${c.scopusName || 'someone else'}`;
-      }
-      return 'Not fetched yet';
-    }
-    if (!p.researcherId) return 'No ResearcherID';
-    if (!p.wosConnected) return 'Type them below';
-    if (c?.wos && !c.wos.nameMatches && !c.wos.unchecked) return `This ID belongs to ${c.wos.wosName || 'someone else'}`;
-    return 'Not fetched yet';
-  };
-  const cols: Array<[string, 'scopus' | 'wos' | 'openalex', MetricsRow | null]> = [
-    ['Scopus', 'scopus', p.scopus], ['Web of Science', 'wos', p.wos], ['OpenAlex', 'openalex', p.openalex],
+  const scopusFromOrcid = p.idsFromOrcid.scopusAuthorId;
+  const ridFromOrcid = p.idsFromOrcid.researcherId;
+
+  const scopusStatus = ((): { tone: Tone; text: string } => {
+    if (!p.scopusAuthorId) return { tone: 'neutral', text: 'No Scopus ID yet' };
+    if (!p.scopusConnected) return { tone: 'neutral', text: 'Waiting for BIT’s Elsevier key' };
+    if (!p.scopus) return { tone: 'neutral', text: 'Not fetched yet: press Fetch now' };
+    if (scopusFromOrcid) return { tone: 'success', text: 'Verified: on your ORCID record' };
+    if (p.scopus.verified !== false) return { tone: 'success', text: 'Verified: your surname is on the papers' };
+    return {
+      tone: 'warning',
+      text: c?.nameShare !== undefined ? `Not verified: ${Math.round(c.nameShare * 100)}% of the papers carry your surname` : 'Not verified: the name differs',
+    };
+  })();
+  const wosStatus = ((): { tone: Tone; text: string } => {
+    if (p.wos?.typed) return { tone: 'success', text: 'Typed by you, with a screenshot' };
+    if (!p.researcherId) return { tone: 'neutral', text: 'No ResearcherID yet' };
+    if (!p.wosConnected) return { tone: 'neutral', text: 'Not connected yet: type the figures below' };
+    if (!p.wos) return { tone: 'neutral', text: 'Not fetched yet: press Fetch now' };
+    if (ridFromOrcid) return { tone: 'success', text: 'Verified: on your ORCID record' };
+    if (p.wos.verified !== false) return { tone: 'success', text: 'Verified: the profile is yours' };
+    return { tone: 'warning', text: `Not verified: the profile is under ${c?.wos?.wosName || 'another name'}` };
+  })();
+  const openAlexStatus = ((): { tone: Tone; text: string } => {
+    if (!p.orcid) return { tone: 'neutral', text: 'Add your ORCID iD first' };
+    if (!p.orcidTrusted) return { tone: 'warning', text: 'Your ORCID iD is not confirmed' };
+    return p.openalex ? { tone: 'success', text: 'Found through your ORCID iD' } : { tone: 'neutral', text: 'Not found on OpenAlex yet' };
+  })();
+
+  const dateOf = (row: MetricsRow | null, typed = false) => (row ? `${typed ? 'Typed' : 'Fetched'} ${formatDate(row.asOf)}` : null);
+  const steps: Array<[string, string, boolean, ReactNode]> = [
+    ['Add your ORCID iD', 'Under Account, above.', p.orcidTrusted, null],
+    ['Connect Scopus to ORCID', 'On your Scopus author page choose “Connect to ORCID”.', scopusFromOrcid,
+      <a key="s" className="underline" target="_blank" rel="noreferrer"
+        href={p.scopusAuthorId ? `https://www.scopus.com/authid/detail.uri?authorId=${encodeURIComponent(p.scopusAuthorId)}` : 'https://www.scopus.com/freelookup/form/author.uri'}>
+        Open Scopus
+      </a>],
+    ['Connect Web of Science to ORCID', 'In your Web of Science researcher profile, add your ORCID iD.', ridFromOrcid,
+      <a key="w" className="underline" target="_blank" rel="noreferrer" href="https://www.webofscience.com/">Open Web of Science</a>],
   ];
+
+  const typedIdChanged = scopusId.trim() !== (p.scopusAuthorId ?? '') || rid.trim().toUpperCase() !== (p.researcherId ?? '');
 
   return (
     <Card className="mb-4" padded={false}>
-      <CardHeader
-        title="Research IDs and figures"
-        subtitle="Your publications, citations and h-index in Scopus, Web of Science and OpenAlex, side by side."
-      />
+      <CardHeader title="Your research figures" subtitle="Documents, citations and h-index in Scopus, Web of Science and OpenAlex." />
 
-      {/* Where the IDs come from */}
-      <div className="border-b border-line p-4 text-sm">
-        {!p.orcid ? (
-          <Notice tone="info">
-            Add your <strong>ORCID iD</strong> under Account above. DARP then reads your Scopus Author ID and ResearcherID from
-            your ORCID record (“Other IDs” on orcid.org) and fetches your figures. Nothing else to type.
-          </Notice>
-        ) : !p.orcidTrusted ? (
-          <Notice tone="warning">
-            Your ORCID iD is saved, but its record is not under your account’s name, so DARP does not read IDs or figures from it.
-          </Notice>
-        ) : (
-          <p className="text-ink-muted">IDs read from your ORCID record <span className="font-mono">{p.orcid}</span>. To change them, change them on orcid.org and press “Fetch now”.</p>
-        )}
-        <div className="mt-3 grid gap-4 sm:grid-cols-2">
-          {([
-            ['scopus', 'Scopus Author ID', scopusId, setScopusId, p.idsFromOrcid.scopusAuthorId, '57200000001', error.scopusAuthorId],
-            ['rid', 'Web of Science ResearcherID', rid, setRid, p.idsFromOrcid.researcherId, 'AAB-1234-2020', error.researcherId],
-          ] as const).map(([k, label, value, set, fromOrcid, ph, err]) => (
-            <div key={k}>
-              <label htmlFor={`${id}-${k}`} className="mb-1 block text-xs font-semibold text-ink-muted">{label}</label>
-              {fromOrcid ? (
-                <p id={`${id}-${k}`} className="font-mono text-sm">{value} <span className="font-sans text-xs text-success-700">from your ORCID record</span></p>
-              ) : (
-                <>
-                  <Input id={`${id}-${k}`} className="font-mono" placeholder={ph} value={value} onChange={(e) => set(e.target.value)} />
-                  <p className="mt-1 text-xs text-ink-muted">Not on your ORCID record: type it, or better, add it to ORCID under “Other IDs”.</p>
-                </>
-              )}
-              {err ? <p className="mt-1 text-xs text-danger-700">{err}</p> : null}
-            </div>
+      {/* The best route, in three steps */}
+      <div className="border-b border-line p-4">
+        <h3 className="text-sm font-semibold">Connect once and your figures verify themselves</h3>
+        <ol className="mt-2 grid gap-2 sm:grid-cols-3">
+          {steps.map(([title, text, done, link], i) => (
+            <li key={title} className={cx('flex gap-2 rounded-sm border p-2.5', done ? 'border-success-100 bg-success-50' : 'border-line bg-surface-2')}>
+              <span className={cx('mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full text-2xs font-bold',
+                done ? 'bg-success-700 text-white' : 'bg-line text-ink-muted')}>
+                {done ? <IconCheck width={11} height={11} /> : i + 1}
+              </span>
+              <div className="text-xs">
+                <p className="font-semibold">{title}</p>
+                <p className="mt-0.5 text-ink-muted">{text}</p>
+                {link && !done ? <p className="mt-1">{link}</p> : null}
+              </div>
+            </li>
           ))}
-        </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {!(p.idsFromOrcid.scopusAuthorId && p.idsFromOrcid.researcherId) ? (
-            <Button
-              variant="secondary"
-              disabled={busy !== null || (scopusId.trim() === (p.scopusAuthorId ?? '') && rid.trim().toUpperCase() === (p.researcherId ?? ''))}
-              onClick={() => void call('ids', '/api/profile/research/ids', 'PUT', {
-                ...(p.idsFromOrcid.scopusAuthorId ? {} : { scopusAuthorId: scopusId || null }),
-                ...(p.idsFromOrcid.researcherId ? {} : { researcherId: rid || null }),
-              })}
-            >
-              {busy === 'ids' ? 'Saving…' : 'Save typed IDs'}
-            </Button>
-          ) : null}
-          {p.orcidTrusted || p.scopusAuthorId || p.researcherId ? (
-            <Button variant="ghost" disabled={busy !== null} onClick={() => void call('refresh', '/api/profile/research/refresh', 'POST', {})}>
-              {busy === 'refresh' ? 'Fetching…' : 'Fetch now'}
-            </Button>
-          ) : null}
-          {p.scopusAuthorId ? (
-            <a className="text-xs underline" target="_blank" rel="noreferrer"
-              href={`https://www.scopus.com/authid/detail.uri?authorId=${encodeURIComponent(p.scopusAuthorId)}`}>
-              Open my Scopus author page
-            </a>
-          ) : null}
-          {saved ? <span className="text-xs text-success-700">{saved === 'refresh' ? 'Fetched.' : 'Saved.'}</span> : null}
-          {error.ids || error.refresh ? <Notice tone="danger" className="w-full">{error.ids || error.refresh}</Notice> : null}
-        </div>
+        </ol>
+        {p.orcid && !p.orcidTrusted ? (
+          <Notice tone="warning" className="mt-3">
+            Your ORCID iD is saved, but its record is not under your account’s name, so DARP does not read IDs from it.
+          </Notice>
+        ) : null}
+        <p className="mt-3 text-xs text-ink-muted">
+          After connecting, press <strong>Fetch now</strong>. Not connected? Type your IDs below. DARP still fetches your figures and compares your
+          surname with the papers; it marks them “Not verified” when unsure.
+        </p>
       </div>
 
-      {/* The comparison */}
-      <Table>
-        <thead>
-          <tr>
-            <Th>Figure</Th>
-            {cols.map(([label, key, row]) => (
-              <Th key={key} className="text-right">
-                {label}
-                <span className="block text-2xs font-normal text-ink-faint">
-                  {row ? `${row.source === 'wos' && p.wos?.typed ? 'typed' : 'fetched'} ${formatDate(row.asOf)}` : missing(key)}
-                </span>
-              </Th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {([
-            ['Publications (documents)', (r: MetricsRow) => r.documents],
-            ['Citations', (r: MetricsRow) => r.citations],
-            ['Citations without self-citations', (r: MetricsRow) => r.citationsExclSelf],
-            ['h-index', (r: MetricsRow) => r.hIndex],
-            ['h-index without self-citations', (r: MetricsRow) => r.hIndexExclSelf],
-          ] as const).map(([label, get]) => (
-            <tr key={label}>
-              <Td className="text-xs font-semibold">{label}</Td>
-              {cols.map(([, key, row]) => (
-                <Td key={key} className="text-right font-mono tabular-nums">{row ? n(get(row)) : '—'}</Td>
-              ))}
-            </tr>
-          ))}
-          {p.scopus ? (
+      {/* One card per source */}
+      <div className="grid gap-3 p-4 lg:grid-cols-3">
+        <SourceCard title="Scopus" status={scopusStatus} row={p.scopus}
+          note={[dateOf(p.scopus), p.scopus && p.scopusBitDocuments !== null ? `${n(p.scopusBitDocuments)} written at BIT` : null].filter(Boolean).join(' · ') || undefined}>
+          <div>
+            <label htmlFor={`${id}-scopus`} className="mb-1 block text-xs font-semibold text-ink-muted">Scopus Author ID</label>
+            {scopusFromOrcid ? (
+              <p id={`${id}-scopus`} className="font-mono text-sm">{scopusId}</p>
+            ) : (
+              <Input id={`${id}-scopus`} className="font-mono" inputMode="numeric" placeholder="57200000001" value={scopusId} onChange={(e) => setScopusId(e.target.value)} />
+            )}
+            {error.scopusAuthorId ? <p className="mt-1 text-xs text-danger-700">{error.scopusAuthorId}</p> : null}
+            {p.scopusAuthorId ? (
+              <a className="mt-1 inline-block text-xs underline" target="_blank" rel="noreferrer"
+                href={`https://www.scopus.com/authid/detail.uri?authorId=${encodeURIComponent(p.scopusAuthorId)}`}>
+                Is this you? Open this Scopus page
+              </a>
+            ) : null}
+          </div>
+        </SourceCard>
+
+        <SourceCard title="Web of Science" status={wosStatus} row={p.wos} note={dateOf(p.wos, p.wos?.typed) ?? undefined}>
+          <div>
+            <label htmlFor={`${id}-rid`} className="mb-1 block text-xs font-semibold text-ink-muted">ResearcherID</label>
+            {ridFromOrcid ? (
+              <p id={`${id}-rid`} className="font-mono text-sm">{rid}</p>
+            ) : (
+              <Input id={`${id}-rid`} className="font-mono" placeholder="AAB-1234-2020" value={rid} onChange={(e) => setRid(e.target.value)} />
+            )}
+            {error.researcherId ? <p className="mt-1 text-xs text-danger-700">{error.researcherId}</p> : null}
+          </div>
+        </SourceCard>
+
+        <SourceCard title="OpenAlex" status={openAlexStatus} row={p.openalex}
+          note={dateOf(p.openalex) ?? 'Free and automatic: found through your ORCID iD.'} />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 pb-4">
+        {!(scopusFromOrcid && ridFromOrcid) ? (
+          <Button
+            variant="secondary"
+            disabled={busy !== null || !typedIdChanged}
+            onClick={() => void call('ids', '/api/profile/research/ids', 'PUT', {
+              ...(scopusFromOrcid ? {} : { scopusAuthorId: scopusId || null }),
+              ...(ridFromOrcid ? {} : { researcherId: rid || null }),
+            })}
+          >
+            {busy === 'ids' ? 'Saving…' : 'Save typed IDs'}
+          </Button>
+        ) : null}
+        {p.orcidTrusted || p.scopusAuthorId || p.researcherId ? (
+          <Button disabled={busy !== null} onClick={() => void call('refresh', '/api/profile/research/refresh', 'POST', {})}>
+            {busy === 'refresh' ? 'Fetching…' : 'Fetch now'}
+          </Button>
+        ) : null}
+        {saved ? <span className="text-xs text-success-700">{saved === 'refresh' ? 'Fetched.' : 'Saved.'}</span> : null}
+        {error.ids || error.refresh ? <Notice tone="danger" className="w-full">{error.ids || error.refresh}</Notice> : null}
+        <p className="w-full text-2xs text-ink-muted">Refreshed automatically each month.</p>
+      </div>
+
+      {/* Every figure, side by side */}
+      <details className="border-b border-line">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">Compare every figure</summary>
+        <Table>
+          <thead>
             <tr>
-              <Td className="text-xs font-semibold">Of the Scopus documents, written at BIT</Td>
-              <Td className="text-right font-mono tabular-nums">{n(p.scopusBitDocuments)}</Td>
-              <Td className="text-right font-mono tabular-nums">—</Td>
-              <Td className="text-right font-mono tabular-nums">—</Td>
+              <Th>Figure</Th>
+              <Th className="text-right">Scopus</Th>
+              <Th className="text-right">Web of Science</Th>
+              <Th className="text-right">OpenAlex</Th>
             </tr>
-          ) : null}
-        </tbody>
-      </Table>
-      <p className="border-b border-line px-4 py-2 text-2xs text-ink-muted">
-        OpenAlex counts more kinds of sources than Scopus or Web of Science, so its numbers are usually higher. NA: the source does
-        not give that figure{c?.noCitationOverview ? ' (Scopus figures without self-citations need Elsevier’s Citation Overview, not enabled for BIT yet)' : ''}.
-        Refreshed automatically each month.
-      </p>
+          </thead>
+          <tbody>
+            {([
+              ['Publications (documents)', (r: MetricsRow) => r.documents],
+              ['Citations', (r: MetricsRow) => r.citations],
+              ['Citations without self-citations', (r: MetricsRow) => r.citationsExclSelf],
+              ['h-index', (r: MetricsRow) => r.hIndex],
+              ['h-index without self-citations', (r: MetricsRow) => r.hIndexExclSelf],
+            ] as const).map(([label, get]) => (
+              <tr key={label}>
+                <Td className="text-xs font-semibold">{label}</Td>
+                {[p.scopus, p.wos, p.openalex].map((row, i) => (
+                  <Td key={i} className="text-right font-mono tabular-nums">{row ? n(get(row)) : '—'}</Td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+        <p className="px-4 py-2 text-2xs text-ink-muted">
+          OpenAlex counts more kinds of sources than Scopus or Web of Science, so its numbers are usually higher. NA: the source does
+          not give that figure{c?.noCitationOverview ? ' (Scopus figures without self-citations need Elsevier’s Citation Overview, not enabled for BIT yet)' : ''}.
+        </p>
+      </details>
 
       {/* Typed WoS figures, while Clarivate is not connected */}
       {!p.wosConnected ? (

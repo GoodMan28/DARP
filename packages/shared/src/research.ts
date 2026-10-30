@@ -27,6 +27,8 @@ export interface MetricsRow {
   citationsExclSelf: number | null;
   hIndex: number | null;
   hIndexExclSelf: number | null;
+  /** The ID's owner was confirmed (ORCID lists it, or the name matched). false: fetched from a typed ID whose name could not be matched. */
+  verified?: boolean;
 }
 
 /** IQAC's thresholds for the label (Administration can change them). */

@@ -66,6 +66,8 @@ type Row = typeof researcherMetrics.$inferSelect;
 const asMetrics = (r: Row): MetricsRow => ({
   source: r.source as MetricsRow['source'], asOf: r.asOf, documents: r.documents, citations: r.citations,
   citationsExclSelf: r.citationsExclSelf, hIndex: r.hIndex, hIndexExclSelf: r.hIndexExclSelf,
+  // Rows kept before the flag existed were stored only when the name matched.
+  verified: ((r.raw ?? {}) as { verified?: boolean }).verified !== false,
 });
 
 type Latest = { scopus: Row | null; wos: Row | null; openalex: Row | null };
@@ -242,7 +244,7 @@ export async function refreshScopus(userId: string, opts: { strict?: boolean } =
     ...(share !== undefined ? { nameShare: Math.round(share * 100) / 100 } : {}),
     noCitationOverview: figures.citationsExclSelf === null,
   };
-  if (!nameMatches) return save(check);   // a stranger's figures are never stored as this person's
+  // Figures are kept either way; those whose name could not be matched are flagged "not verified".
 
   // How many of the papers were written at BIT (by the affiliation ID in the paper search).
   let bitDocuments: number | null = null;
@@ -250,7 +252,7 @@ export async function refreshScopus(userId: string, opts: { strict?: boolean } =
 
   const values = {
     documents: figures.documents, citations: figures.citations, citationsExclSelf: figures.citationsExclSelf,
-    hIndex: figures.hIndex, hIndexExclSelf: figures.hIndexExclSelf, raw: { scopusName, bitDocuments },
+    hIndex: figures.hIndex, hIndexExclSelf: figures.hIndexExclSelf, raw: { scopusName, bitDocuments, verified: nameMatches },
   };
   await db.insert(researcherMetrics).values({ userId, source: 'scopus', asOf: today(), ...values })
     .onConflictDoUpdate({ target: [researcherMetrics.userId, researcherMetrics.source, researcherMetrics.asOf], set: { ...values, createdAt: new Date() } });
@@ -338,9 +340,7 @@ export async function refreshWos(userId: string): Promise<void> {
   const nameMatches = (!!u.orcid && r.orcids.includes(u.orcid))
     || namesMatch(partsOf(u), { given: r.firstName, family: r.lastName, full: r.fullName });
   await note({ checkedAt, wosName: r.fullName, nameMatches });
-  if (nameMatches) {
-    await keep(userId, 'wos', { documents: r.documents, citations: r.citations, citationsExclSelf: r.citationsExclSelf, hIndex: r.hIndex }, { wosName: r.fullName });
-  }
+  await keep(userId, 'wos', { documents: r.documents, citations: r.citations, citationsExclSelf: r.citationsExclSelf, hIndex: r.hIndex }, { wosName: r.fullName, verified: nameMatches });
 }
 
 /**
