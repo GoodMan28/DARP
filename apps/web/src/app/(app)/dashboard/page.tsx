@@ -9,6 +9,8 @@ import type { DashboardPayload, ModuleProgress } from '@darp/shared/contracts';
 import { ROLE_PURPOSE } from '@darp/shared/roles';
 import { plural } from '@darp/shared/format';
 import type { Role } from '@darp/shared/modules/types';
+import { getModule } from '@darp/shared/modules';
+import { MyNumbers } from './MyNumbers';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,12 +46,14 @@ function ProgressPill({ progress }: { progress: ModuleProgress }) {
 }
 
 export default async function DashboardPage() {
-  const { user, cycle, groups } = await requireMe();
+  const { user, groups } = await requireMe();
   const dashboard = await loadPageData<DashboardPayload>('/api/dashboard');
   if (!dashboard.ok) throw new Error(dashboard.message);
 
   const { ownsModules, modules: myModules, departments, corrections, autoUpdates } = dashboard.data;
   const showDepartments = user.role !== 'faculty';
+  // Everyone who fills in a Faculty Profile (faculty, HODs, professors holding an office) has numbers.
+  const fillsProfile = !!getModule('profile')?.ownerRoles.includes(user.role);
 
   const totals = myModules.reduce(
     (acc, m) => ({
@@ -75,7 +79,6 @@ export default async function DashboardPage() {
       crumbs={[{ label: 'Overview' }]}
       title={`Good to see you, ${user.name}`}
       subtitle={purposeFor(user.role)}
-      cycleName={cycle.name}
       actions={
         ownsModules && myModules[0]
           ? <LinkButton href={`/m/${myModules[0].key}`}>Continue data entry</LinkButton>
@@ -93,7 +96,7 @@ export default async function DashboardPage() {
         ) : (
           <>
             <StatTile label="Corrected after return" value={corrections.length} note="Waiting for your second look" />
-            <StatTile label="Departments" value={departments.length} note="Reporting this cycle" />
+            <StatTile label="Departments" value={departments.length} note="Reporting" />
             <StatTile
               label="Institute completion"
               value={`${departments.length
@@ -111,7 +114,7 @@ export default async function DashboardPage() {
           <Card className="lg:col-span-2" padded={false}>
             <CardHeader
               title="My modules"
-              subtitle="Everything your role is responsible for this cycle."
+              subtitle="Everything your role is responsible for."
             />
             {myModules.length === 0 ? (
               <EmptyState title="No modules assigned">
@@ -209,21 +212,20 @@ export default async function DashboardPage() {
         ) : null}
 
         {/* profile shortcut for faculty */}
-        {user.role === 'faculty' || user.role === 'hod' ? (
+        {fillsProfile ? (
           <Card padded={false}>
-            <CardHeader title="My profile" subtitle="Computed from your records." />
-            <div className="p-4 text-sm text-ink-muted">
-              <p>
-                Your profile carries 22 typed fields, 57 counters computed from the records above,
-                and 13 figures you declare yourself.
-              </p>
-              <div className="mt-3">
-                <LinkButton href="/profile" variant="secondary">Open my profile</LinkButton>
-              </div>
+            <CardHeader title="My profile" subtitle="Your details: designation, qualifications, identifiers." />
+            <div className="p-4">
+              <LinkButton href="/profile" variant="secondary">Open my profile</LinkButton>
             </div>
           </Card>
         ) : null}
       </div>
+
+      {/* the person's own totals, only when asked for */}
+      {fillsProfile ? (
+        <div className="mt-4"><MyNumbers /></div>
+      ) : null}
 
       {/* department completion */}
       {showDepartments && departments.length > 0 ? (

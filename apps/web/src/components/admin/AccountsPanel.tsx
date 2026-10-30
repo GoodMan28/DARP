@@ -10,6 +10,7 @@ import {
 } from '@/components/ui';
 import { IconPlus, IconSearch } from '@/components/shell/Icon';
 import type { Role } from '@darp/shared/modules/types';
+import { NAME_PREFIXES, splitName } from '@darp/shared/names';
 import type {
   AdminUserRow, CreatedUserPayload, DepartmentRow, ResetPayload, UsersPayload,
 } from './types';
@@ -18,7 +19,10 @@ const ROLES: readonly Role[] = ['faculty', 'hod', 'dofa', 'drie', 'dugs', 'cdc',
 const DEPARTMENT_REQUIRED: readonly Role[] = ['faculty', 'hod'];
 
 interface FormState {
-  name: string;
+  namePrefix: string;
+  firstName: string;
+  middleName: string;
+  lastName: string;
   email: string;
   role: Role;
   departmentId: string;
@@ -27,7 +31,7 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = {
-  name: '', email: '', role: 'faculty', departmentId: '', employeeId: '', dateOfJoining: '',
+  namePrefix: '', firstName: '', middleName: '', lastName: '', email: '', role: 'faculty', departmentId: '', employeeId: '', dateOfJoining: '',
 };
 
 export function AccountsPanel({ currentUserId }: { currentUserId: string }) {
@@ -88,8 +92,14 @@ export function AccountsPanel({ currentUserId }: { currentUserId: string }) {
 
   function startEdit(u: AdminUserRow) {
     setEditingId(u.id);
+    // An account made before names had parts holds its whole name as the first name: offer a split.
+    const old = u.firstName && !u.middleName && !u.lastName && /\s/.test(u.firstName);
+    const parts = old ? splitName(u.firstName) : { prefix: u.namePrefix, first: u.firstName, middle: u.middleName, last: u.lastName };
     setForm({
-      name: u.name,
+      namePrefix: parts.prefix,
+      firstName: parts.first,
+      middleName: parts.middle,
+      lastName: parts.last,
       email: u.email,
       role: u.role,
       departmentId: u.departmentId ?? '',
@@ -124,7 +134,10 @@ export function AccountsPanel({ currentUserId }: { currentUserId: string }) {
     }
 
     const payload = {
-      name: form.name.trim(),
+      namePrefix: form.namePrefix,
+      firstName: form.firstName.trim(),
+      middleName: form.middleName.trim(),
+      lastName: form.lastName.trim(),
       email: form.email.trim(),
       role: form.role,
       departmentId: form.departmentId || null,
@@ -209,13 +222,44 @@ export function AccountsPanel({ currentUserId }: { currentUserId: string }) {
             actions={<Button variant="ghost" onClick={closeForm}>Cancel</Button>}
           />
           <div className="grid gap-3 p-4 md:grid-cols-2 lg:grid-cols-3">
-            <Field label="Full name" required error={fieldErrors.name} htmlFor="acc-name">
+            <Field label="Prefix" error={fieldErrors.namePrefix} htmlFor="acc-prefix">
+              <Select
+                id="acc-prefix"
+                value={form.namePrefix}
+                onChange={(e) => setForm({ ...form, namePrefix: e.target.value })}
+              >
+                <option value="">None</option>
+                {NAME_PREFIXES.map((p) => <option key={p} value={p}>{p}</option>)}
+              </Select>
+            </Field>
+
+            <Field label="First name" required error={fieldErrors.firstName} htmlFor="acc-first">
               <Input
-                id="acc-name"
-                value={form.name}
+                id="acc-first"
+                value={form.firstName}
                 autoComplete="off"
-                aria-invalid={fieldErrors.name ? true : undefined}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                aria-invalid={fieldErrors.firstName ? true : undefined}
+                onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+              />
+            </Field>
+
+            <Field label="Middle name" error={fieldErrors.middleName} htmlFor="acc-middle" help="Optional.">
+              <Input
+                id="acc-middle"
+                value={form.middleName}
+                autoComplete="off"
+                aria-invalid={fieldErrors.middleName ? true : undefined}
+                onChange={(e) => setForm({ ...form, middleName: e.target.value })}
+              />
+            </Field>
+
+            <Field label="Last name" error={fieldErrors.lastName} htmlFor="acc-last" help="Leave blank if the person has no surname.">
+              <Input
+                id="acc-last"
+                value={form.lastName}
+                autoComplete="off"
+                aria-invalid={fieldErrors.lastName ? true : undefined}
+                onChange={(e) => setForm({ ...form, lastName: e.target.value })}
               />
             </Field>
 
@@ -244,7 +288,7 @@ export function AccountsPanel({ currentUserId }: { currentUserId: string }) {
               label="Department"
               required={needsDepartment}
               error={fieldErrors.departmentId}
-              help={needsDepartment ? 'Required for faculty and HOD accounts.' : 'Optional for office roles.'}
+              help={needsDepartment ? 'Required for faculty and HOD accounts.' : 'For an office holder: the department they teach in, so their own records count there.'}
               htmlFor="acc-dept"
             >
               <Select

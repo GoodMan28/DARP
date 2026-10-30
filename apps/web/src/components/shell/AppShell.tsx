@@ -11,27 +11,27 @@ export interface ShellProps {
   crumbs: Crumb[];
   title: string;
   subtitle?: string;
-  cycleName: string;
   /** Right-aligned page actions, e.g. Export / Add record buttons. */
   actions?: ReactNode;
   children: ReactNode;
 }
 
 export function AppShell({
-  user, groups, crumbs, title, subtitle, cycleName, actions, children,
+  user, groups, crumbs, title, subtitle, actions, children,
 }: ShellProps) {
   return (
     <div className="min-h-dvh bg-canvas">
       <a href="#main" className="skip-link">Skip to main content</a>
       <div className="flex min-h-dvh">
-        <Sidebar groups={groups} roleLabel={ROLE_LABEL[user.role]} />
+        {/* Reports: every role (a faculty member downloads their own workbook); the routes check it again. */}
+        <Sidebar groups={groups} roleLabel={ROLE_LABEL[user.role]} showAdmin={user.role === 'admin'} showReports />
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar
             name={user.name}
             roleLabel={ROLE_LABEL[user.role]}
             departmentName={user.departmentName}
             crumbs={crumbs}
-            cycleName={cycleName}
+            showAdmin={user.role === 'admin'}
           />
           <main id="main" tabIndex={-1} className="flex-1 px-4 py-5 md:px-6 md:py-6">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
@@ -44,8 +44,7 @@ export function AppShell({
             {children}
           </main>
           <footer className="border-t border-line px-4 py-4 text-2xs text-ink-faint md:px-6">
-            DARP · Internal Quality Assurance Cell, Birla Institute of Technology, Mesra ·
-            {' '}{cycleName} · Internal use only
+            DARP · Internal Quality Assurance Cell, Birla Institute of Technology, Mesra · Internal use only
           </footer>
         </div>
       </div>

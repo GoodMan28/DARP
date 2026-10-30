@@ -11,7 +11,7 @@ import { DeleteRecord } from '@/components/records/DeleteRecord';
 import { Remark } from '@/components/records/Remark';
 import { lockedStrip } from '@/components/records/form-fields';
 import { requireMe, loadPageData } from '@/lib/api.server';
-import { LOOKUP_SOURCE_LABEL, type ModuleSchemaPayload, type RecordDetail } from '@darp/shared/contracts';
+import { AUTHORSHIP_LABEL, LOOKUP_SOURCE_LABEL, type AuthorshipLevel, type ModuleSchemaPayload, type RecordDetail } from '@darp/shared/contracts';
 import { getModule } from '@darp/shared/modules';
 import { formatDateTime, STATUS_LABEL } from '@darp/shared/format';
 import { ROLE_LABEL } from '@darp/shared/roles';
@@ -20,6 +20,8 @@ export const dynamic = 'force-dynamic';
 
 interface PageProps {
   params: Promise<{ moduleKey: string; id: string }>;
+  /** ?bulk=<upload id>&from=<module>: opened from "Add many at once", which saving returns to. */
+  searchParams: Promise<{ bulk?: string; from?: string }>;
 }
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
@@ -28,13 +30,25 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   return { title: m ? `${m.name} record · DARP` : 'Record · DARP' };
 }
 
-export default async function RecordPage({ params }: PageProps) {
+/** Authorship levels from proof to none: green, blue, amber, red. */
+const AUTHORSHIP_CLASS: Record<AuthorshipLevel, string> = {
+  confirmed: 'border-success-100 bg-success-50 text-success-700',
+  likely: 'border-info-100 bg-info-50 text-info-700',
+  name: 'border-warning-100 bg-warning-50 text-warning-700',
+  unmatched: 'border-danger-100 bg-danger-50 text-danger-700',
+};
+
+export default async function RecordPage({ params, searchParams }: PageProps) {
   const { moduleKey, id } = await params;
+  const { bulk, from } = await searchParams;
+  // Built from checked parts, never taken as a URL: no link can send the owner anywhere else.
+  const upload = bulk && /^[0-9a-f-]{36}$/i.test(bulk) && from && getModule(from)?.lookup
+    ? `/m/${getModule(from)!.key}/bulk?id=${bulk}` : undefined;
 
   const m = getModule(moduleKey);
   if (!m) notFound();
 
-  const { user, cycle, groups } = await requireMe();
+  const { user, groups } = await requireMe();
 
   // Either request 404s for a role that may not open this module, or a record outside its scope.
   const [schema, loaded] = await Promise.all([
@@ -49,7 +63,6 @@ export default async function RecordPage({ params }: PageProps) {
         groups={groups}
         crumbs={[{ label: 'Overview', href: '/dashboard' }, { label: m.name, href: `/m/${m.key}` }]}
         title={`${m.name} record`}
-        cycleName={cycle.name}
       >
         <Notice tone="warning" title="This record cannot be opened">
           {!loaded.ok ? loaded.message : !schema.ok ? schema.message : null}
@@ -102,11 +115,10 @@ export default async function RecordPage({ params }: PageProps) {
       crumbs={crumbs}
       title={heading}
       subtitle={`${m.name} · ${record.periodLabel} · ${STATUS_LABEL[record.status] ?? record.status}`}
-      cycleName={cycle.name}
       actions={
-        <LinkButton href={`/m/${m.key}`} variant="secondary">
+        <LinkButton href={upload ?? `/m/${m.key}`} variant="secondary">
           <IconArrowBack width={14} height={14} />
-          Back to list
+          {upload ? 'Back to the upload' : 'Back to list'}
         </LinkButton>
       }
     >
@@ -185,6 +197,7 @@ export default async function RecordPage({ params }: PageProps) {
             approved={record.status === 'approved'}
             estimatedDates={record.estimatedDates}
             needsInput={record.needsInput}
+            returnTo={upload}
           />
           {record.edits.length > 0 && record.status !== 'draft' ? (
             <details id="edit-history" open={!record.isMine} className="mt-4 rounded-sm border border-line bg-surface">
@@ -243,6 +256,18 @@ export default async function RecordPage({ params }: PageProps) {
                 </ul>
               </Notice>
             ) : null
+          ) : null}
+
+          {record.verification?.authorship ? (
+            <div className="rounded-sm border border-line bg-surface p-3 text-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold text-ink-muted">Authorship</span>
+                <span className={`inline-flex rounded-xs border px-1.5 py-0.5 text-2xs font-semibold ${AUTHORSHIP_CLASS[record.verification.authorship.level]}`}>
+                  {AUTHORSHIP_LABEL[record.verification.authorship.level]}
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-ink-muted">{record.verification.authorship.detail}</p>
+            </div>
           ) : null}
 
           <Card padded={false}>

@@ -71,7 +71,7 @@ export function CyclePanel() {
     <div className="space-y-4">
       <Notice tone="info">
         A year range is a name and a first and last year, for example “NAAC Cycle 4” 2022 to 2024. The default range is what
-        profile totals and reports start with. It never hides a record, and a person can pick other years at any time.
+        “My numbers” on each person’s Overview page and the reports start with. It never hides a record, and a person can pick other years at any time.
         If no range is marked default, the last three calendar years are used.
       </Notice>
       {note ? <Notice tone={note.tone}>{note.text}</Notice> : null}

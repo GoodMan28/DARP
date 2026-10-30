@@ -41,7 +41,7 @@ const FAQ = [
   },
   {
     q: 'I have nothing to report in a module.',
-    a: 'Open it and mark “Nothing to report this cycle”. An empty module and a completed-but-empty one look different on your head of department’s dashboard.',
+    a: 'Open it and mark “Nothing to report”. An empty module and a completed-but-empty one look different on your head of department’s dashboard.',
   },
   {
     q: 'Why does it ask for my Aadhaar?',
@@ -178,7 +178,7 @@ export default function InstructionsPage() {
                   <tr>
                     <td className="px-3 py-2 align-top font-semibold">IQAC</td>
                     <td className="px-3 py-2 align-top text-ink-muted">
-                      Accounts, dropdown lists, the cycle and its deadline
+                      Accounts, dropdown lists, year ranges and journal lists
                     </td>
                     <td className="px-3 py-2 align-top text-ink-muted">
                       Approves everything, and has the final word

@@ -9,13 +9,14 @@ import { IconUser, IconLogout, IconChevronDown, IconChevronRight } from './Icon'
 export interface Crumb { label: string; href?: string }
 
 export function Topbar({
-  name, roleLabel, departmentName, crumbs, cycleName,
+  name, roleLabel, departmentName, crumbs, showAdmin,
 }: {
   name: string;
   roleLabel: string;
   departmentName: string | null;
   crumbs: Crumb[];
-  cycleName: string;
+  /** IQAC (role admin) gets a link to the Administration page. */
+  showAdmin: boolean;
 }) {
   const [menu, setMenu] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
@@ -44,7 +45,6 @@ export function Topbar({
       <div className="flex h-topbar items-center gap-3 px-4 md:px-6">
         <Link href="/dashboard" className="flex shrink-0 items-center gap-2">
           <span className="text-sm font-bold tracking-[0.06em] text-primary">DARP</span>
-          <span className="hidden text-2xs text-ink-faint sm:inline">{cycleName}</span>
         </Link>
 
         <nav aria-label="Breadcrumb" className="ml-2 hidden min-w-0 flex-1 md:block">
@@ -96,6 +96,15 @@ export function Topbar({
               >
                 My profile
               </Link>
+              {showAdmin ? (
+                <Link
+                  href="/admin"
+                  role="menuitem"
+                  className="block px-3 py-2 text-sm text-ink hover:bg-surface-2"
+                >
+                  Administration
+                </Link>
+              ) : null}
               <Link
                 href="/change-password"
                 role="menuitem"

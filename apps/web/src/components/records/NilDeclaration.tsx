@@ -4,14 +4,21 @@ import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiJson } from '@/lib/csrf-client';
 import { Checkbox, Notice } from '@/components/ui';
+import type { PeriodType } from '@darp/shared/modules/types';
+
+/** A year named the way the module counts years: 2024, FY 2024-25 or AY 2024-25. */
+function yearLabel(year: number, type: PeriodType): string {
+  if (type === 'CY') return String(year);
+  return `${type} ${year}-${String(year + 1).slice(-2)}`;
+}
 
 /**
- * "Nothing to report this cycle." Without this, an empty module is ambiguous:
+ * "Nothing to report for a year." Without this, an empty module is ambiguous:
  * nobody can tell a faculty member who has no patents from one who has not started.
  */
 export function NilDeclaration({
-  moduleKey, moduleName, declaredYears, years,
-}: { moduleKey: string; moduleName: string; declaredYears: number[]; years: number[] }) {
+  moduleKey, moduleName, periodType, declaredYears, years,
+}: { moduleKey: string; moduleName: string; periodType: PeriodType; declaredYears: number[]; years: number[] }) {
   const router = useRouter();
   const [year, setYear] = useState<number>(years[0] ?? new Date().getFullYear());
   const [on, setOn] = useState(declaredYears.includes(years[0] ?? 0));
@@ -56,18 +63,23 @@ export function NilDeclaration({
             disabled={busy}
             onChange={(e) => { const y = Number(e.target.value); setYear(y); setOn(declaredYears.includes(y)); }}
           >
-            {years.map((y) => <option key={y} value={y}>{y}</option>)}
+            {years.map((y) => <option key={y} value={y}>{yearLabel(y, periodType)}</option>)}
           </select>
           <span id={`${id}-help`} className="mt-0.5 block text-xs text-ink-muted">
-            Tick this to declare a nil return. The module then counts as complete in the
-            department roll-up instead of showing as outstanding. Untick it at any time and add a
-            record as usual.
+            Use this when you genuinely have nothing to add for that year. It tells your head of
+            department and IQAC that the module is done for that year, not forgotten: it shows as
+            complete instead of “Not started”. You can untick it later and add a record as usual.
           </span>
         </span>
       </label>
       {on ? (
         <p className="mt-2 pl-7 text-xs font-semibold text-success-700">
-          Declared. IQAC sees this module as complete with no records.
+          Declared for {yearLabel(year, periodType)}. IQAC sees this module as complete with no records for that year.
+        </p>
+      ) : null}
+      {declaredYears.length ? (
+        <p className="mt-1 pl-7 text-xs text-ink-muted">
+          Declared so far: {declaredYears.map((y) => yearLabel(y, periodType)).join(', ')}
         </p>
       ) : null}
       {error ? <Notice tone="danger" className="mt-2">{error}</Notice> : null}

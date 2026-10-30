@@ -38,6 +38,8 @@ interface Props {
   estimatedDates?: string[];
   /** Values that could not be carried over and must be entered again. */
   needsInput?: string[];
+  /** Opened from an upload of many records: saving goes back there instead of to the module list. */
+  returnTo?: string;
 }
 
 /** The same text for this purpose: case and spacing aside (the server compares the same way). */
@@ -47,7 +49,7 @@ const sameText = (a: unknown, b: string) => (
 
 export function RecordForm({
   moduleKey, fields, recordId, initialValues, locked, readOnly, lookup, initialLocked, handedOver,
-  initialProvenance, showRanking, approved, estimatedDates, needsInput,
+  initialProvenance, showRanking, approved, estimatedDates, needsInput, returnTo,
 }: Props) {
   const [values, setValues] = useState<Record<string, unknown>>(initialValues ?? {});
   const [lockedKeys, setLockedKeys] = useState<Set<string>>(() => new Set(initialLocked ?? []));
@@ -209,7 +211,7 @@ export function RecordForm({
       return;                            // values stay on screen — nothing typed is ever lost
     }
     dirtyRef.current = false;
-    window.location.href = `/m/${moduleKey}?saved=1`;
+    window.location.href = returnTo ?? `/m/${moduleKey}?saved=1`;
   }
 
   return (
@@ -408,7 +410,9 @@ export function RecordForm({
                       {!readOnly && needsInput?.includes(f.key) && !String(values[f.key] ?? '').trim() ? (
                         <p className="mt-1 text-xs text-warning-700">Please enter this again, as a number.</p>
                       ) : null}
-                      {SPAN_MODULES[moduleKey]?.years === f.key && spanText(moduleKey, values) ? (
+                      {(SPAN_MODULES[moduleKey]?.years === f.key
+                        || (SPAN_MODULES[moduleKey]?.lifetime === f.key && values[f.key] === true))
+                        && spanText(moduleKey, values) ? (
                         <p className="mt-2 rounded-sm bg-surface-2 px-2 py-1.5 text-sm">
                           <span className="font-semibold">{SPAN_MODULES[moduleKey]!.kind === 'validUntil' ? 'Valid until: ' : 'Project period: '}</span>
                           {spanText(moduleKey, values)}
@@ -433,13 +437,13 @@ export function RecordForm({
 
       {!readOnly ? (
         <div className="sticky bottom-0 flex flex-wrap items-center gap-2 border-t border-line bg-canvas py-3">
-          <LinkButton href={`/m/${moduleKey}`} variant="ghost">Cancel</LinkButton>
+          <LinkButton href={returnTo ?? `/m/${moduleKey}`} variant="ghost">Cancel</LinkButton>
           {approved ? null : (
-            <Button type="button" variant="secondary" disabled={busy} onClick={() => void save('draft')}>
-              Save as draft
+            <Button type="button" variant={returnTo ? 'primary' : 'secondary'} disabled={busy} onClick={() => void save('draft')}>
+              {returnTo ? 'Save and return to the upload' : 'Save as draft'}
             </Button>
           )}
-          <Button type="submit" disabled={busy}>
+          <Button type="submit" variant={returnTo && !approved ? 'secondary' : 'primary'} disabled={busy}>
             {busy ? 'Saving…' : approved ? 'Save changes' : 'Save and submit'}
           </Button>
           <p className="ml-auto text-xs text-ink-muted">

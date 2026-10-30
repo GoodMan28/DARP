@@ -17,6 +17,8 @@ interface Props {
   periods: PeriodOption[];
   /** The Faculty Profile roster also lists people who have not saved a profile yet. */
   roster?: boolean;
+  /** The open view (conditions, sort, grouping), kept in the address as the search and status change. */
+  view?: string;
 }
 
 const STATUS_OPTIONS = [
@@ -31,7 +33,7 @@ const STATUS_OPTIONS = [
  * URL query, and the server component re-renders the table from the new query.
  * That keeps the list shareable, bookmarkable and back-button correct.
  */
-export function ListControls({ moduleKey, moduleName, q, status, year, periods, roster }: Props) {
+export function ListControls({ moduleKey, moduleName, q, status, year, periods, roster, view }: Props) {
   const router = useRouter();
   const [text, setText] = useState(q);
   const [pending, setPending] = useState(false);
@@ -51,6 +53,7 @@ export function ListControls({ moduleKey, moduleName, q, status, year, periods, 
     if (nq.trim()) params.set('q', nq.trim());
     if (ns) params.set('status', ns);
     if (ny) params.set('year', ny);
+    if (view) params.set('view', view);
     // Any filter change returns to the first page — page 2 of the old result set is meaningless.
     const query = params.toString();
     setPending(true);

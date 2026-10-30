@@ -351,8 +351,8 @@ export function Th({
   );
 }
 
-export function Td({ children, className }: { children?: ReactNode; className?: string }) {
-  return <td className={cx('border-b border-line px-3 py-2 align-top text-ink', className)}>{children}</td>;
+export function Td({ children, className, colSpan }: { children?: ReactNode; className?: string; colSpan?: number }) {
+  return <td colSpan={colSpan} className={cx('border-b border-line px-3 py-2 align-top text-ink', className)}>{children}</td>;
 }
 
 /* ───────────────────────────── stat tile ──────────────────────────── */
