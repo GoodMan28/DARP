@@ -117,6 +117,34 @@ describe('the Scopus client', () => {
     expect(f).toMatchObject({ documents: 30, hIndex: 9, citationsExclSelf: null, hIndexExclSelf: null });
   });
 
+  it('falls back to the paper search when Elsevier refuses the author views (a key used off campus)', async () => {
+    process.env.ELSEVIER_API_KEY = 'test-key';
+    process.env.ELSEVIER_GAP_MS = '0';
+    elsevier([
+      [/\/author\/author_id/, 401, { 'service-error': { status: { statusCode: 'AUTHORIZATION_ERROR' } } }],
+      [/search\/scopus.*start=0/, 200, page(0, 25, 30)],
+      [/search\/scopus.*start=25/, 200, page(25, 5, 30)],
+      [/abstract\/citations/, 401, {}],
+    ]);
+    const { scopusFigures } = await import('@/server/researchers/scopus');
+    const f = await scopusFigures('57200000001');
+    // 30 papers cited 30, 29, … 1 times: 465 citations, and h-index 15 (the 15th paper has 16 citations).
+    expect(f).toMatchObject({ author: null, documents: 30, citations: 465, hIndex: 15, citationsExclSelf: null, hIndexExclSelf: null });
+  });
+
+  it('reads a journal’s SJR, SNIP and CiteScore from the open serial view', async () => {
+    process.env.ELSEVIER_API_KEY = 'test-key';
+    process.env.ELSEVIER_GAP_MS = '0';
+    const calls = elsevier([[/serial\/title\/issn\/20531583/, 200, { 'serial-metadata-response': { entry: [{
+      'dc:title': '2D Materials', SJRList: { SJR: [{ '@year': '2024', $: '1.000' }, { '@year': '2025', $: '1.090' }] },
+      SNIPList: { SNIP: [{ '@year': '2025', $: '0.868' }] }, citeScoreYearInfoList: { citeScoreCurrentMetric: '8.0' },
+    }] } }]]);
+    const { serialMetrics } = await import('@/server/researchers/scopus');
+    expect(await serialMetrics('2053-1583')).toEqual({ title: '2D Materials', sjr: 1.09, sjrYear: 2025, snip: 0.868, citeScore: 8 });
+    expect(calls[0]).toContain('/serial/title/issn/20531583');
+    expect(await serialMetrics('0000-0000')).toBeNull();
+  });
+
   it('says there is no such author, and refuses to run without a key', async () => {
     process.env.ELSEVIER_API_KEY = 'test-key';
     elsevier([]);

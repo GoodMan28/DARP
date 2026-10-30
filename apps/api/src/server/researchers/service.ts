@@ -187,7 +187,7 @@ export async function saveWos(
 export async function refreshScopus(userId: string, opts: { strict?: boolean } = {}): Promise<ScopusCheck | null> {
   const [u] = await db.select({
     name: users.name, prefix: users.namePrefix, first: users.firstName, middle: users.middleName, last: users.lastName,
-    scopusAuthorId: users.scopusAuthorId,
+    scopusAuthorId: users.scopusAuthorId, orcid: users.orcid, orcidCheck: users.orcidCheck,
   }).from(users).where(eq(users.id, userId)).limit(1);
   if (!u?.scopusAuthorId) return null;
   const checkedAt = new Date().toISOString();
@@ -210,11 +210,19 @@ export async function refreshScopus(userId: string, opts: { strict?: boolean } =
     return save({ checkedAt, scopusName: '', nameMatches: false, unchecked: 'unreachable' });
   }
   const a = figures.author;
-  const scopusName = [a.given, a.family].filter(Boolean).join(' ') || a.indexed;
+  const scopusName = a ? [a.given, a.family].filter(Boolean).join(' ') || a.indexed : '';
   const parts = partsOf(u);
-  const nameMatches = namesMatch(parts, { given: a.given, family: a.family, full: scopusName })
-    || (!!a.indexed && namesMatch(parts, { given: '', family: '', full: a.indexed }));
-  const check: ScopusCheck = { checkedAt, scopusName, nameMatches, noCitationOverview: figures.citationsExclSelf === null };
+  // With the profile's name, compare it. Without it (author views refused off campus), the ID counts as the
+  // person's only when their trusted ORCID record lists it: ORCID already vouches for the name.
+  const fromOrcid = trusted(u.orcid, u.orcidCheck) && !!u.orcidCheck.externalIds?.scopusAuthorIds.includes(u.scopusAuthorId);
+  const nameMatches = a
+    ? namesMatch(parts, { given: a.given, family: a.family, full: scopusName })
+      || (!!a.indexed && namesMatch(parts, { given: '', family: '', full: a.indexed }))
+    : fromOrcid;
+  const check: ScopusCheck = {
+    checkedAt, scopusName: scopusName || (nameMatches ? 'listed on your ORCID record' : ''), nameMatches,
+    noCitationOverview: figures.citationsExclSelf === null,
+  };
   if (!nameMatches) return save(check);   // a stranger's figures are never stored as this person's
 
   const values = {

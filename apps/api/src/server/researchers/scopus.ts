@@ -20,8 +20,8 @@ export const scopusConnected = () => !!process.env.ELSEVIER_API_KEY;
 export class ScopusUnavailable extends Error {
   override name = 'ScopusUnavailable';
 }
-/** The key is not entitled to this API (Citation Overview not enabled for BIT). */
-class NotEntitled extends Error {
+/** The key is not entitled to this API or view (Citation Overview not enabled, or an author view off campus). */
+export class NotEntitled extends Error {
   override name = 'NotEntitled';
 }
 
@@ -150,7 +150,8 @@ export async function fetchCitationsExclSelf(ids: string[]): Promise<number[] | 
 }
 
 export interface ScopusFigures {
-  author: ScopusAuthor;
+  /** The profile's name; null when Elsevier refuses the author views (a key used off campus without an institutional token). */
+  author: ScopusAuthor | null;
   documents: number | null;
   citations: number | null;
   hIndex: number | null;
@@ -160,16 +161,52 @@ export interface ScopusFigures {
 
 /** Everything for one author: the profile's figures, and the same without self-citations when enabled. */
 export async function scopusFigures(authorId: string): Promise<ScopusFigures | null> {
-  const author = await fetchAuthor(authorId);
-  if (!author) return null;
+  // Author Retrieval needs institutional access. Without it (HTTP 401) the figures come from the paper
+  // search instead: every paper with its citation count, from which documents, citations and the
+  // h-index follow. The profile's name is then unknown, so the caller decides whom to trust.
+  let author: ScopusAuthor | null = null;
+  try {
+    author = await fetchAuthor(authorId);
+    if (!author) return null;
+  } catch (e) {
+    if (!(e instanceof NotEntitled)) throw e;
+  }
   const docs = await fetchDocuments(authorId);
+  if (!author && docs.length === 0) return null;
   const excl = docs.length ? await fetchCitationsExclSelf(docs.map((d) => d.id)) : [];
   return {
     author,
-    documents: author.documents ?? docs.length,
-    citations: author.citations ?? docs.reduce((n, d) => n + d.citedBy, 0),
-    hIndex: author.hIndex ?? hIndex(docs.map((d) => d.citedBy)),
+    documents: author?.documents ?? docs.length,
+    citations: author?.citations ?? docs.reduce((n, d) => n + d.citedBy, 0),
+    hIndex: author?.hIndex ?? hIndex(docs.map((d) => d.citedBy)),
     citationsExclSelf: excl ? excl.reduce((n, c) => n + c, 0) : null,
     hIndexExclSelf: excl ? hIndex(excl) : null,
+  };
+}
+
+export interface SerialMetrics {
+  title: string;
+  /** The newest SJR (SCImago Journal Rank) Elsevier lists, and its year. */
+  sjr: number | null;
+  sjrYear: number | null;
+  snip: number | null;
+  /** CiteScore of the current year. */
+  citeScore: number | null;
+}
+
+/** A journal's SJR, SNIP and CiteScore from Elsevier's open Serial Title view. null when Scopus has no such journal. */
+export async function serialMetrics(issn: string): Promise<SerialMetrics | null> {
+  const r = await elsevier(`/serial/title/issn/${issn.replace(/-/g, '')}`);
+  const e = obj(list(obj(obj(r)['serial-metadata-response']).entry)[0]);
+  if (!e['dc:title']) return null;
+  const newest = (v: unknown): { n: number | null; year: number | null } => {
+    const rows = list(v).map(obj).map((x) => ({ n: num(x.$), year: num(x['@year']) })).filter((x) => x.n !== null);
+    const last = rows.sort((a, b) => (b.year ?? 0) - (a.year ?? 0))[0];
+    return { n: last?.n ?? null, year: last?.year ?? null };
+  };
+  const sjr = newest(obj(e.SJRList).SJR);
+  return {
+    title: String(e['dc:title']), sjr: sjr.n, sjrYear: sjr.year, snip: newest(obj(e.SNIPList).SNIP).n,
+    citeScore: num(obj(e.citeScoreYearInfoList).citeScoreCurrentMetric),
   };
 }
