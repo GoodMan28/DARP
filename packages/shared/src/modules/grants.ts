@@ -1,5 +1,6 @@
 // src/modules/grants.ts
 import type { ModuleConfig } from './_types';
+import { FACULTY_MEMBERS } from './_types';
 
 export const grants: ModuleConfig = {
   key: 'grants',
@@ -10,7 +11,7 @@ export const grants: ModuleConfig = {
   bodies: ['NAAC', 'NIRF'],
   description:
     'Research funding received through government and non-government sources — projects, endowments and research chairs.',
-  ownerRoles: ['faculty', 'hod'],
+  ownerRoles: FACULTY_MEMBERS,
   verifierRoles: ['drie'],
   viewRoles: ['hod', 'drie', 'admin'],
   scope: 'self',

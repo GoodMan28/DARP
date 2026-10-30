@@ -141,14 +141,25 @@ describe('capabilities', () => {
   it('only owner roles may create', () => {
     expect(canCreateIn(user({ role: 'faculty' }), mod)).toBe(true);
     expect(canCreateIn(user({ role: 'hod' }), mod)).toBe(true);        // a HOD is also a faculty member
-    expect(canCreateIn(user({ role: 'drie', departmentId: null }), mod)).toBe(false);
-    expect(canCreateIn(user({ role: 'admin' }), mod)).toBe(true);
+    // Every post is held by a professor, who reports their own work too.
+    for (const role of ['dofa', 'drie', 'dugs', 'cdc', 'admin'] as const) {
+      expect(canCreateIn(user({ role }), mod), role).toBe(true);
+    }
+    // An office module stays its office's: a dean does not enter CDC's competitive-exam results.
+    expect(canCreateIn(user({ role: 'drie' }), MODULES.exams!)).toBe(false);
+  });
+
+  it('shows an office holder only their own records in a module they fill in but do not oversee', () => {
+    const dugs = user({ id: 'g1', role: 'dugs', departmentId: 'd1' });
+    // DUGS neither verifies nor views patents: it reads its own patent and nobody else's.
+    expect(canReadRecord(dugs, MODULES.patents!, rec({ ownerUserId: 'g1' }))).toBe(true);
+    expect(canReadRecord(dugs, MODULES.patents!, rec({ ownerUserId: 'u9' }))).toBe(false);
   });
 });
 
 describe('every module is reachable and verifiable by somebody', () => {
-  it('gives each of the 24 modules an owner role and a verifier', () => {
-    expect(MODULE_LIST).toHaveLength(24);
+  it('gives each of the 25 modules an owner role and a verifier', () => {
+    expect(MODULE_LIST).toHaveLength(25);
     for (const m of MODULE_LIST) {
       expect(m.ownerRoles.length, `${m.key} has no owner role`).toBeGreaterThan(0);
       expect(m.verifierRoles.length, `${m.key} has no verifier role`).toBeGreaterThan(0);
@@ -162,10 +173,14 @@ describe('every module is reachable and verifiable by somebody', () => {
     }
   });
 
-  it('never lets a module be verified by the same role that owns it', () => {
-    for (const m of MODULE_LIST) {
-      const selfVerified = m.ownerRoles.filter((r) => m.verifierRoles.includes(r) && r !== 'admin');
-      expect(selfVerified, `${m.key} is verified by its own owner`).toEqual([]);
+  it('never lets anyone return their own record, though a verifying office may own records too', () => {
+    // DRIE checks patents and, being professors, its staff file patents as well.
+    const drie = user({ id: 'r1', role: 'drie', departmentId: 'd1' });
+    for (const m of MODULE_LIST.filter((x) => x.verifierRoles.includes('drie'))) {
+      const own = canTransition(drie, m, rec({ ownerUserId: 'r1', status: 'approved' }), 'return');
+      expect(own.allowed, `${m.key}: own record`).toBe(false);
+      const other = canTransition(drie, m, rec({ ownerUserId: 'u9', status: 'approved' }), 'return');
+      expect(other.allowed, `${m.key}: someone else's record`).toBe(true);
     }
   });
 });

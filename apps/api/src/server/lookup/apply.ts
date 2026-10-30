@@ -1,11 +1,12 @@
 import type { ModuleConfig } from '@darp/shared/modules/types';
 import { getModule } from '@darp/shared/modules';
-import { LOOKUP_SOURCE_LABEL, type RecordVerification, type FieldProvenance } from '@darp/shared/contracts';
+import { LOOKUP_SOURCE_LABEL, type RecordVerification, type FieldProvenance, type Authorship } from '@darp/shared/contracts';
 import { resolve } from './resolve';
 import { isLookupUnavailable } from './http';
-import { namesMatch } from './names';
+import { ownerNamed } from './names';
+import { identityOfName, type OwnerIdentity } from './identity';
 import { buildCitation } from './citation';
-import type { LookupResult } from './types';
+import type { LookupResult, Person } from './types';
 
 /**
  * Anything the automatic check could not confirm, worded for the verifying office and IQAC.
@@ -72,7 +73,7 @@ export function patentStatusDate(data: Record<string, unknown>): string {
 export async function applyLookup(
   m: ModuleConfig,
   input: Record<string, unknown>,
-  ctx: { ownerName: string },
+  ctx: { owner: OwnerIdentity },
 ): Promise<Applied> {
   const applied = await applyLookupCore(m, input, ctx);
   if (m.lookup?.kind === 'patent') applied.data.statusDate = patentStatusDate(applied.data);
@@ -82,7 +83,7 @@ export async function applyLookup(
 async function applyLookupCore(
   m: ModuleConfig,
   input: Record<string, unknown>,
-  ctx: { ownerName: string },
+  ctx: { owner: OwnerIdentity },
 ): Promise<Applied> {
   if (!m.lookup) return { data: input, verification: null, eligible: false, misplaced: null };
 
@@ -102,6 +103,7 @@ async function applyLookupCore(
       misplaced: null,
       verification: {
         source: null, identifier: raw || null, checkedAt, autoApproved: false, reasons: [reason], fields,
+        authorship: { level: 'unmatched', detail: `Nothing was fetched, so the ${personOf(m)} list was typed by hand.` },
       },
     };
   };
@@ -178,11 +180,18 @@ async function applyLookupCore(
   }
   // Matched against the PUBLISHED author list, never the edited one (decision D3).
   // A grant found without its application has no inventor list at all: its flag's reason says so.
-  const published = r.people.filter((p) => namesMatch(ctx.ownerName, p));
-  if (published.length === 0 && !r.flags.includes('grant-only')) {
-    reasons.push(`${ctx.ownerName} is not in the ${personOf(m)} list of ${source} — the name was added by hand.`);
+  const ownerName = ctx.owner.name;
+  const authorship = authorshipOf(m, r, ctx.owner);
+  const published = r.people.filter((p) => ownerNamed(ctx.owner, p));
+  if (authorship.level === 'confirmed') {
+    // The ORCID iD settles it, whatever the name looks like on the paper.
+  } else if (published.length === 0 && !r.flags.includes('grant-only')) {
+    reasons.push(`${ownerName} is not in the ${personOf(m)} list of ${source} — the name was added by hand.`);
   } else if (published.length > 0 && published.every((p) => p.bitAffiliated === false)) {
-    reasons.push(`${ctx.ownerName} is listed on the published record with another institution, not BIT Mesra.`);
+    reasons.push(`${ownerName} is listed on the published record with another institution, not BIT Mesra.`);
+  }
+  if (ctx.owner.orcid && published.length > 0 && published.every((p) => p.orcid && p.orcid !== ctx.owner.orcid)) {
+    reasons.push(`The ${personOf(m)} named like ${ownerName} has a different ORCID iD on the published record (${published[0]!.orcid}), not ${ctx.owner.orcid}: possibly a namesake.`);
   }
   // The year is never a reason: a record keeps its own year, and IQAC chooses the years to pull.
   return {
@@ -196,8 +205,31 @@ async function applyLookupCore(
       autoApproved: false,
       reasons: [...new Set(reasons)],
       fields,
+      authorship,
     },
   };
+}
+
+/**
+ * How sure the portal is that the owner is one of the published authors or inventors:
+ * their checked ORCID iD on the record; else their name at BIT Mesra; else their name alone; else nothing.
+ */
+export function authorshipOf(m: ModuleConfig, r: LookupResult, owner: OwnerIdentity): Authorship {
+  const word = personOf(m);
+  if (owner.orcid && r.people.some((p) => p.orcid === owner.orcid)) {
+    return { level: 'confirmed', detail: `${owner.name}'s ORCID iD ${owner.orcid} is on the published record.` };
+  }
+  const named: Person[] = r.people.filter((p) => ownerNamed(owner, p));
+  // A listed author with someone else's ORCID iD is not the owner, however alike the names.
+  const plausible = owner.orcid ? named.filter((p) => !p.orcid || p.orcid === owner.orcid) : named;
+  if (plausible.some((p) => p.bitAffiliated === true)) {
+    return { level: 'likely', detail: `A listed ${word} has ${owner.name}'s name and ${m.lookup?.kind === 'patent' ? 'a BIT Mesra address' : 'BIT Mesra as affiliation'}.` };
+  }
+  if (plausible.length > 0) {
+    const where = plausible.every((p) => p.bitAffiliated === false) ? 'another institution' : 'no affiliation given';
+    return { level: 'name', detail: `A listed ${word} has ${owner.name}'s name (${where}). Check the evidence.` };
+  }
+  return { level: 'unmatched', detail: `No listed ${word} has ${owner.name}'s name: it was added by hand. Check the evidence.` };
 }
 
 /** A work that belongs in another module (or in none), refused on submit: lookup.elsewhere. */
@@ -273,12 +305,14 @@ function splitAuthors(list: string): string[] {
  * Returns the field to blame and the message, or null when the rule is met or not configured.
  */
 export function ownerMissingFromAuthors(
-  m: ModuleConfig, data: Record<string, unknown>, ownerName: string,
+  m: ModuleConfig, data: Record<string, unknown>, ownerIn: OwnerIdentity | string,
 ): { field: string; message: string } | null {
   const key = m.lookup?.ownerMustBeIn;
   if (!key) return null;
+  const owner = typeof ownerIn === 'string' ? identityOfName(ownerIn) : ownerIn;
+  const ownerName = owner.name;
   const names = splitAuthors(String(data[key] ?? ''));
-  const found = names.some((full) => namesMatch(ownerName, { given: '', family: '', full }));
+  const found = names.some((full) => ownerNamed(owner, { given: '', family: '', full }));
   const word = personOf(m);
   return found ? null : {
     field: key,

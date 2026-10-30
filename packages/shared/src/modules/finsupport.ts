@@ -1,5 +1,6 @@
 // src/modules/finsupport.ts
 import type { ModuleConfig } from './_types';
+import { FACULTY_MEMBERS } from './_types';
 
 export const finsupport: ModuleConfig = {
   key: 'finsupport',
@@ -10,7 +11,7 @@ export const finsupport: ModuleConfig = {
   bodies: ['NAAC'],
   description:
     'Institute support for attending conferences and workshops, and for professional-body membership fees. Minimum ₹5,000 per teacher per year.',
-  ownerRoles: ['faculty', 'hod'],
+  ownerRoles: FACULTY_MEMBERS,
   verifierRoles: ['dofa'],
   viewRoles: ['hod', 'dofa', 'admin'],
   scope: 'self',

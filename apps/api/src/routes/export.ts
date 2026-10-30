@@ -1,28 +1,12 @@
 import { withRoute, fail, file } from '@/server/http/handler';
 import { generateWorkbook } from '@/server/export/excel';
 import { WORKBOOK_KEYS } from '@/server/export/mapping';
+import { ALLOWED_WORKBOOKS as ALLOWED } from '@/server/export/reports';
 import { parseRange } from '@/server/records/range';
 import { hasCapability } from '@/server/auth/permissions';
 import { audit } from '@/server/audit/log';
 import { log } from '@/server/log';
-import type { Role, WorkbookKey } from '@darp/shared/modules/types';
-
-/**
- * Which office may export which workbook. Admin (IQAC) may export all.
- *
- * Note: `hod` has no `export` capability in `permissions.ts`, so an HOD is refused by the route
- * wrapper before this map is consulted. The entry is kept so that granting the capability is the
- * only change needed, and the department filter below is already in place for it.
- */
-const ALLOWED: Record<Role, WorkbookKey[]> = {
-  admin: WORKBOOK_KEYS,
-  drie: ['drie'],
-  dofa: ['dofa', 'faculty'],
-  dugs: ['dugs'],
-  cdc: ['cdc'],
-  hod: ['hod'],
-  faculty: [],
-};
+import type { WorkbookKey } from '@darp/shared/modules/types';
 
 export const GET = withRoute(
   { capability: 'export', rate: { limit: 10, windowSeconds: 300 } },

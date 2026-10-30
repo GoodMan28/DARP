@@ -21,7 +21,7 @@ export async function truncateAll() {
     // TRUNCATE from everyone, owner included. Test rows accumulate there, which is
     // exactly the behaviour the append-only guarantee promises.
     await owner.query(`
-      truncate table record_transitions, evidence_files, records,
+      truncate table saved_views, researcher_metrics, app_settings, bulk_import_items, bulk_imports, record_transitions, evidence_files, records,
                      module_declarations, profile_baselines,
                      sessions, password_resets, login_attempts
       restart identity cascade;

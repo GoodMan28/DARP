@@ -1,5 +1,6 @@
 // src/modules/publications.ts
 import type { ModuleConfig } from './_types';
+import { FACULTY_MEMBERS } from './_types';
 
 export const publications: ModuleConfig = {
   key: 'publications',
@@ -10,7 +11,7 @@ export const publications: ModuleConfig = {
   bodies: ['NAAC', 'NIRF', 'QS'],
   description:
     'Research papers published in journals. Paste the DOI and press Fetch details — the paper\'s details are filled in from the publisher\'s record. Each paper is entered once.',
-  ownerRoles: ['faculty', 'hod'],
+  ownerRoles: FACULTY_MEMBERS,
   verifierRoles: ['drie'],
   viewRoles: ['hod', 'drie', 'admin'],
   scope: 'self',

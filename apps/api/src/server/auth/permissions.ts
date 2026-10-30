@@ -3,7 +3,9 @@ import type { SessionUser } from './session';
 
 /** What a role may do institute-wide, independent of any module. */
 export const ROLE_CAPABILITIES = {
-  faculty: { manageUsers: false, manageLists: false, manageCycle: false, viewAudit: false, export: false, revealPii: false },
+  // A faculty member may download their own Faculty workbook: every export query runs through
+  // scopeFilter(), which gives a faculty member their own records only.
+  faculty: { manageUsers: false, manageLists: false, manageCycle: false, viewAudit: false, export: true, revealPii: false },
   // A head of department may export the HOD workbook. It is safe because every export
   // query runs through scopeFilter(), which limits a HOD to their own department.
   hod: { manageUsers: false, manageLists: false, manageCycle: false, viewAudit: false, export: true, revealPii: false },

@@ -1,5 +1,12 @@
 export type Role = 'faculty' | 'hod' | 'dofa' | 'drie' | 'dugs' | 'cdc' | 'admin';
 
+/**
+ * Who fills in the faculty modules and the Faculty Profile. Every post (HOD, the deans, the CDC head,
+ * the IQAC coordinator) is held by a professor, who reports their own work like any faculty member,
+ * on top of what the post lets them see.
+ */
+export const FACULTY_MEMBERS: Role[] = ['faculty', 'hod', 'dofa', 'drie', 'dugs', 'cdc', 'admin'];
+
 export type WorkbookKey = 'faculty' | 'drie' | 'dofa' | 'dugs' | 'hod' | 'cdc';
 
 export type PeriodType = 'CY' | 'FY' | 'AY';

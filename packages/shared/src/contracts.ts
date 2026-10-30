@@ -144,7 +144,8 @@ export interface CorrectionRow {
 
 /* ──────────────────────────────── profile ─────────────────────────────── */
 
-export type CounterWindow = 'cycle' | 'sinceJoining';
+/** 'today': records still valid today (an award within its validity), whatever their year. */
+export type CounterWindow = 'cycle' | 'sinceJoining' | 'today';
 
 export interface DeclaredCounterDef {
   key: string;
@@ -220,6 +221,8 @@ export interface FormFieldDef {
 
 /** GET /api/modules/:moduleKey/schema — the module's shape plus the caller's standing in it. */
 export interface ModuleSchemaPayload {
+  /** The columns the Filter, Sort, Group and Hide fields tools offer for this module. */
+  viewColumns: import('./views').ViewColumn[];
   key: string;
   name: string;
   group: ModuleConfig['group'];
@@ -266,6 +269,8 @@ export interface RecordListRow {
   returnedAt: string | null;
   /** A profile roster row for someone who has not saved a profile yet: `id` is then the person's user id. */
   noRecord?: boolean;
+  /** The group the row is under, when the view groups ("Computer Science & Engg.", "Approved"). */
+  group?: string | null;
 }
 
 /** GET /api/modules/:moduleKey/records */
@@ -274,6 +279,8 @@ export interface RecordListPayload {
   page: number;
   pageSize: number;
   rows: RecordListRow[];
+  /** When grouped: every group's size across all pages, in order. */
+  groups?: Array<{ label: string; count: number }>;
 }
 
 export interface RecordHistoryEntry {
@@ -348,6 +355,56 @@ export interface RecordVerification {
    * cannot be hidden. Fields not listed came from the publisher unchanged.
    */
   fields?: Record<string, FieldProvenance>;
+  /** How sure the portal is that the owner is one of the authors or inventors. Never blocks a submission. */
+  authorship?: Authorship;
+}
+
+/**
+ * confirmed: the owner's checked ORCID iD is on the published record.
+ * likely:    the owner's name matches a listed author or inventor at BIT Mesra.
+ * name:      the name matches, but the affiliation is unknown or another institution.
+ * unmatched: nobody listed matches; the owner added their name by hand.
+ */
+export type AuthorshipLevel = 'confirmed' | 'likely' | 'name' | 'unmatched';
+
+export interface Authorship {
+  level: AuthorshipLevel;
+  /** One sentence for DRIE and IQAC, e.g. "ORCID iD 0000-0002-1825-0097 is on the paper." */
+  detail: string;
+}
+
+export const AUTHORSHIP_LABEL: Record<AuthorshipLevel, string> = {
+  confirmed: 'Confirmed by ORCID',
+  likely: 'Likely: name and BIT Mesra',
+  name: 'Name only',
+  unmatched: 'Needs checking',
+};
+
+/** What ORCID's public record said about an iD when it was saved. */
+export interface OrcidCheck {
+  checkedAt: string;
+  /** The record exists on orcid.org. */
+  found: boolean;
+  /** The name on the ORCID record (or one of its other names) is the account's name. */
+  nameMatches: boolean;
+  /** An employment at BIT Mesra is listed. */
+  bitEmployment: boolean;
+  /** The name as ORCID shows it, for the person to compare. */
+  orcidName: string;
+  /** ORCID could not be reached: saved unchecked, and not used until checked again. */
+  unchecked?: boolean;
+  /** The other IDs the ORCID record lists ("Other IDs" on orcid.org): Scopus Author IDs and ResearcherIDs. */
+  externalIds?: { scopusAuthorIds: string[]; researcherIds: string[] };
+}
+
+/** GET /api/profile/identity */
+export interface IdentityPayload {
+  namePrefix: string;
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  orcid: string | null;
+  orcidCheck: OrcidCheck | null;
 }
 
 export interface FieldProvenance {
@@ -377,3 +434,62 @@ export const LOOKUP_SOURCE_LABEL: Record<LookupSource, string> = {
   openlibrary: 'Open Library',
   ipindia: 'the Patent Office Journal (IP India)',
 };
+
+/* ── Adding many records at once from a file of DOIs, ISBNs or patent numbers ── */
+
+/**
+ * What became of one identifier in the file. Every one but `exists` has a draft for the owner to
+ * complete (the faculty member is trusted); the status says what the check found:
+ *  created       filled from the register, nothing to add
+ *  exists        already recorded (by the owner, with a link, or by a colleague): no draft
+ *  not-found     not in the register: the draft holds only the number
+ *  wrong-module  it belongs in another module: the draft is made there (a preprint belongs nowhere: no draft)
+ *  not-yours     the owner's name is not in its author or inventor list: they add it on the draft
+ *  error         could not be checked (register unreachable: draft holds the number; upload cut off: none)
+ */
+export type BulkItemStatus = 'pending' | 'created' | 'exists' | 'not-found' | 'wrong-module' | 'not-yours' | 'error';
+
+export interface BulkItem {
+  id: string;
+  raw: string;
+  status: BulkItemStatus;
+  message: string | null;
+  /** The record made (or found already made), while it exists. */
+  record: {
+    id: string;
+    /** A line that belongs in another module has its draft there. */
+    moduleKey: string;
+    moduleName: string;
+    status: RecordStatus;
+    mine: boolean;
+    title: string;
+    /** The module's evidence field, for the upload box on the row. */
+    evidence: { fieldKey: string; label: string; accept: string[] | null; maxSizeMB: number } | null;
+    /** The evidence file on the draft, if any. */
+    evidenceId: string | null;
+    /** Submitting needs an evidence file: always in some modules, else when something is unconfirmed. */
+    needsEvidence: boolean;
+    /** What the automatic check could not confirm. */
+    points: string[];
+  } | null;
+}
+
+/** GET /api/modules/:moduleKey/bulk/:id */
+export interface BulkImport {
+  id: string;
+  moduleKey: string;
+  fileName: string;
+  status: 'running' | 'done' | 'failed';
+  total: number;
+  done: number;
+  createdAt: string;
+  items: BulkItem[];
+}
+
+/** POST /api/modules/:moduleKey/bulk/:id/submit: one per record. */
+export interface BulkSubmitResult {
+  recordId: string;
+  ok: boolean;
+  status: RecordStatus | null;
+  message: string | null;
+}

@@ -1,5 +1,6 @@
 // src/modules/profile.ts
 import type { ModuleConfig } from './_types';
+import { FACULTY_MEMBERS } from './_types';
 
 export const profile: ModuleConfig = {
   key: 'profile',
@@ -9,7 +10,7 @@ export const profile: ModuleConfig = {
   bodies: ['NAAC', 'NIRF'],
   description:
     'Your identity, qualifications and appointment details. Every count on your profile is computed from your records — nothing here is hand-counted.',
-  ownerRoles: ['faculty', 'hod'],
+  ownerRoles: FACULTY_MEMBERS,
   verifierRoles: ['dofa'],
   viewRoles: ['hod', 'dofa', 'admin'],
   scope: 'self',

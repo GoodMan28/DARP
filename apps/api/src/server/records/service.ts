@@ -1,10 +1,11 @@
-import { and, asc, desc, eq, inArray, isNotNull, isNull, sql, count } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql, count, type SQL } from 'drizzle-orm';
 import { db } from '@/server/db';
 import { records, recordTransitions, recordEdits, users, departments, moduleDeclarations } from '@/server/db/schema';
 import { getModule } from '@darp/shared/modules';
 import type { ModuleConfig, RecordStatus, Role } from '@darp/shared/modules/types';
 import type { SessionUser } from '@/server/auth/session';
 import { scopeFilter } from './scope';
+import { buildViewQuery, type ViewQuery } from './viewQuery';
 import {
   canCreateIn, canReadRecord, canEditRecord, canDeleteRecord, deleteNeedsReason, canTransition, type WorkflowAction,
 } from '@/server/auth/permissions';
@@ -15,6 +16,7 @@ import { defaultRange, windowsOfRange } from './range';
 import { audit } from '@/server/audit/log';
 import { derivedValues } from '@/server/journals/ranking';
 import { applyLookup, ownerMissingFromAuthors, evidenceMissing } from '@/server/lookup/apply';
+import { ownerIdentity, type OwnerIdentity } from '@/server/lookup/identity';
 import { unattachableFiles, linkEvidence } from './evidenceLinks';
 import { systemActor } from '@/server/lookup/system';
 import { LOOKUP_SOURCE_LABEL, type RecordVerification, type RecordListRow } from '@darp/shared/contracts';
@@ -84,10 +86,15 @@ export interface ListParams {
   mine?: boolean;
   /** Only records with points for the verifying office or IQAC to check (see needsCheck). */
   check?: boolean;
+  /** A view (conditions, sort, grouping) as handed over by the page; read and cleaned by buildViewQuery. */
+  view?: unknown;
 }
 
 export type ListRow = Omit<RecordListRow, 'updatedAt'> & { updatedAt: Date };
-export interface ListResult { total: number; page: number; pageSize: number; rows: ListRow[] }
+export interface ListResult {
+  total: number; page: number; pageSize: number; rows: ListRow[];
+  groups?: Array<{ label: string; count: number }>;
+}
 
 /** Who sent each returned record back, and when: the latest return of every record on the page. */
 async function returnedInfo(ids: string[]): Promise<Map<string, { role: Role; at: string }>> {
@@ -102,16 +109,18 @@ async function returnedInfo(ids: string[]): Promise<Map<string, { role: Role; at
 }
 
 /**
- * The Faculty Profile as a department roster: every active faculty member and HOD the caller may see,
+ * The Faculty Profile as a department roster: everyone active who fills in a profile (faculty, HODs and
+ * the professors holding an office) the caller may see,
  * with their profile record if they have saved one ("not filled in yet" otherwise).
  */
 async function listProfileRoster(actor: SessionUser, m: ModuleConfig, params: ListParams): Promise<ListResult> {
   const pageSize = Math.min(Math.max(params.pageSize ?? 20, 5), 100);
   const page = Math.max(params.page ?? 1, 1);
-  let who = and(inArray(users.role, ['faculty', 'hod']), eq(users.isActive, true))!;
+  let who = and(inArray(users.role, m.ownerRoles), eq(users.isActive, true))!;
   if (actor.role === 'hod') {
     who = actor.departmentId ? and(who, eq(users.departmentId, actor.departmentId))! : and(who, sql`false`)!;
   }
+
   if (params.q) {
     const needle = `%${params.q.trim().toLowerCase().slice(0, 100)}%`;
     who = and(who, sql`lower(${users.name}) like ${needle}`)!;
@@ -156,13 +165,13 @@ async function listProfileRoster(actor: SessionUser, m: ModuleConfig, params: Li
   };
 }
 
-export async function listRecords(actor: SessionUser, moduleKey: string, params: ListParams): Promise<ListResult> {
-  const m = mustGetModule(moduleKey);
-
-  if (m.key === 'profile' && actor.role !== 'faculty' && !params.check && !params.periodYear && !params.mine) {
-    return listProfileRoster(actor, m, params);
-  }
-
+/**
+ * The conditions of a list: the caller's scope, then the page's own filters (status, year, search…),
+ * then the view's conditions. The view is only ever added to the scope, never in place of it.
+ */
+export async function listWhere(
+  actor: SessionUser, m: ModuleConfig, params: ListParams,
+): Promise<{ where: SQL; vq: ViewQuery | null }> {
   let where = scopeFilter(actor, m);
   if (params.status && params.status !== 'none') where = and(where, eq(records.status, params.status))!;
   if (params.periodYear) where = and(where, eq(records.periodYear, params.periodYear))!;
@@ -179,6 +188,20 @@ export async function listRecords(actor: SessionUser, moduleKey: string, params:
     where = and(where, sql`${records.searchText} like ${needle}`)!;
   }
 
+  const vq = params.view ? await buildViewQuery(actor, m, params.view) : null;
+  if (vq?.where) where = and(where, vq.where)!;
+  return { where, vq };
+}
+
+export async function listRecords(actor: SessionUser, moduleKey: string, params: ListParams): Promise<ListResult> {
+  const m = mustGetModule(moduleKey);
+
+  if (m.key === 'profile' && actor.role !== 'faculty' && !params.check && !params.periodYear && !params.mine) {
+    return listProfileRoster(actor, m, params);
+  }
+
+  const { where, vq } = await listWhere(actor, m, params);
+
   const pageSize = Math.min(Math.max(params.pageSize ?? 20, 5), 100);
   const page = Math.max(params.page ?? 1, 1);
 
@@ -186,9 +209,14 @@ export async function listRecords(actor: SessionUser, moduleKey: string, params:
   // Derived columns (the journal's ranking) are not stored, so they cannot be sorted on.
   const sortable = new Set(m.listColumns.filter((k) => m.fields.some((f) => f.key === k)));
   const dir = params.dir === 'desc' ? desc : asc;
-  const orderBy = params.sort && sortable.has(params.sort)
-    ? dir(sql`${records.data} ->> ${params.sort}`)
-    : desc(records.updatedAt);
+  const groupExpr = vq?.groupExpr ?? null;
+  // The view's sort first (after its grouping, which keeps each group's rows together), else the page's own.
+  const orderBy: SQL[] = [
+    ...(groupExpr ? [sql`${groupExpr} asc`] : []),
+    ...(vq?.orderBy.length ? vq.orderBy
+      : [params.sort && sortable.has(params.sort) ? dir(sql`${records.data} ->> ${params.sort}`) : desc(records.updatedAt)]),
+    desc(records.updatedAt),
+  ];
 
   const rows = await db
     .select({
@@ -203,15 +231,27 @@ export async function listRecords(actor: SessionUser, moduleKey: string, params:
       updatedAt: records.updatedAt,
       returnedRemark: records.returnedRemark,
       verification: records.verification,
+      grp: groupExpr ?? sql`null`,
     })
     .from(records)
     .innerJoin(users, eq(users.id, records.ownerUserId))
+    .leftJoin(departments, eq(departments.id, records.departmentId))
     .where(where)
-    .orderBy(orderBy)
+    .orderBy(...orderBy)
     .limit(pageSize)
     .offset((page - 1) * pageSize);
 
-  const [totalRow] = await db.select({ n: count() }).from(records).where(where);
+  const [totalRow] = await db.select({ n: count() }).from(records)
+    .innerJoin(users, eq(users.id, records.ownerUserId))
+    .leftJoin(departments, eq(departments.id, records.departmentId))
+    .where(where);
+  // Every group's size across all pages ("group by 1": the expression is a parameterised piece of SQL).
+  const groups = groupExpr
+    ? (await db.select({ label: sql<string>`${groupExpr}`, n: count() }).from(records)
+      .innerJoin(users, eq(users.id, records.ownerUserId))
+      .leftJoin(departments, eq(departments.id, records.departmentId))
+      .where(where).groupBy(sql`1`).orderBy(sql`1`)).map((g) => ({ label: g.label, count: g.n }))
+    : undefined;
   const derived = await derivedValues(m, rows.map((r) => ({ key: r.id, data: r.data as Record<string, unknown> })));
   const returned = await returnedInfo(rows.filter((r) => r.status === 'returned').map((r) => r.id));
 
@@ -219,8 +259,10 @@ export async function listRecords(actor: SessionUser, moduleKey: string, params:
     total: totalRow?.n ?? 0,
     page,
     pageSize,
+    ...(groups ? { groups } : {}),
     rows: rows.map((r) => ({
       id: r.id,
+      group: (r.grp as string | null) ?? null,
       status: r.status,
       periodLabel: r.periodLabel,
       periodYear: r.periodYear,
@@ -413,11 +455,13 @@ function refuseOnSubmit(m: ModuleConfig, looked: Looked, mode: 'draft' | 'submit
  *    evidence field is `required` need it on every record anyway.
  */
 function submitErrors(
-  m: ModuleConfig, looked: Looked, ownerName: string, mode: 'draft' | 'submit',
+  m: ModuleConfig, looked: Looked, ownerWho: OwnerIdentity, mode: 'draft' | 'submit',
 ): Record<string, string> {
   if (mode !== 'submit' || !m.lookup) return {};
   const errors: Record<string, string> = {};
-  const owner = ownerMissingFromAuthors(m, looked.data, ownerName);
+  // An ORCID iD on the published record proves authorship, however the name is printed there.
+  const confirmed = looked.verification?.authorship?.level === 'confirmed';
+  const owner = confirmed ? null : ownerMissingFromAuthors(m, looked.data, ownerWho);
   if (owner) errors[owner.field] = owner.message;
   const evidence = evidenceMissing(m, looked.data, looked.verification);
   if (evidence) errors[evidence.field] = evidence.message;
@@ -426,11 +470,11 @@ function submitErrors(
 
 /** Field rules and submit rules together, so the owner sees every problem at once. */
 async function validateSubmission(
-  m: ModuleConfig, looked: Looked, ownerName: string, mode: 'draft' | 'submit',
+  m: ModuleConfig, looked: Looked, ownerWho: OwnerIdentity, mode: 'draft' | 'submit',
 ) {
   refuseOnSubmit(m, looked, mode);
   const v = await validateRecord(m, looked.data, mode);
-  const errors = { ...submitErrors(m, looked, ownerName, mode), ...(v.ok ? {} : v.errors) };
+  const errors = { ...submitErrors(m, looked, ownerWho, mode), ...(v.ok ? {} : v.errors) };
   if (!v.ok || Object.keys(errors).length > 0) throw new ServiceError('VALIDATION', 'Some fields need attention.', errors);
   return v;
 }
@@ -452,8 +496,9 @@ export async function createRecord(
   if (!canCreateIn(actor, m)) throw new ServiceError('FORBIDDEN', 'You cannot add records to this module.');
 
   const cycle = await activeCycle();
-  const looked = await applyLookup(m, input, { ownerName: actor.name });
-  const v = await validateSubmission(m, looked, actor.name, mode);
+  const who = await ownerIdentity(actor.id, actor.name);
+  const looked = await applyLookup(m, input, { owner: who });
+  const v = await validateSubmission(m, looked, who, mode);
 
   const departmentId = departmentForRecord(actor, m);
   const badFiles = await unattachableFiles(actor.id, m, null, v.data);
@@ -573,10 +618,10 @@ export async function updateRecord(
     }
   }
 
-  const [owner] = await db.select({ name: users.name }).from(users).where(eq(users.id, existing.ownerUserId));
-  const looked = await applyLookup(m, input, { ownerName: owner?.name ?? actor.name });
+  const who = await ownerIdentity(existing.ownerUserId, actor.name);
+  const looked = await applyLookup(m, input, { owner: who });
 
-  const v = await validateSubmission(m, looked, owner?.name ?? actor.name, mode);
+  const v = await validateSubmission(m, looked, who, mode);
 
   const badFiles = await unattachableFiles(actor.id, m, id, v.data);
   if (Object.keys(badFiles).length > 0) throw new ServiceError('VALIDATION', 'Some fields need attention.', badFiles);
@@ -941,12 +986,15 @@ export async function getEncryptedFieldForReveal(
 
 /* ─────────────── nil returns ("nothing to report for a year") ─────────────── */
 
-/** The years someone may declare "nothing to report" for: the default range's years, newest first. */
-export async function declarableYears(): Promise<number[]> {
-  const r = await defaultRange();
-  const out: number[] = [];
-  for (let y = r.to; y >= r.from; y--) out.push(y);
-  return out;
+/**
+ * The years someone may declare "nothing to report" for: the last ten years, plus any year already
+ * declared, newest first. A year is named the way the module counts years (FY 2024 is FY 2024-25).
+ */
+export function declarableYears(declared: number[] = [], now = new Date()): number[] {
+  const thisYear = now.getUTCFullYear();
+  const years = new Set<number>(declared);
+  for (let y = thisYear; y > thisYear - 10; y--) years.add(y);
+  return [...years].sort((a, b) => b - a);
 }
 
 export async function setNilDeclaration(actor: SessionUser, moduleKey: string, declared: boolean, year?: number) {
@@ -1021,4 +1069,45 @@ async function assertNoDuplicate(
       Object.fromEntries((m.naturalKey ?? []).map((k) => [k, 'Already recorded.'])),
     );
   }
+}
+
+/** What an export holds: the rows a list would show, all of them up to `limit`, in the view's order. */
+export interface ExportData {
+  columns: import('@darp/shared/views').ViewColumn[];
+  view: import('@darp/shared/views').ViewState;
+  truncated: boolean;
+  rows: Array<{
+    ownerName: string; department: string; status: RecordStatus; periodLabel: string;
+    data: Record<string, unknown>; derived: Record<string, string>;
+  }>;
+}
+
+export async function exportRows(
+  actor: SessionUser, moduleKey: string, params: ListParams, limit: number,
+): Promise<ExportData> {
+  const m = mustGetModule(moduleKey);
+  const { where, vq } = await listWhere(actor, m, { ...params, view: params.view ?? {} });
+  const groupExpr = vq?.groupExpr ?? null;
+  const rows = await db
+    .select({
+      id: records.id, status: records.status, periodLabel: records.periodLabel, data: records.data,
+      ownerUserId: records.ownerUserId, ownerName: users.name, department: departments.name,
+    })
+    .from(records)
+    .innerJoin(users, eq(users.id, records.ownerUserId))
+    .leftJoin(departments, eq(departments.id, records.departmentId))
+    .where(where)
+    .orderBy(...(groupExpr ? [sql`${groupExpr} asc`] : []), ...(vq?.orderBy.length ? vq.orderBy : []), desc(records.updatedAt))
+    .limit(limit + 1);
+  const kept = rows.slice(0, limit);
+  const derived = await derivedValues(m, kept.map((r) => ({ key: r.id, data: r.data as Record<string, unknown> })));
+  return {
+    columns: vq!.columns, view: vq!.view, truncated: rows.length > limit,
+    rows: kept.map((r) => ({
+      ownerName: r.ownerName, department: r.department ?? '', status: r.status, periodLabel: r.periodLabel,
+      // The same protection as the list: masked or hidden values for anyone but the owner and IQAC.
+      data: presentForRead(m, r.data as Record<string, unknown>, { includeSensitive: r.ownerUserId === actor.id || actor.role === 'admin' }),
+      derived: derived.get(r.id) ?? {},
+    })),
+  };
 }

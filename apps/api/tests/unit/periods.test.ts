@@ -23,13 +23,13 @@ describe('period resolution', () => {
     expect(labelFor(2024, 'CY')).toBe('2024');
   });
 
-  it('prints the source field for all 24 modules — REVIEW THIS OUTPUT ONCE', () => {
+  it('prints the source field for all 25 modules — REVIEW THIS OUTPUT ONCE', () => {
     const table = MODULE_LIST.map((m) => {
       const src = periodSourceField(m);
       return `${m.key.padEnd(16)} ${m.periodType}  ${src ? `${src.kind}:${src.key}` : '(falls back to the cycle end)'}`;
     });
     console.error('\nPeriod source per module:\n' + table.join('\n'));
-    expect(table).toHaveLength(24);
+    expect(table).toHaveLength(25);
   });
 
   it('falls back to the cycle end year when a record has no usable date', () => {
@@ -48,6 +48,10 @@ describe('period resolution', () => {
     expect(resolvePeriod(MODULES.books!, { year: '2025' }, cycle).periodLabel).toBe('2025');
     expect(resolvePeriod(MODULES.awards!, { awardDate: '2019-06-01' }, cycle).periodLabel).toBe('2019');
     expect(resolvePeriod(MODULES.patents!, { statusDate: '2018-05-01' }, cycle).periodLabel).toBe('2018');
+  });
+
+  it('files a fellowship dated in February under the financial year before', () => {
+    expect(resolvePeriod(MODULES.fellowships!, { awardDate: '2024-02-10', validityYears: '1' }, cycle).periodYear).toBe(2023);
   });
 
   it("files the Faculty Profile under the cycle's last year: its dates are not reporting periods", () => {

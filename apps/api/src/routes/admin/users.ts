@@ -6,7 +6,7 @@ import { users, departments } from '@/server/db/schema';
 import { withRoute, ok, fail } from '@/server/http/handler';
 import { hashPassword, PasswordPolicyError } from '@/server/auth/password';
 import { audit } from '@/server/audit/log';
-import { generateTemporaryPassword, ROLE_VALUES, DEPARTMENT_REQUIRED_ROLES } from '@/server/auth/accounts';
+import { generateTemporaryPassword, ROLE_VALUES, DEPARTMENT_REQUIRED_ROLES, NAME_FIELDS, namePartsFrom } from '@/server/auth/accounts';
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use the date picker.');
 
@@ -19,6 +19,10 @@ export const GET = withRoute(
       .select({
         id: users.id,
         name: users.name,
+        namePrefix: users.namePrefix,
+        firstName: users.firstName,
+        middleName: users.middleName,
+        lastName: users.lastName,
         email: users.email,
         role: users.role,
         departmentId: users.departmentId,
@@ -49,7 +53,7 @@ export const GET = withRoute(
 /* ────────────────────────────── POST create ─────────────────────────── */
 
 const createSchema = z.object({
-  name: z.string().trim().min(2, 'Enter the full name.').max(160),
+  ...NAME_FIELDS,
   email: z.string().trim().toLowerCase().email('Enter a valid e-mail address.').max(200),
   role: z.enum(ROLE_VALUES),
   departmentId: z.string().uuid('Choose a department.').nullish(),
@@ -60,6 +64,9 @@ const createSchema = z.object({
 export const POST = withRoute(
   { roles: ['admin'], capability: 'manageUsers', schema: createSchema, rate: { limit: 30, windowSeconds: 300 } },
   async ({ actor, body, ip, userAgent }) => {
+    const named = namePartsFrom(body);
+    if (!named.ok) return fail('VALIDATION', { message: 'Check the name.', fields: named.fields });
+
     // The department rule is checked here, before the insert, so the constraint never fires.
     const needsDepartment = DEPARTMENT_REQUIRED_ROLES.includes(body.role);
     if (needsDepartment && !body.departmentId) {
@@ -102,7 +109,11 @@ export const POST = withRoute(
     const inserted = await db
       .insert(users)
       .values({
-        name: body.name,
+        name: named.name,
+        namePrefix: named.parts.prefix,
+        firstName: named.parts.first,
+        middleName: named.parts.middle,
+        lastName: named.parts.last,
         email: body.email,
         role: body.role,
         departmentId,
@@ -116,6 +127,10 @@ export const POST = withRoute(
       .returning({
         id: users.id,
         name: users.name,
+        namePrefix: users.namePrefix,
+        firstName: users.firstName,
+        middleName: users.middleName,
+        lastName: users.lastName,
         email: users.email,
         role: users.role,
         departmentId: users.departmentId,

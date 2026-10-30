@@ -38,7 +38,8 @@ export function scopeFilter(actor: SessionUser, m: ModuleConfig): SQL {
   // The owning office sees every record of the modules it owns or verifies.
   if (m.verifierRoles.includes(actor.role) || m.viewRoles.includes(actor.role)) return base;
 
-  if (actor.role === 'faculty') return and(base, eq(records.ownerUserId, actor.id))!;
+  // A faculty member, or an office holder in a module they fill in but do not oversee: their own records.
+  if (actor.role === 'faculty' || m.ownerRoles.includes(actor.role)) return and(base, eq(records.ownerUserId, actor.id))!;
 
   // Unknown combination: see nothing.
   return and(base, eq(records.id, MATCHES_NOTHING))!;

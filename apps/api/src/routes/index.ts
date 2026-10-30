@@ -9,15 +9,21 @@ import * as reset from './auth/reset';
 import * as changePassword from './auth/change-password';
 import * as moduleSchema from './modules/schema';
 import * as moduleRecords from './modules/records';
+import * as moduleRecordsExport from './modules/recordsExport';
+import * as moduleViews from './modules/views';
 import * as moduleRecord from './modules/record';
 import * as moduleTransition from './modules/transition';
 import * as moduleDeclare from './modules/declare';
+import * as moduleBulk from './modules/bulk';
+import * as reports from './reports';
+import * as research from './research';
 import * as lookup from './lookup';
 import * as journals from './journals';
 import * as evidenceUpload from './evidence/upload';
 import * as evidenceFile from './evidence/file';
 import * as exportWorkbook from './export';
 import * as profileRollups from './profile-rollups';
+import * as profileIdentity from './profile-identity';
 import * as adminUsers from './admin/users';
 import * as adminUser from './admin/user';
 import * as adminAudit from './admin/audit';
@@ -47,12 +53,22 @@ api.post('/auth/change-password', changePassword.POST);
 
 api.get('/modules/:moduleKey/schema', moduleSchema.GET);
 api.get('/modules/:moduleKey/records', moduleRecords.GET);
+// Before /records/:id, or "export" would be read as a record's id.
+api.get('/modules/:moduleKey/records/export', moduleRecordsExport.GET);
+api.get('/modules/:moduleKey/views', moduleViews.GET);
+api.post('/modules/:moduleKey/views', moduleViews.POST);
+api.delete('/modules/:moduleKey/views/:id', moduleViews.DELETE);
 api.post('/modules/:moduleKey/records', moduleRecords.POST);
 api.get('/modules/:moduleKey/records/:id', moduleRecord.GET);
 api.patch('/modules/:moduleKey/records/:id', moduleRecord.PATCH);
 api.delete('/modules/:moduleKey/records/:id', moduleRecord.DELETE);
 api.post('/modules/:moduleKey/records/:id/transition', moduleTransition.POST);
 api.post('/modules/:moduleKey/declare', moduleDeclare.POST);
+api.get('/modules/:moduleKey/bulk', moduleBulk.LIST);
+api.post('/modules/:moduleKey/bulk', moduleBulk.POST);
+api.get('/modules/:moduleKey/bulk/:id', moduleBulk.GET);
+api.post('/modules/:moduleKey/bulk/:id/evidence', moduleBulk.EVIDENCE);
+api.post('/modules/:moduleKey/bulk/:id/submit', moduleBulk.SUBMIT);
 api.post('/lookup/:moduleKey', lookup.POST);
 api.get('/journals/ranking', journals.GET);
 
@@ -61,9 +77,22 @@ api.get('/evidence/:id', evidenceFile.GET);
 api.delete('/evidence/:id', evidenceFile.DELETE);
 
 api.get('/export/:workbook', exportWorkbook.GET);
+api.get('/reports/options', reports.OPTIONS);
+api.get('/reports/research-quality', research.QUALITY);
+api.get('/profile/research', research.GET);
+api.put('/profile/research/ids', research.PUT_IDS);
+api.post('/profile/research/wos', research.POST_WOS);
+api.post('/profile/research/refresh', research.POST_REFRESH);
+api.get('/admin/research/thresholds', research.GET_THRESHOLDS);
+api.put('/admin/research/thresholds', research.PUT_THRESHOLDS);
+api.get('/reports/:format/summary', reports.SUMMARY);
+api.get('/reports/:format', reports.GET);
 
 api.get('/profile/rollups', profileRollups.GET);
 api.patch('/profile/rollups', profileRollups.PATCH);
+api.get('/profile/identity', profileIdentity.GET);
+api.post('/profile/orcid', profileIdentity.POST_ORCID);
+api.delete('/profile/orcid', profileIdentity.DELETE_ORCID);
 
 api.get('/admin/users', adminUsers.GET);
 api.post('/admin/users', adminUsers.POST);

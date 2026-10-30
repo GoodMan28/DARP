@@ -1,5 +1,6 @@
 // src/modules/books.ts
 import type { ModuleConfig } from './_types';
+import { FACULTY_MEMBERS } from './_types';
 
 export const books: ModuleConfig = {
   key: 'books',
@@ -10,7 +11,7 @@ export const books: ModuleConfig = {
   bodies: ['NAAC'],
   description:
     'Books, chapters in edited volumes, and papers in conference proceedings. Paste the DOI (or the ISBN) and press Fetch details — the details are filled in from the publisher\'s record. Each entry is entered once.',
-  ownerRoles: ['faculty', 'hod'],
+  ownerRoles: FACULTY_MEMBERS,
   verifierRoles: ['drie'],
   viewRoles: ['hod', 'drie', 'admin'],
   scope: 'self',

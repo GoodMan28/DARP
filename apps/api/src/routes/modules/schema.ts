@@ -2,6 +2,7 @@ import { withRoute, ok, fail } from '@/server/http/handler';
 import {
   mustGetModule, activeCycle, statusCounts, getNilDeclarations, declarableYears, periodsInUse,
 } from '@/server/records/service';
+import { viewColumnsFor } from '@/server/records/viewQuery';
 import { toResponse } from '@/server/records/toResponse';
 import { canViewModule, canCreateIn, canVerify } from '@/server/auth/permissions';
 import { getAllLists } from '@/server/records/masterLists';
@@ -24,6 +25,7 @@ export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async 
     const periods = periodOptions(m, cycle);
     const years = new Set([...periods.map((p) => p.year), ...(await periodsInUse(actor, m.key))]);
     const recordPeriods = [...years].sort((a, b) => b - a).map((year) => ({ year, label: labelFor(year, m.periodType) }));
+    const declaredYears = await getNilDeclarations(actor, m.key);
 
     return ok<ModuleSchemaPayload>({
       key: m.key,
@@ -43,11 +45,12 @@ export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async 
         }
         : null,
       listColumns: m.listColumns,
+      viewColumns: await viewColumnsFor(m),
       periods,
       recordPeriods,
       counts: await statusCounts(actor, m.key),
-      declaredYears: await getNilDeclarations(actor, m.key),
-      declarableYears: await declarableYears(),
+      declaredYears,
+      declarableYears: declarableYears(declaredYears),
       fields: m.fields.map((f) => ({
         key: f.key,
         label: f.label,

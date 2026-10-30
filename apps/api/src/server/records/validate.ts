@@ -100,8 +100,9 @@ function fieldSchema(f: FieldConfig, lists: Record<string, string[]>): z.ZodType
 
 function isVisible(f: FieldConfig, data: Record<string, unknown>): boolean {
   if (!f.showIf) return true;
+  // As the form compares it: a checkbox reads 'true' or 'false', a missing value ''.
   const actual = data[f.showIf.field];
-  return typeof actual === 'string' && f.showIf.in.includes(actual);
+  return ['string', 'boolean', 'undefined'].includes(typeof actual) && f.showIf.in.includes(String(actual ?? ''));
 }
 
 export interface ValidationResult {

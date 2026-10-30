@@ -1,5 +1,6 @@
 // src/modules/qscontacts.ts
 import type { ModuleConfig } from './_types';
+import { FACULTY_MEMBERS } from './_types';
 
 export const qscontacts: ModuleConfig = {
   key: 'qscontacts',
@@ -9,7 +10,7 @@ export const qscontacts: ModuleConfig = {
   bodies: ['QS'],
   description:
     'Academic collaborators QS may contact for the Academic Reputation Survey. Consent must be obtained before a contact is submitted.',
-  ownerRoles: ['faculty', 'hod'],
+  ownerRoles: FACULTY_MEMBERS,
   verifierRoles: ['dofa'],
   viewRoles: ['hod', 'dofa', 'admin'],
   scope: 'self',

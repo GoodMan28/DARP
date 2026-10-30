@@ -53,6 +53,8 @@ const bodySchema = z.discriminatedUnion('action', [
     year: z.number().int().min(1999).max(2100),
     listName: z.string().max(40).optional(),
     rows: z.array(rowSchema).min(1).max(5000),
+    /** The first batch of a file: the list already loaded for that year is replaced, not added to. */
+    replace: z.boolean().default(false),
     /** The last batch of a file: written to the audit log once, with the totals. */
     last: z.boolean().default(false),
     totalRows: z.number().int().min(0).optional(),
@@ -132,6 +134,8 @@ export const POST = withRoute(
       return ok({ cleared: true });
     }
 
+    // Loading SCIE 2026 again means "this is the SCIE list now": a journal dropped from it must go.
+    if (body.replace) await clearJournalList(body.kind, body.year, body.listName);
     const stored = body.kind === 'sjr'
       ? await storeSjrRows(body.year, body.rows)
       : await storeListRows(body.listName!, body.year, body.rows);

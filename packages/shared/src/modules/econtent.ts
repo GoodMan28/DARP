@@ -1,5 +1,6 @@
 // src/modules/econtent.ts
 import type { ModuleConfig } from './_types';
+import { FACULTY_MEMBERS } from './_types';
 
 export const econtent: ModuleConfig = {
   key: 'econtent',
@@ -10,7 +11,7 @@ export const econtent: ModuleConfig = {
   bodies: ['NAAC'],
   description:
     'E-content modules you developed for e-PG Pathshala, CEC, SWAYAM, other MOOC platforms, government initiatives or the institutional LMS.',
-  ownerRoles: ['faculty', 'hod'],
+  ownerRoles: FACULTY_MEMBERS,
   verifierRoles: ['dugs'],
   viewRoles: ['hod', 'dugs', 'admin'],
   scope: 'self',

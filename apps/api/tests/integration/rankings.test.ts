@@ -118,11 +118,14 @@ describe('where the ranking is shown', () => {
       ],
     });
     const sheet = workbook.getWorksheet('Publications')!;
-    const header = (sheet.getRow(1).values as unknown[]).map(String);
+    // The headings row: row 1 of a sheet DARP builds, lower down in IQAC's format file.
+    let at = 1;
+    sheet.eachRow((row, n) => { if ((row.values as unknown[]).map(String).includes('Indexing') && at === 1) at = n; });
+    const header = (sheet.getRow(at).values as unknown[]).map(String);
     const col = (name: string) => header.indexOf(name);
-    expect(sheet.getRow(2).getCell(col('Indexing')).text).toBe('SCIE, Scopus');
-    expect(sheet.getRow(2).getCell(col('Impact Factor (WoS)')).text).toBe('5.2 (JIF 2024)');
-    expect(sheet.getRow(3).getCell(col('Indexing')).text).toBe('NA');
-    expect(sheet.getRow(3).getCell(col('JIF quartile (WoS)')).text).toBe('NA');
+    expect(sheet.getRow(at + 1).getCell(col('Indexing')).text).toBe('SCIE, Scopus');
+    expect(sheet.getRow(at + 1).getCell(col('Impact Factor (WoS)')).text).toBe('5.2 (JIF 2024)');
+    expect(sheet.getRow(at + 2).getCell(col('Indexing')).text).toBe('NA');
+    expect(sheet.getRow(at + 2).getCell(col('JIF quartile (WoS)')).text).toBe('NA');
   });
 });

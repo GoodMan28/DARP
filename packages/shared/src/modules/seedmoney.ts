@@ -1,5 +1,6 @@
 // src/modules/seedmoney.ts
 import type { ModuleConfig } from './_types';
+import { FACULTY_MEMBERS } from './_types';
 
 export const seedmoney: ModuleConfig = {
   key: 'seedmoney',
@@ -9,7 +10,7 @@ export const seedmoney: ModuleConfig = {
   naacRef: '3.1',
   bodies: ['NAAC'],
   description: 'Seed money granted to you by the institute, 2022 onwards.',
-  ownerRoles: ['faculty', 'hod'],
+  ownerRoles: FACULTY_MEMBERS,
   verifierRoles: ['drie'],
   viewRoles: ['hod', 'drie', 'admin'],
   scope: 'self',

@@ -78,6 +78,34 @@
       "when": 1793231590935,
       "tag": "0010_abnormal_lilith",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793294204639,
+      "tag": "0011_person_names",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793310261563,
+      "tag": "0012_bulk_imports",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793339544574,
+      "tag": "0013_researcher_metrics",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793347663797,
+      "tag": "0014_saved_views",
+      "breakpoints": true
     }
   ]
 }

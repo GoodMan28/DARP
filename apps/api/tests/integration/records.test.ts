@@ -224,7 +224,8 @@ describe('nil returns', () => {
   });
 
   it('does not let somebody declare a module that is not theirs to own', async () => {
-    await expect(setNilDeclaration(drie, 'publications', true)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    // Publications are every professor's, DRIE's included; CDC's exam results are CDC's alone.
+    await expect(setNilDeclaration(drie, 'exams', true)).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 });
 

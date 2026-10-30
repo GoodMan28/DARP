@@ -4,6 +4,7 @@ import { pool } from '@/server/db';
 import { log } from '@/server/log';
 import { syncScopusListIfStale, scheduleNightlyScopusCheck } from '@/server/lookup/scopusList';
 import { schedulePatentJournal } from '@/server/lookup/patentIndex';
+import { scheduleResearcherRefresh } from '@/server/researchers/service';
 
 const port = Number(process.env.PORT ?? 4000);
 // Loopback by default: the API is reached through the web tier, never directly from the
@@ -25,6 +26,9 @@ const server = createApp().listen(port, host, () => {
   // issues not read yet (the first time, several years of them, in the background), then each
   // night's new issue at 3 AM.
   schedulePatentJournal();
+  // Researchers' Scopus figures (h-index, citations): a thirtieth of them each night at 4 AM, once
+  // BIT's Elsevier API key is set. Without the key it does nothing.
+  scheduleResearcherRefresh();
 });
 
 function shutdown(signal: string) {

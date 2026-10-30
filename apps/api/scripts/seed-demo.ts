@@ -3,6 +3,10 @@
  *
  *   npm run db:seed:demo               populate
  *   npm run db:seed:demo -- --clear    remove every trace
+ *   npm run db:seed:demo -- --office-faculty
+ *       on a database already seeded: give the five office holders (deans, CDC head, IQAC
+ *       coordinator) a professor's name, department and joining date, and records of their own in
+ *       the faculty modules. Nobody else's records are touched; run it twice and nothing doubles.
  *
  * Values are generated FROM each module's own config, so this stays valid when a
  * config changes: every field is filled according to its declared type, master
@@ -12,9 +16,9 @@
  * domain, so `--clear` deletes them and their records without touching real data.
  */
 import pg from 'pg';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { db, pool } from '../src/server/db';
-import { users, departments, cycles } from '../src/server/db/schema';
+import { users, departments, cycles, records } from '../src/server/db/schema';
 import { hashPassword } from '../src/server/auth/password';
 import { createRecord, transitionRecord } from '../src/server/records/service';
 import { uploadEvidence } from '../src/server/evidence/service';
@@ -22,6 +26,7 @@ import { getAllLists } from '../src/server/records/masterLists';
 import { MODULES } from '@darp/shared/modules';
 import type { FieldConfig, ModuleConfig, Role } from '@darp/shared/modules/types';
 import type { SessionUser } from '../src/server/auth/session';
+import { composeName, type NameParts } from '@darp/shared/names';
 
 // Demo data is generated offline: never call a publisher register while seeding.
 process.env.LOOKUP_OFFLINE = '1';
@@ -34,21 +39,25 @@ const DEMO_PASSWORD = 'DarpDemo!2026Pass';
 
 /* ─────────────────────────── demo people ─────────────────────────── */
 
-interface DemoPerson { key: string; name: string; role: Role; dept?: string; joined?: string }
+interface DemoPerson { key: string; parts: NameParts; role: Role; dept?: string; joined?: string }
 
 const PEOPLE: DemoPerson[] = [
-  { key: 'verma', name: 'Dr A. K. Verma', role: 'faculty', dept: 'CSE', joined: '2011-07-18' },
-  { key: 'mahato', name: 'Dr S. Mahato', role: 'faculty', dept: 'CSE', joined: '2016-01-04' },
-  { key: 'ranjan', name: 'Dr P. Ranjan', role: 'faculty', dept: 'EEE', joined: '2009-08-03' },
-  { key: 'kujur', name: 'Dr N. Kujur', role: 'faculty', dept: 'ME', joined: '2018-07-02' },
-  { key: 'hodcse', name: 'Prof. R. K. Sinha', role: 'hod', dept: 'CSE', joined: '2004-06-15' },
-  { key: 'hodme', name: 'Prof. M. Tirkey', role: 'hod', dept: 'ME', joined: '2006-09-11' },
-  { key: 'dofa', name: 'Dean of Faculty Affairs', role: 'dofa' },
-  { key: 'drie', name: 'Dean of Research, Innovation & Entrepreneurship', role: 'drie' },
-  { key: 'dugs', name: 'Dean of UG & PG Studies', role: 'dugs' },
-  { key: 'cdc', name: 'Career Development Centre', role: 'cdc' },
-  { key: 'iqac', name: 'IQAC Demo Administrator', role: 'admin' },
+  { key: 'verma', parts: { prefix: 'Dr.', first: 'Anil', middle: 'Kumar', last: 'Verma' }, role: 'faculty', dept: 'CSE', joined: '2011-07-18' },
+  { key: 'mahato', parts: { prefix: 'Dr.', first: 'Sanjay', middle: '', last: 'Mahato' }, role: 'faculty', dept: 'CSE', joined: '2016-01-04' },
+  { key: 'ranjan', parts: { prefix: 'Dr.', first: 'Prakash', middle: '', last: 'Ranjan' }, role: 'faculty', dept: 'EEE', joined: '2009-08-03' },
+  { key: 'kujur', parts: { prefix: 'Dr.', first: 'Neha', middle: '', last: 'Kujur' }, role: 'faculty', dept: 'ME', joined: '2018-07-02' },
+  { key: 'hodcse', parts: { prefix: 'Prof.', first: 'Rajesh', middle: 'Kumar', last: 'Sinha' }, role: 'hod', dept: 'CSE', joined: '2004-06-15' },
+  { key: 'hodme', parts: { prefix: 'Prof.', first: 'Manoj', middle: '', last: 'Tirkey' }, role: 'hod', dept: 'ME', joined: '2006-09-11' },
+  // Every post is held by a senior professor, who also reports their own work as faculty.
+  { key: 'dofa', parts: { prefix: 'Prof. (Dr.)', first: 'Sanjay', middle: 'Kumar', last: 'Mishra' }, role: 'dofa', dept: 'EEE', joined: '1999-07-12' },
+  { key: 'drie', parts: { prefix: 'Prof.', first: 'Amitava', middle: '', last: 'Chakraborty' }, role: 'drie', dept: 'CSE', joined: '2001-01-08' },
+  { key: 'dugs', parts: { prefix: 'Prof.', first: 'Venkat', middle: '', last: 'Narayan' }, role: 'dugs', dept: 'ME', joined: '2002-08-01' },
+  { key: 'cdc', parts: { prefix: 'Prof.', first: 'Rakesh', middle: '', last: 'Prasad' }, role: 'cdc', dept: 'EEE', joined: '2005-07-18' },
+  { key: 'iqac', parts: { prefix: 'Prof. (Dr.)', first: 'Kaushik', middle: '', last: 'Banerjee' }, role: 'admin', dept: 'CSE', joined: '2000-02-14' },
 ];
+
+/** The office holders: professors who fill in the faculty modules as well as running their office. */
+const OFFICE_KEYS = ['dofa', 'drie', 'dugs', 'cdc', 'iqac'];
 
 /* ───────────────────── realistic sample values ───────────────────── */
 
@@ -286,7 +295,7 @@ function valueFor(f: FieldConfig, ctx: GenContext): unknown {
       if (label.includes('author') || label.includes('inventor') || label.includes('name of the')) {
         return pick(PEOPLE_NAMES, rng);
       }
-      if (label.includes('name')) return ctx.person.name;
+      if (label.includes('name')) return composeName(ctx.person.parts);
       if (label.includes('title')) return pick(TITLES, rng);
       if (label.includes('roll') || label.includes('registration') || label.includes('enrol')) {
         return `BIT/${2020 + Math.floor(rng() * 5)}/${1000 + Math.floor(rng() * 8999)}`;
@@ -389,17 +398,28 @@ async function main() {
 
   for (const p of PEOPLE) {
     const email = `${p.key}${DEMO_DOMAIN}`;
+    const name = composeName(p.parts);
+    const nameCols = { name, namePrefix: p.parts.prefix, firstName: p.parts.first, middleName: p.parts.middle, lastName: p.parts.last };
     const dept = p.dept ? deptByCode.get(p.dept) : undefined;
     const existing = await db.select().from(users).where(eq(users.email, email)).limit(1);
     const row = existing[0] ?? (await db.insert(users).values({
       email,
-      name: p.name,
+      ...nameCols,
       role: p.role,
       departmentId: dept?.id ?? null,
       dateOfJoining: p.joined ?? null,
       passwordHash: hash,
       mustChangePassword: false,      // demo accounts sign straight in
     }).returning())[0]!;
+    // Bring an account seeded earlier up to date (office holders were once nameless offices).
+    if (existing[0] && (row.name !== name || row.firstName !== p.parts.first || row.lastName !== p.parts.last
+      || row.departmentId !== (dept?.id ?? null) || row.dateOfJoining !== (p.joined ?? null))) {
+      await db.update(users).set({ ...nameCols, departmentId: dept?.id ?? null, dateOfJoining: p.joined ?? null })
+        .where(eq(users.id, row.id));
+      row.name = name;
+      row.departmentId = dept?.id ?? null;
+      row.dateOfJoining = p.joined ?? null;
+    }
 
     actors.set(p.key, {
       id: row.id,
@@ -418,7 +438,8 @@ async function main() {
 
   /* how many records each role's modules get */
   const PLAN: Array<{ personKey: string; moduleKey: string; n: number }> = [];
-  const facultyKeys = ['verma', 'mahato', 'ranjan', 'kujur'];
+  const officeOnly = process.argv.includes('--office-faculty');
+  const facultyKeys = officeOnly ? OFFICE_KEYS : ['verma', 'mahato', 'ranjan', 'kujur', ...OFFICE_KEYS];
   const facultyModules = Object.values(MODULES).filter((m) => m.ownerRoles.includes('faculty'));
   for (const pk of facultyKeys) {
     for (const m of facultyModules) {
@@ -426,26 +447,34 @@ async function main() {
       PLAN.push({ personKey: pk, moduleKey: m.key, n: m.key === 'profile' ? 1 : 2 });
     }
   }
-  for (const pk of ['hodcse', 'hodme']) {
+  for (const pk of officeOnly ? [] : ['hodcse', 'hodme']) {
     for (const m of Object.values(MODULES).filter((x) => x.ownerRoles.includes('hod'))) {
       PLAN.push({ personKey: pk, moduleKey: m.key, n: 2 });
     }
   }
-  for (const m of Object.values(MODULES).filter((x) => x.ownerRoles.includes('dofa'))) {
+  for (const m of Object.values(MODULES).filter((x) => !officeOnly && x.ownerRoles.includes('dofa') && !x.ownerRoles.includes('faculty'))) {
     PLAN.push({ personKey: 'dofa', moduleKey: m.key, n: 3 });
   }
-  for (const m of Object.values(MODULES).filter((x) => x.ownerRoles.includes('cdc'))) {
+  for (const m of Object.values(MODULES).filter((x) => !officeOnly && x.ownerRoles.includes('cdc') && !x.ownerRoles.includes('faculty'))) {
     PLAN.push({ personKey: 'cdc', moduleKey: m.key, n: 4 });
   }
 
   const made: Array<{ moduleKey: string; id: string }> = [];
   const failures = new Map<string, string>();
-  let index = 0;
+  // A later office-only run numbers its records apart, so generated unique keys never collide.
+  let index = officeOnly ? 5000 : 0;
 
   for (const step of PLAN) {
     const actor = actors.get(step.personKey)!;
     const person = personOf.get(step.personKey)!;
     const m = MODULES[step.moduleKey]!;
+    if (officeOnly) {
+      // Run twice, nothing doubles: skip a module the person already has records in.
+      const [had] = await db.select({ id: records.id }).from(records).where(and(
+        eq(records.ownerUserId, actor.id), eq(records.moduleKey, m.key), isNull(records.deletedAt),
+      )).limit(1);
+      if (had) continue;
+    }
     for (let i = 0; i < step.n; i++) {
       index += 1;
       const ctx: GenContext = {
@@ -457,6 +486,15 @@ async function main() {
         uniqueKeys: new Set(m.naturalKey ?? []),
       };
       const values = buildRecord(m, ctx);
+      if (m.key === 'patents') {
+        // Dates in their real order, one per stage reached; the status date is worked out on save.
+        const y = ctx.cycleYears[ctx.index % ctx.cycleYears.length]!;
+        const stage = ['Applied', 'Published', 'Granted'].indexOf(String(values.status));
+        values.filedDate = `${y - 1}-03-${String(1 + (ctx.index % 28)).padStart(2, '0')}`;
+        if (stage >= 1) values.publishedDate = `${y}-01-${String(1 + (ctx.index % 28)).padStart(2, '0')}`;
+        if (stage >= 2) values.grantDate = `${y + 1}-02-${String(1 + (ctx.index % 28)).padStart(2, '0')}`;
+        delete values.statusDate;
+      }
       // Modules with a lookup: the owner must be in the author list, and (offline, so nothing is
       // confirmed) evidence is compulsory — attach a one-page demo PDF. So does any required file.
       const authorsKey = m.lookup?.ownerMustBeIn;

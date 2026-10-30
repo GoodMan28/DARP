@@ -238,3 +238,50 @@ export function extractListRows(table: string[][]): ExtractResult {
   if (rows.length === 0) return { ok: false, message: 'No journal in this file has a valid ISSN.' };
   return { ok: true, rows, journals: data.length };
 }
+
+/** The four Web of Science collections, as Clarivate names their downloads. */
+const WOS_FILE_NAMES: Array<{ code: string; pattern: RegExp }> = [
+  { code: 'SCIE', pattern: /\bSCIE\b|science\s+citation\s+index\s+expanded/i },
+  { code: 'SSCI', pattern: /\bSSCIE?\b|social\s+sciences?\s+citation\s+index/i },
+  { code: 'AHCI', pattern: /\bA\s*&?\s*HCI\b|arts\s*(&|and)\s*humanities/i },
+  { code: 'ESCI', pattern: /\bESCI\b|emerging\s+sources/i },
+];
+
+export type DetectedJournalFile =
+  /** SCImago's file. year: its edition, from the file name or its "Total Docs. (2025)" column. */
+  | { kind: 'sjr'; year: number | null }
+  /** A Journal Citation Reports export; the JIF year is read from the file itself. */
+  | { kind: 'jcr'; year: number | null }
+  /** A Web of Science collection. listName: which one, from the file name, when the Indexing list has it. */
+  | { kind: 'list'; listName: string | null }
+  | { kind: 'unknown'; message: string };
+
+/**
+ * What a journal file IQAC dropped on the upload box is, from its columns and its name, so several
+ * files can be loaded at once without saying which is which. A Master Journal List download does not
+ * name its collection inside the file, only in the file name ("Science Citation Index Expanded
+ * (SCIE).csv"); when the name does not say, the person picks it.
+ */
+export function detectJournalFile(fileName: string, table: string[][], listNames: readonly string[]): DetectedJournalFile {
+  const header = (table[0] ?? []).map((h) => h.trim().toLowerCase());
+  if (header.includes('sjr best quartile')) {
+    const fromName = fileName.match(/(?:^|\D)((?:19|20)\d{2})(?!\d)/)?.[1];
+    const fromColumn = header.map((h) => h.match(/^total docs\.? \(((?:19|20)\d{2})\)$/)?.[1]).find(Boolean);
+    const year = Number(fromName ?? fromColumn);
+    return { kind: 'sjr', year: Number.isInteger(year) && year > 0 ? year : null };
+  }
+  const jcrHeader = table.find((r) => r.some((c) => c.trim().toLowerCase() === 'issn') && r.some((c) => /^(19|20)\d{2}\s+JIF$/i.test(c.trim())));
+  if (jcrHeader) {
+    return { kind: 'jcr', year: Number(jcrHeader.find((c) => /^(19|20)\d{2}\s+JIF$/i.test(c.trim()))!.trim().slice(0, 4)) };
+  }
+  if (header.some((h) => h.includes('issn'))) {
+    const base = fileName.replace(/\.[^.]+$/, '');
+    const code = WOS_FILE_NAMES.find((w) => w.pattern.test(base))?.code;
+    const listName = code ? listNames.find((n) => n.toUpperCase() === code) ?? null : null;
+    return { kind: 'list', listName };
+  }
+  return {
+    kind: 'unknown',
+    message: `DARP cannot tell what this file is: it has no ISSN column. Its first columns are: ${(table[0] ?? []).slice(0, 5).join(', ') || 'none'}.`,
+  };
+}

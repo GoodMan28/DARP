@@ -1,6 +1,7 @@
 import type { PeriodType, RecordStatus } from '@darp/shared/modules/types';
 import type { CounterWindow, DeclaredCounterDef } from '@darp/shared/contracts';
 import type { JournalRanking } from '@darp/shared/journals';
+import { recordActive } from '@darp/shared/projectPeriod';
 
 export type { CounterWindow, DeclaredCounterDef };
 
@@ -19,6 +20,13 @@ export interface CounterDef {
   sumField?: string;
   /** Only count records whose field is one of these values. */
   filter?: { field: string; in: string[] };
+  /**
+   * Count a stage of a record by that stage's own date, not by the record's year. Patents: one patent
+   * filed in 2022, published in 2023 and granted in 2025 counts once as filed (2022), once as
+   * published (2023) and once as granted (2025). The record must have reached the stage (`reachedBy`);
+   * when the date is missing, a record still at the stage itself (`reachedBy[0]`) uses its own year.
+   */
+  stage?: { dateField: string; reachedBy: string[] };
   /** Only count papers whose journal ranking (worked out from the ISSN, never stored) passes this. */
   ranking?: (r: JournalRanking) => boolean;
   /** How to show it: a plain number or rupees. */
@@ -39,12 +47,19 @@ function both(
   ];
 }
 
+/** Records within their validity on the day the figures are worked out (lifetime ones always are). */
+function stillValid(mods: Array<[string, string]>): CounterDef[] {
+  return mods.map(([moduleKey, label]) => C({
+    key: `${moduleKey}.count.active`, label, moduleKey, metric: 'count', window: 'today', format: 'number',
+  }));
+}
+
 const WOS_INDEXES = ['SCIE', 'SSCI', 'AHCI', 'ESCI'];
 const TOP_HALF = ['Q1', 'Q2'];
 
 /**
- * The 57 computed counters: the sheet's 49, papers in conference proceedings, and papers by their
- * journal's indexing and quartile. These keys are
+ * The 67 computed counters: the sheet's 49, patents filed, papers in conference proceedings, papers by their
+ * journal's indexing and quartile, the awards still valid today, and outreach activities. These keys are
  * exactly the `feedsCounters` values declared across the 24 module configs — tests/unit/rollups.test.ts fails if the two ever drift.
  */
 export const COUNTERS: CounterDef[] = [
@@ -71,13 +86,18 @@ export const COUNTERS: CounterDef[] = [
 
   /* ── Patents ──────────────────────────────────────────────── */
   ...both({
+    keyBase: 'patents.count.filed', moduleKey: 'patents', metric: 'count', format: 'number',
+    stage: { dateField: 'filedDate', reachedBy: ['Applied', 'Published', 'Granted'] },
+    label: 'Patents filed {CY}', labelSince: 'Patents filed since joining BIT',
+  }),
+  ...both({
     keyBase: 'patents.count.published', moduleKey: 'patents', metric: 'count', format: 'number',
-    filter: { field: 'status', in: ['Published'] },
+    stage: { dateField: 'publishedDate', reachedBy: ['Published', 'Granted'] },
     label: 'Patents published {CY}', labelSince: 'Patents published since joining BIT',
   }),
   ...both({
     keyBase: 'patents.count.granted', moduleKey: 'patents', metric: 'count', format: 'number',
-    filter: { field: 'status', in: ['Granted'] },
+    stage: { dateField: 'grantDate', reachedBy: ['Granted'] },
     label: 'Patents granted {CY}', labelSince: 'Patents granted since joining BIT',
   }),
 
@@ -175,6 +195,12 @@ export const COUNTERS: CounterDef[] = [
     label: 'Extension-activity awards {CY}',
     labelSince: 'Extension-activity awards since joining BIT',
   }),
+  ...stillValid([
+    ['awards', 'Awards still valid today'],
+    ['riawards', 'Research & innovation awards still valid today'],
+    ['extawards', 'Extension-activity awards still valid today'],
+    ['fellowships', 'Fellowships still valid today'],
+  ]),
 
   /* ── Financial support (the sheet has only the window rows) ─ */
   C({
@@ -191,6 +217,18 @@ export const COUNTERS: CounterDef[] = [
     keyBase: 'fdpattended.count', moduleKey: 'fdpattended', metric: 'count', format: 'number',
     label: 'FDPs / MDPs / refreshers attended {CY}',
     labelSince: 'FDPs / MDPs / refreshers attended since joining BIT',
+  }),
+
+  /* ── Outreach activities ──────────────────────────────────── */
+  ...both({
+    keyBase: 'outreach.count', moduleKey: 'outreach', metric: 'count', format: 'number',
+    label: 'Outreach activities (talks, reviews, examining, boards…), {CY}',
+    labelSince: 'Outreach activities (talks, reviews, examining, boards…) since joining BIT',
+  }),
+  ...both({
+    keyBase: 'outreach.count.outside', moduleKey: 'outreach', metric: 'count', format: 'number',
+    filter: { field: 'where', in: ['Outside BIT'] },
+    label: 'Outreach activities outside BIT, {CY}', labelSince: 'Outreach activities outside BIT since joining BIT',
   }),
 
   /* ── E-content ────────────────────────────────────────────── */
@@ -225,19 +263,35 @@ export const COUNTERS: CounterDef[] = [
 
 export const DECLARED_COUNTERS: DeclaredCounterDef[] = [
   { key: 'manual.seminars.national.sinceJoining', label: 'National seminars attended since joining BIT', help: 'Seminars, conferences and workshops are told apart by the name of the programme.', format: 'number' },
-  { key: 'manual.seminars.national.cycle', label: 'National seminars attended, {lastAY}', help: '', format: 'number' },
+  { key: 'manual.seminars.national.cycle', label: 'National seminars attended last year ({lastAY})', help: '', format: 'number' },
   { key: 'manual.seminars.international.sinceJoining', label: 'International seminars attended since joining BIT', help: '', format: 'number' },
-  { key: 'manual.seminars.international.cycle', label: 'International seminars attended, {lastAY}', help: '', format: 'number' },
+  { key: 'manual.seminars.international.cycle', label: 'International seminars attended last year ({lastAY})', help: '', format: 'number' },
   { key: 'manual.workshops.attended.sinceJoining', label: 'Workshops and conferences attended since joining BIT', help: '', format: 'number' },
-  { key: 'manual.workshops.attended.cycle', label: 'Workshops and conferences attended, {lastAY}', help: '', format: 'number' },
+  { key: 'manual.workshops.attended.cycle', label: 'Workshops and conferences attended last year ({lastAY})', help: '', format: 'number' },
   { key: 'manual.foreignVisits.count.sinceJoining', label: 'Foreign universities visited since joining BIT', help: '', format: 'number' },
-  { key: 'manual.foreignVisits.lastYear', label: 'Visited a foreign university in {lastAY}?', help: '', format: 'yesno' },
+  { key: 'manual.foreignVisits.lastYear', label: 'Visited a foreign university last year ({lastAY})?', help: '', format: 'yesno' },
   { key: 'manual.papersPresented.national.sinceJoining', label: 'Papers presented at national conferences since joining BIT', help: 'Conference presentations, not journal papers.', format: 'number' },
-  { key: 'manual.papersPresented.national.cycle', label: 'Papers presented at national conferences, {lastCY}', help: '', format: 'number' },
+  { key: 'manual.papersPresented.national.cycle', label: 'Papers presented at national conferences last year ({lastCY})', help: '', format: 'number' },
   { key: 'manual.papersPresented.international.sinceJoining', label: 'Papers presented at international conferences since joining BIT', help: '', format: 'number' },
-  { key: 'manual.papersPresented.international.cycle', label: 'Papers presented at international conferences, {lastCY}', help: '', format: 'number' },
+  { key: 'manual.papersPresented.international.cycle', label: 'Papers presented at international conferences last year ({lastCY})', help: '', format: 'number' },
   { key: 'manual.collaborators.active', label: 'Total number of active research collaborators', help: '', format: 'number' },
 ];
+
+/**
+ * A declared figure for "last year" is kept for that year: the same question asked about another
+ * year is another figure. Its stored key is `<key>@<year>` (the year it starts in); a figure for
+ * "since joining" or a plain total keeps its key. null for a figure that is not about one year.
+ */
+export function declaredYearType(c: DeclaredCounterDef): 'CY' | 'AY' | null {
+  return c.label.includes('{lastAY}') ? 'AY' : c.label.includes('{lastCY}') ? 'CY' : null;
+}
+
+/** The key a declared figure is stored under for a range (see declaredYearType). */
+export function declaredStorageKey(c: DeclaredCounterDef, b: CycleBounds, today = new Date()): string {
+  const t = declaredYearType(c);
+  return t ? `${c.key}@${lastYearOf(b, t, today)}` : c.key;
+}
+
 
 export const ALL_COUNTER_KEYS: string[] = [
   ...COUNTERS.map((c) => c.key),
@@ -270,18 +324,59 @@ export interface CycleBounds {
 }
 
 /**
- * Labels name the cycle's years through placeholders, filled from the cycle IQAC has made active
- * (Administration → Reporting cycle), so no year is written into the catalogue:
- *   {CY} 2022–2024 · {FY} FY 2022-25 · {AY} AY 2022-25 · {lastAY} AY 2024-25 · {lastCY} CY 2024
+ * The last year of a type that has ended by `today`, named by the year it starts in. On 30 October
+ * 2026: CY 2025, FY 2025-26 (ended 31 March 2026), AY 2025-26 (ended 30 June 2026).
  */
-export function withCycleYears(label: string, b: CycleBounds): string {
+export function lastCompletedYear(type: PeriodType, today = new Date()): number {
+  const y = today.getUTCFullYear();
+  const m = today.getUTCMonth() + 1;
+  if (type === 'CY') return y - 1;
+  if (type === 'FY') return m >= 4 ? y - 1 : y - 2;
+  return m >= 7 ? y - 1 : y - 2;
+}
+
+/**
+ * "Last year" for a range, as the Faculty Profile sheet means it: the range's last year, but never
+ * a year still running (a range ending 2026, read in October 2026, gives AY 2025-26, not AY 2026-27).
+ */
+export function lastYearOf(b: CycleBounds, type: 'CY' | 'AY', today = new Date()): number {
+  return Math.min(b[type][1], lastCompletedYear(type, today));
+}
+
+/**
+ * Labels name the chosen years through placeholders, so no year is written into the catalogue.
+ * A financial or academic year is named by the year it starts in, so 2022 to 2024 covers
+ * FY 2022-23, 2023-24 and 2024-25 (1 April 2022 to 31 March 2025):
+ *   {CY} 2022–2024 · {FY} FY 2022-23 to 2024-25 · {AY} AY 2022-23 to 2024-25 · {lastAY} AY 2024-25 · {lastCY} CY 2024
+ * {lastAY} and {lastCY} are the last completed year in the range (see lastYearOf).
+ */
+export function withCycleYears(label: string, b: CycleBounds, today = new Date()): string {
   const yy = (y: number) => String(y % 100).padStart(2, '0');
+  const span = (type: 'FY' | 'AY', [from, to]: [number, number]) => (from === to
+    ? `${type} ${from}-${yy(from + 1)}`
+    : `${type} ${from}-${yy(from + 1)} to ${to}-${yy(to + 1)}`);
   return label
-    .replace(/\{CY\}/g, `${b.CY[0]}–${b.CY[1]}`)
-    .replace(/\{FY\}/g, `FY ${b.FY[0]}-${yy(b.FY[1] + 1)}`)
-    .replace(/\{AY\}/g, `AY ${b.AY[0]}-${yy(b.AY[1] + 1)}`)
-    .replace(/\{lastAY\}/g, `AY ${b.AY[1]}-${yy(b.AY[1] + 1)}`)
-    .replace(/\{lastCY\}/g, `CY ${b.CY[1]}`);
+    .replace(/\{CY\}/g, b.CY[0] === b.CY[1] ? String(b.CY[0]) : `${b.CY[0]}–${b.CY[1]}`)
+    .replace(/\{FY\}/g, span('FY', b.FY))
+    .replace(/\{AY\}/g, span('AY', b.AY))
+    .replace(/\{lastAY\}/g, () => { const y = lastYearOf(b, 'AY', today); return `AY ${y}-${yy(y + 1)}`; })
+    .replace(/\{lastCY\}/g, () => `CY ${lastYearOf(b, 'CY', today)}`);
+}
+
+/** The year a record reached the counter's stage, or null when it has not reached it. */
+function stageYear(def: CounterDef, r: CountableRecord, type: PeriodType): number | null {
+  if (!def.stage) return r.periodYear;
+  const status = typeof r.data.status === 'string' ? r.data.status : '';
+  if (!def.stage.reachedBy.includes(status)) return null;
+  const d = r.data[def.stage.dateField];
+  if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}/.test(d)) {
+    const y = Number(d.slice(0, 4));
+    const m = Number(d.slice(5, 7));
+    if (type === 'FY') return m >= 4 ? y : y - 1;
+    if (type === 'AY') return m >= 7 ? y : y - 1;
+    return y;
+  }
+  return status === def.stage.reachedBy[0] ? r.periodYear : null;
 }
 
 function matchesFilter(def: CounterDef, data: Record<string, unknown>): boolean {
@@ -314,6 +409,7 @@ export function computeCounters(
   bounds: CycleBounds,
   periodTypeOf: (moduleKey: string) => PeriodType,
   baselines: Record<string, number> = {},
+  today = new Date(),
 ): Record<string, number> {
   const counted = recordsIn.filter((r) => COUNTED_STATUSES.includes(r.status));
   const out: Record<string, number> = {};
@@ -324,9 +420,16 @@ export function computeCounters(
       if (r.moduleKey !== def.moduleKey) continue;
       if (!matchesFilter(def, r.data)) continue;
       if (def.ranking && !(r.ranking && def.ranking(r.ranking))) continue;
+      if (def.window === 'today') {
+        if (!recordActive(def.moduleKey, r.data, today)) continue;
+        total += 1;
+        continue;
+      }
+      const year = stageYear(def, r, periodTypeOf(def.moduleKey));
+      if (year === null) continue;
       if (def.window === 'cycle') {
         const [from, to] = bounds[periodTypeOf(def.moduleKey)];
-        if (r.periodYear < from || r.periodYear > to) continue;
+        if (year < from || year > to) continue;
       }
       if (def.metric === 'count') total += 1;
       else if (def.sumField) total += moneyOf(r.data, def.sumField);

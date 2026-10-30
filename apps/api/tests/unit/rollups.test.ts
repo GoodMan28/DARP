@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   COUNTERS, DECLARED_COUNTERS, ALL_COUNTER_KEYS, computeCounters,
-  COUNTED_STATUSES, EXPORTABLE_STATUSES, withCycleYears,
+  COUNTED_STATUSES, EXPORTABLE_STATUSES, withCycleYears, lastCompletedYear, declaredStorageKey,
   type CountableRecord, type CycleBounds,
 } from '@/server/rollups/counters';
 import { MODULE_LIST, getModule } from '@darp/shared/modules';
@@ -26,15 +26,19 @@ describe('counter catalogue', () => {
     expect(extra, `defined but no module feeds them: ${extra.join(', ')}`).toEqual([]);
   });
 
-  it('adds up to the 84 rows of the Faculty Profile sheet, plus conference papers and journal rankings', () => {
+  it('adds up to the 84 rows of the Faculty Profile sheet, plus conference papers, journal rankings and valid awards', () => {
     // The sheet has no conference-paper row; NAAC 3.4 counts them with books and chapters.
     expect(getModule('profile')!.fields).toHaveLength(22);
-    expect(COUNTERS).toHaveLength(57);
+    expect(COUNTERS).toHaveLength(67);
     expect(COUNTERS.filter((c) => c.key.startsWith('books.count.conference'))).toHaveLength(2);
     // Papers by their journal's indexing and quartile (Scopus, Web of Science, Q1/Q2).
     expect(COUNTERS.filter((c) => c.ranking)).toHaveLength(6);
+    // Awards, research awards, extension awards and fellowships still valid today.
+    expect(COUNTERS.filter((c) => c.window === 'today')).toHaveLength(4);
     expect(DECLARED_COUNTERS).toHaveLength(13);
-    expect(22 + COUNTERS.length + DECLARED_COUNTERS.length).toBe(84 + 2 + 6);
+    // Outreach activities, all and outside BIT, for the range and since joining.
+    expect(COUNTERS.filter((c) => c.moduleKey === 'outreach')).toHaveLength(4);
+    expect(22 + COUNTERS.length + DECLARED_COUNTERS.length).toBe(84 + 2 + 6 + 2 + 4 + 4);
   });
 
   it('has unique keys, a known module and a sum field wherever it sums', () => {
@@ -96,6 +100,22 @@ describe('computation', () => {
     expect(out['patents.count.granted.cycle']).toBe(2);
   });
 
+  it('counts each patent stage in the year of its own date', () => {
+    // Filed 2021, published 2023, granted 2025: dated 2025 as a record, but each stage counts in its own year.
+    const granted = rec({ moduleKey: 'patents', periodYear: 2025, data: {
+      status: 'Granted', filedDate: '2021-11-02', publishedDate: '2023-03-10', grantDate: '2025-01-20',
+    } });
+    const applied = rec({ moduleKey: 'patents', periodYear: 2022, data: {
+      status: 'Applied', filedDate: '2022-05-05', publishedDate: '2023-01-01',   // a stale hidden date
+    } });
+    const out = computeCounters([granted, applied], bounds, pt);
+    expect(out['patents.count.filed.cycle']).toBe(1);          // only the 2022 filing is inside 2022–2024
+    expect(out['patents.count.filed.sinceJoining']).toBe(2);
+    expect(out['patents.count.published.cycle']).toBe(1);      // published 2023, though granted later
+    expect(out['patents.count.granted.cycle']).toBe(0);        // granted 2025, outside the range
+    expect(out['patents.count.granted.sinceJoining']).toBe(1);
+  });
+
   it('sums money as whole rupees, tolerating separators', () => {
     const out = computeCounters([
       rec({ moduleKey: 'grants', data: { role: 'PI', amount: '4820000' } }),
@@ -128,6 +148,22 @@ describe('computation', () => {
     expect(Object.keys(out)).toHaveLength(COUNTERS.length);
   });
 
+  it('counts the awards still valid today, whatever their year', () => {
+    const today = new Date('2026-10-30');
+    const out = computeCounters([
+      rec({ moduleKey: 'awards', periodYear: 2024, data: { awardDate: '2024-03-15', validityYears: '3' } }), // to 14-03-2027
+      rec({ moduleKey: 'awards', periodYear: 2024, data: { awardDate: '2024-03-15', validityYears: '2' } }), // ended 14-03-2026
+      rec({ moduleKey: 'awards', periodYear: 2001, data: { awardDate: '2001-01-10', validForLife: true } }),
+      rec({ moduleKey: 'awards', periodYear: 2023, data: { awardDate: '2023-06-01' } }),                      // validity not given
+      rec({ moduleKey: 'awards', periodYear: 2025, status: 'draft', data: { awardDate: '2025-06-01', validForLife: true } }),
+      rec({ moduleKey: 'fellowships', periodYear: 2025, data: { awardDate: '2026-02-10', validityYears: '1' } }),
+    ], bounds, pt, {}, today);
+    expect(out['awards.count.active']).toBe(2);
+    expect(out['fellowships.count.active']).toBe(1);
+    // An old record without a validity still counts under its year.
+    expect(out['awards.count.sinceJoining']).toBe(4);
+  });
+
   it('gives every counter a zero when the person has entered nothing', () => {
     const out = computeCounters([], bounds, pt);
     expect(Object.values(out).every((v) => v === 0)).toBe(true);
@@ -139,10 +175,34 @@ describe('counter labels follow the active cycle', () => {
     const cycle4 = { CY: [2022, 2024], FY: [2022, 2024], AY: [2022, 2024] } as CycleBounds;
     const cycle5 = { CY: [2025, 2029], FY: [2025, 2029], AY: [2025, 2029] } as CycleBounds;
     expect(withCycleYears('Publications {CY}', cycle4)).toBe('Publications 2022–2024');
-    expect(withCycleYears('Consultancy projects, {FY}', cycle4)).toBe('Consultancy projects, FY 2022-25');
-    expect(withCycleYears('UG students guided, {AY}', cycle5)).toBe('UG students guided, AY 2025-30');
-    expect(withCycleYears('Visited a foreign university in {lastAY}?', cycle5)).toBe('Visited a foreign university in AY 2029-30?');
-    expect(withCycleYears('Papers presented, {lastCY}', cycle5)).toBe('Papers presented, CY 2029');
+    expect(withCycleYears('Consultancy projects, {FY}', cycle4)).toBe('Consultancy projects, FY 2022-23 to 2024-25');
+    expect(withCycleYears('UG students guided, {AY}', cycle5)).toBe('UG students guided, AY 2025-26 to 2029-30');
+    // One year is named once.
+    const one = { CY: [2024, 2024], FY: [2024, 2024], AY: [2024, 2024] } as CycleBounds;
+    expect(withCycleYears('Grants {FY} · papers {CY}', one)).toBe('Grants FY 2024-25 · papers 2024');
+    const later = new Date('2031-01-01');
+    expect(withCycleYears('Visited a foreign university in {lastAY}?', cycle5, later)).toBe('Visited a foreign university in AY 2029-30?');
+    expect(withCycleYears('Papers presented, {lastCY}', cycle5, later)).toBe('Papers presented, CY 2029');
+  });
+
+  it('never calls a year still running "last year"', () => {
+    // The user's case: a range ending 2026, read on 30 October 2026.
+    const range = { CY: [2024, 2026], FY: [2024, 2026], AY: [2024, 2026] } as CycleBounds;
+    const today = new Date('2026-10-30');
+    expect(withCycleYears('Seminars last year ({lastAY})', range, today)).toBe('Seminars last year (AY 2025-26)');
+    expect(withCycleYears('Papers last year ({lastCY})', range, today)).toBe('Papers last year (CY 2025)');
+    expect(lastCompletedYear('AY', new Date('2026-06-30'))).toBe(2024);   // AY 2025-26 ends that day
+    expect(lastCompletedYear('AY', new Date('2026-07-01'))).toBe(2025);
+    expect(lastCompletedYear('FY', new Date('2026-03-31'))).toBe(2024);
+    expect(lastCompletedYear('FY', new Date('2026-04-01'))).toBe(2025);
+  });
+
+  it('keeps a "last year" figure for its own year', () => {
+    const seminars = DECLARED_COUNTERS.find((c) => c.key === 'manual.seminars.national.cycle')!;
+    const since = DECLARED_COUNTERS.find((c) => c.key === 'manual.seminars.national.sinceJoining')!;
+    const range = { CY: [2022, 2024], FY: [2022, 2024], AY: [2022, 2024] } as CycleBounds;
+    expect(declaredStorageKey(seminars, range, new Date('2026-10-30'))).toBe('manual.seminars.national.cycle@2024');
+    expect(declaredStorageKey(since, range, new Date('2026-10-30'))).toBe('manual.seminars.national.sinceJoining');
   });
 
   it('leaves no year written into the catalogue', () => {

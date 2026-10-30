@@ -1,4 +1,4 @@
-import { spanText } from '@darp/shared/projectPeriod';
+import { spanColumnText } from '@darp/shared/projectPeriod';
 import { inArray, max } from 'drizzle-orm';
 import { db } from '@/server/db';
 import { journalMetrics, journalIndexListings, journalCoverage, journalJcr } from '@/server/db/schema';
@@ -129,7 +129,7 @@ export async function derivedValues(
   for (const r of rows) {
     const texts = rankingTexts(rankings?.get(r.key) ?? empty()) as Record<string, string>;
     out.set(r.key, Object.fromEntries(m.derived.map((d) => [
-      d.key, d.key === 'projectPeriod' || d.key === 'validUntil' ? spanText(m.key, r.data) || '—' : texts[d.key] ?? '',
+      d.key, d.key === 'projectPeriod' || d.key === 'validUntil' ? spanColumnText(m.key, r.data) : texts[d.key] ?? '',
     ])));
   }
   return out;

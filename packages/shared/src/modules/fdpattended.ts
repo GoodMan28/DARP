@@ -1,5 +1,6 @@
 // src/modules/fdpattended.ts
 import type { ModuleConfig } from './_types';
+import { FACULTY_MEMBERS } from './_types';
 
 export const fdpattended: ModuleConfig = {
   key: 'fdpattended',
@@ -10,7 +11,7 @@ export const fdpattended: ModuleConfig = {
   bodies: ['NAAC'],
   description:
     'Faculty and management development programmes you attended — online or face to face, including orientation, refresher and short-term courses.',
-  ownerRoles: ['faculty', 'hod'],
+  ownerRoles: FACULTY_MEMBERS,
   verifierRoles: ['dofa'],
   viewRoles: ['hod', 'dofa', 'admin'],
   scope: 'self',

@@ -31,7 +31,23 @@ export const departments = pgTable('departments', {
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   email: text('email').notNull(),
+  /** The display name, always composed from the parts below (composeName in @darp/shared/names). */
   name: text('name').notNull(),
+  namePrefix: text('name_prefix').notNull().default(''),
+  firstName: text('first_name').notNull().default(''),
+  middleName: text('middle_name').notNull().default(''),
+  /** Optional: some names have no surname. */
+  lastName: text('last_name').notNull().default(''),
+  /** Scopus Author ID (10–11 digits), typed by the person; metrics are fetched from Elsevier with it. */
+  scopusAuthorId: text('scopus_author_id'),
+  /** What Elsevier says about that ID: whose it is, and whether the name matches the account. */
+  scopusCheck: jsonb('scopus_check'),
+  /** Web of Science ResearcherID, e.g. AAB-1234-2020. The WoS figures are typed by the person. */
+  researcherId: text('researcher_id'),
+  /** Typed by the person; used to confirm authorship only when `orcidCheck.nameMatches`. */
+  orcid: text('orcid'),
+  /** What ORCID's public record said when the iD was saved: OrcidCheck in @darp/shared/contracts. */
+  orcidCheck: jsonb('orcid_check'),
   role: roleEnum('role').notNull(),
   departmentId: uuid('department_id').references(() => departments.id, { onDelete: 'restrict' }),
   employeeId: text('employee_id'),
@@ -436,6 +452,79 @@ export const patentJournalParts = pgTable('patent_journal_parts', {
   error: text('error'),
   indexedAt: timestamp('indexed_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * A file of DOIs, ISBNs or patent numbers uploaded to add many records at once. Each identifier is
+ * one item, fetched in the background and saved as a draft the owner then completes and submits.
+ */
+export const bulkImports = pgTable('bulk_imports', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  ownerUserId: uuid('owner_user_id').notNull().references(() => users.id),
+  moduleKey: text('module_key').notNull(),
+  fileName: text('file_name').notNull(),
+  /** 'running' | 'done' | 'failed' */
+  status: text('status').notNull(),
+  total: integer('total').notNull(),
+  done: integer('done').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('bulk_imports_owner_idx').on(t.ownerUserId, t.createdAt)]);
+
+export const bulkImportItems = pgTable('bulk_import_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  importId: uuid('import_id').notNull().references(() => bulkImports.id, { onDelete: 'cascade' }),
+  /** Its place in the file, so the review table keeps the file's order. */
+  position: integer('position').notNull(),
+  /** The identifier as found in the file. */
+  raw: text('raw').notNull(),
+  /** 'pending' | 'created' | 'exists' | 'not-found' | 'wrong-module' | 'not-yours' | 'error' */
+  status: text('status').notNull().default('pending'),
+  recordId: uuid('record_id').references(() => records.id, { onDelete: 'set null' }),
+  message: text('message'),
+}, (t) => [index('bulk_items_import_idx').on(t.importId, t.position)]);
+
+/**
+ * A researcher's figures on one day, from one source: Scopus (fetched with the person's Scopus
+ * Author ID) or Web of Science (typed by the person, with a screenshot). Kept as history, one row
+ * per person, source and day, so a trend can be shown.
+ */
+export const researcherMetrics = pgTable('researcher_metrics', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  /** 'scopus' | 'wos' */
+  source: text('source').notNull(),
+  asOf: date('as_of').notNull(),
+  documents: integer('documents'),
+  citations: integer('citations'),
+  /** Null when not known: Scopus without Elsevier's Citation Overview, or WoS not typed. */
+  citationsExclSelf: integer('citations_excl_self'),
+  hIndex: integer('h_index'),
+  hIndexExclSelf: integer('h_index_excl_self'),
+  /** Where the figures came from: the evidence file of a typed WoS row, notes from Elsevier. */
+  raw: jsonb('raw'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('researcher_metrics_once').on(t.userId, t.source, t.asOf)]);
+
+/** Small settings IQAC can change, by key (e.g. the research-quality thresholds). */
+export const appSettings = pgTable('app_settings', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').notNull(),
+  updatedBy: uuid('updated_by').references(() => users.id),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * A named view of a module's records (conditions, sort, grouping, shown columns). Personal, or shared by
+ * IQAC with everyone who can open the module.
+ */
+export const savedViews = pgTable('saved_views', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  moduleKey: text('module_key').notNull(),
+  ownerUserId: uuid('owner_user_id').notNull().references(() => users.id),
+  name: text('name').notNull(),
+  shared: boolean('shared').notNull().default(false),
+  view: jsonb('view').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('saved_views_module_idx').on(t.moduleKey, t.ownerUserId)]);
 
 /* ───────────────────────────── relations ───────────────────────── */
 

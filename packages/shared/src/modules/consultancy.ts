@@ -1,5 +1,6 @@
 // src/modules/consultancy.ts
 import type { ModuleConfig } from './_types';
+import { FACULTY_MEMBERS } from './_types';
 
 export const consultancy: ModuleConfig = {
   key: 'consultancy',
@@ -9,7 +10,7 @@ export const consultancy: ModuleConfig = {
   naacRef: '3.5',
   bodies: ['NAAC', 'NIRF'],
   description: 'Revenue generated from consultancy projects and from corporate training programmes.',
-  ownerRoles: ['faculty', 'hod'],
+  ownerRoles: FACULTY_MEMBERS,
   verifierRoles: ['drie'],
   viewRoles: ['hod', 'drie', 'admin'],
   scope: 'self',

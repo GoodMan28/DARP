@@ -1,5 +1,6 @@
 // src/modules/patents.ts
 import type { ModuleConfig } from './_types';
+import { FACULTY_MEMBERS } from './_types';
 
 export const patents: ModuleConfig = {
   key: 'patents',
@@ -10,7 +11,7 @@ export const patents: ModuleConfig = {
   bodies: ['NAAC', 'NIRF'],
   description:
     'All patents you own: applied, published or granted. Type the application number (or the patent number) and press Fetch details — an Indian patent\'s details are filled in from the Patent Office Journal. Each patent is entered once.',
-  ownerRoles: ['faculty', 'hod'],
+  ownerRoles: FACULTY_MEMBERS,
   verifierRoles: ['drie'],
   viewRoles: ['hod', 'drie', 'admin'],
   scope: 'self',
@@ -41,7 +42,7 @@ export const patents: ModuleConfig = {
     { key: 'filedDate', label: 'Date filed (Applied)', type: 'date', section: 'Patent', notFuture: true,
       autofill: { from: 'filedDate', locked: true },
       help: 'The date on the filing receipt. Required when the status is Applied.',
-      exportAs: { drie: 'Patent Filed Date (DD/MM/YYYY)' } },
+      exportAs: { faculty: 'Patent Filed Date (DD/MM/YYYY)', drie: 'Patent Filed Date (DD/MM/YYYY)' } },
 
     { key: 'applicationNo', label: 'Patent application number', type: 'text',
       required: true, maxLength: 80, section: 'Patent', normalise: 'patentNumber',
@@ -67,11 +68,13 @@ export const patents: ModuleConfig = {
 
     { key: 'publishedDate', label: 'Date published (Patent Office Journal)', type: 'date', section: 'Status',
       notFuture: true, showIf: { field: 'status', in: ['Published', 'Granted'] },
-      autofill: { from: 'publishedDate', locked: true } },
+      autofill: { from: 'publishedDate', locked: true },
+      exportAs: { faculty: 'Patent Published Date (DD/MM/YYYY)', drie: 'Patent Published Date (DD/MM/YYYY)' } },
 
     { key: 'grantDate', label: 'Date granted (as published in the Journal)', type: 'date', section: 'Status',
       notFuture: true, showIf: { field: 'status', in: ['Granted'] },
-      autofill: { from: 'grantDate', locked: true } },
+      autofill: { from: 'grantDate', locked: true },
+      exportAs: { faculty: 'Patent Granted Date (DD/MM/YYYY)', drie: 'Patent Granted Date (DD/MM/YYYY)' } },
 
     { key: 'statusDate', label: 'Date of Publish/Grant of patent', type: 'date', required: true, periodSource: true,
       section: 'Status', autofill: { from: 'statusDate', locked: true, alwaysLocked: true },
@@ -104,6 +107,7 @@ export const patents: ModuleConfig = {
     { workbook: 'drie', sheet: 'Patents' },
   ],
   feedsCounters: [
+    'patents.count.filed.cycle', 'patents.count.filed.sinceJoining',
     'patents.count.published.cycle', 'patents.count.published.sinceJoining',
     'patents.count.granted.cycle', 'patents.count.granted.sinceJoining',
   ],

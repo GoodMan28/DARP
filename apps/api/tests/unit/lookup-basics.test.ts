@@ -26,6 +26,14 @@ describe('isBitAffiliation', () => {
     expect(isBitAffiliation('Birla Institute of Technology and Science, Pilani')).toBe(false);
     expect(isBitAffiliation('Somewhere', ['https://ror.org/028vtqb15'])).toBe(true);
   });
+
+  it('refuses a BITS campus printed without "and Science", as the patent journal does', () => {
+    // Application 202441079295, Patent Office Journal 44/2024, page 503.
+    expect(isBitAffiliation('Birla Institute of Technology, Hyderabad Campus, Jawahar Nagar, Kapra Mandal, Hyderabad, Telangana – 500078, India')).toBe(false);
+    expect(isBitAffiliation('Birla Institute of Technology, Pilani, Rajasthan')).toBe(false);
+    expect(isBitAffiliation('Birla Institute of Technology, Off-Campus Patna, Bihar')).toBe(true);
+    expect(isBitAffiliation('Department of ECE, Birla Institute of Technology, Lalpur, Ranchi')).toBe(true);
+  });
 });
 
 describe('isbn13', () => {
@@ -59,5 +67,46 @@ describe('namesMatch with Indian spelling variants', () => {
     expect(namesMatch('Dr Vandana Bhattacharjee', p('Vandana', 'Banerjee'))).toBe(false);
     expect(namesMatch('Dr Vandana Bhattacharjee', { given: '', family: '', full: 'Bhattacherjee' })).toBe(false);
     expect(namesMatch('Dr Anil Rao', p('Anil', 'Roy'))).toBe(false);          // short surnames must match exactly
+  });
+});
+
+describe('namesMatch with names in parts', () => {
+  const verma = { prefix: 'Dr.', first: 'Anil', middle: 'Kumar', last: 'Verma' };
+  const full = (s: string) => ({ given: '', family: '', full: s });
+
+  it('reads the forms a name is published in', () => {
+    expect(namesMatch(verma, p('A. K.', 'Verma'))).toBe(true);
+    expect(namesMatch(verma, full('A. K. Verma'))).toBe(true);
+    expect(namesMatch(verma, full('Verma A.K.'))).toBe(true);
+    expect(namesMatch(verma, full('Verma AK'))).toBe(true);
+    expect(namesMatch(verma, full('Verma, Anil Kumar'))).toBe(true);
+    expect(namesMatch(verma, full('Anil Kumar Verma'))).toBe(true);
+    expect(namesMatch(verma, full('ANIL KUMAR VERMA'))).toBe(true);
+  });
+
+  it('tells namesakes apart by their initials', () => {
+    expect(namesMatch(verma, full('A. P. Verma'))).toBe(false);
+    expect(namesMatch(verma, full('Sunil Verma'))).toBe(false);
+    expect(namesMatch(verma, full('Verma, S. K.'))).toBe(false);
+  });
+
+  it('keeps a short all-capitals surname whole', () => {
+    const rao = { prefix: 'Dr.', first: 'Kiran', middle: '', last: 'Rao' };
+    expect(namesMatch(rao, full('KIRAN RAO'))).toBe(true);
+    expect(namesMatch(rao, full('KIRAN ROY'))).toBe(false);
+  });
+
+  it('matches a person with no surname only by the whole name', () => {
+    const single = { prefix: 'Dr.', first: 'Ramanathan', middle: '', last: '' };
+    expect(namesMatch(single, full('Ramanathan'))).toBe(true);
+    expect(namesMatch(single, p('', 'Ramanathan'))).toBe(true);
+    expect(namesMatch(single, full('R. Kumar'))).toBe(false);
+  });
+
+  it('accepts a two-word surname written together or apart', () => {
+    const de = { prefix: 'Prof.', first: 'Partha', middle: '', last: 'De Sarkar' };
+    expect(namesMatch(de, p('Partha', 'De Sarkar'))).toBe(true);
+    expect(namesMatch(de, p('P.', 'DeSarkar'))).toBe(true);
+    expect(namesMatch(de, p('P.', 'Sarkar'))).toBe(true);
   });
 });

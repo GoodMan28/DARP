@@ -1,4 +1,4 @@
-import { and, count, eq, sql } from 'drizzle-orm';
+import { and, count, eq, max, sql } from 'drizzle-orm';
 import { db } from '@/server/db';
 import { journalMetrics, journalIndexListings, journalCoverage, journalJcr } from '@/server/db/schema';
 import { normIssn, parseCoverage, type JournalListRow, type JcrRow } from '@darp/shared/journals';
@@ -137,11 +137,11 @@ export async function clearJournalList(kind: 'sjr' | 'list' | 'jcr', year: numbe
 
 export interface JournalListSummary {
   /** source 'scimago' = loaded by IQAC; 'scopus-list' = computed automatically. */
-  sjr: Array<{ year: number; source: string; issns: number; ranked: number }>;
+  sjr: Array<{ year: number; source: string; issns: number; ranked: number; importedAt: Date | null }>;
   /** source 'upload' = loaded by IQAC; 'scopus-list' = fetched automatically. */
-  lists: Array<{ listName: string; year: number; source: string; issns: number }>;
+  lists: Array<{ listName: string; year: number; source: string; issns: number; importedAt: Date | null }>;
   /** Journal Citation Reports exports, one entry per JIF year. */
-  jcr: Array<{ jifYear: number; issns: number; withJif: number }>;
+  jcr: Array<{ jifYear: number; issns: number; withJif: number; importedAt: Date | null }>;
 }
 
 export async function journalListSummary(): Promise<JournalListSummary> {
@@ -150,17 +150,19 @@ export async function journalListSummary(): Promise<JournalListSummary> {
     source: journalMetrics.source,
     issns: count(),
     ranked: sql<number>`count(${journalMetrics.quartile})::int`,
+    importedAt: max(journalMetrics.importedAt),
   }).from(journalMetrics)
     .groupBy(journalMetrics.year, journalMetrics.source)
     .orderBy(journalMetrics.year, journalMetrics.source);
   const lists = await db.select({
     listName: journalIndexListings.listName, year: journalIndexListings.year,
-    source: journalIndexListings.source, issns: count(),
+    source: journalIndexListings.source, issns: count(), importedAt: max(journalIndexListings.importedAt),
   }).from(journalIndexListings)
     .groupBy(journalIndexListings.listName, journalIndexListings.year, journalIndexListings.source)
     .orderBy(journalIndexListings.listName, journalIndexListings.year);
   const jcr = await db.select({
     jifYear: journalJcr.jifYear, issns: count(), withJif: sql<number>`count(${journalJcr.jif})::int`,
+    importedAt: max(journalJcr.importedAt),
   }).from(journalJcr).groupBy(journalJcr.jifYear).orderBy(journalJcr.jifYear);
   return { sjr, lists, jcr };
 }

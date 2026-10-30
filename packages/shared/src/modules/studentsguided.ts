@@ -1,5 +1,6 @@
 // src/modules/studentsguided.ts
 import type { ModuleConfig } from './_types';
+import { FACULTY_MEMBERS } from './_types';
 
 export const studentsguided: ModuleConfig = {
   key: 'studentsguided',
@@ -10,7 +11,7 @@ export const studentsguided: ModuleConfig = {
   bodies: ['NAAC', 'NIRF'],
   description:
     'Every UG, PG and PhD student for whom you are the Guide, with what they did after passing.',
-  ownerRoles: ['faculty', 'hod'],
+  ownerRoles: FACULTY_MEMBERS,
   verifierRoles: ['dofa'],
   viewRoles: ['hod', 'dofa', 'admin'],
   scope: 'self',

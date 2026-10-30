@@ -19,10 +19,13 @@ export function parseRange(from: unknown, to: unknown): YearRange | null {
   return { from: f, to: t };
 }
 
-/** The last three calendar years ending with the current one: the range when nothing is saved. */
+/**
+ * The last three completed calendar years: the range when nothing is saved. Reports are made for
+ * years that have ended (in 2026: 2023 to 2025), as the NAAC sheets ask.
+ */
 export function fallbackRange(now = new Date()): YearRange {
   const y = now.getUTCFullYear();
-  return { from: y - 2, to: y };
+  return { from: y - 3, to: y - 1 };
 }
 
 /**
