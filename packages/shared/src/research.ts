@@ -12,7 +12,7 @@ export function hIndex(counts: number[]): number {
 /** A Scopus Author ID: 10 or 11 digits. */
 export const SCOPUS_ID = /^\d{10,11}$/;
 /** A typed Scopus ID is the person's when at least this share of its papers carry their surname and first initial. */
-export const NAME_SHARE_MIN = 0.9;
+export const NAME_SHARE_MIN = 0.5;
 /** BIT Mesra in Scopus (found through the paper search, Oct 2026; the library should confirm it). */
 export const BIT_SCOPUS_AFFILIATION_ID = '60026714';
 /** A Web of Science ResearcherID, e.g. AAB-1234-2020. */

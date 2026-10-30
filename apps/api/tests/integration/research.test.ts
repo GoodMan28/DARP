@@ -122,6 +122,16 @@ describe('Scopus Author ID', () => {
     expect(calls.some((c) => c.includes('AUTHLASTNAME(Faculty)') && c.includes('AUTHFIRST(T)'))).toBe(true);
   });
 
+  it('accepts a person whose surname is spelled differently on some papers (7 of 10)', async () => {
+    process.env.ELSEVIER_API_KEY = 'test-key';
+    const spelled = await makeUser({ role: 'faculty', dept: 'CSE' });
+    await db.update(users).set({ scopusAuthorId: '57200000779', firstName: 'Test', lastName: 'Faculty' }).where(eq(users.id, spelled.id));
+    elsevierSearchOnly(7);
+    const p = await refreshNow(spelled, spelled.id);
+    expect(p.scopusCheck).toMatchObject({ nameMatches: true, nameShare: 0.7 });
+    expect(p.scopus).toMatchObject({ documents: 3 });
+  });
+
   it('stores nothing when too few of the ID’s papers carry the person’s name', async () => {
     process.env.ELSEVIER_API_KEY = 'test-key';
     const stranger = await makeUser({ role: 'faculty', dept: 'CSE' });
