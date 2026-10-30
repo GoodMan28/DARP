@@ -6,7 +6,7 @@ import { Button, Card, CardHeader, FileInput, Input, Notice, Table, Td, Th } fro
 import { IconAlert, IconCheck } from '@/components/shell/Icon';
 import { cx } from '@/lib/cx';
 import { formatDate } from '@darp/shared/format';
-import { QUALITY_LABEL, type MetricsRow, type ResearchProfile } from '@darp/shared/research';
+import { QUALITY_LABEL, effectiveScopus, type MetricsRow, type ResearchProfile } from '@darp/shared/research';
 
 const n = (v: number | null | undefined) => (v === null || v === undefined ? 'NA' : v.toLocaleString('en-IN'));
 const pct = (v: number | null) => (v === null ? 'NA' : `${v}%`);
@@ -58,6 +58,52 @@ function SourceCard({ title, status, row, note, children }: {
   );
 }
 
+/** A box for figures read off a profile page: numbers, the date, and a screenshot as the evidence. */
+function TypedForm({ title, intro, blocked, fields, values, onChange, required, screenshot, fieldKey, busy, anyBusy, error, button, onSave }: {
+  title: string; intro: string; blocked: string | null;
+  fields: Array<[string, string]>; values: Record<string, string>; onChange: (key: string, value: string) => void; required: string[];
+  screenshot: string; fieldKey: string; busy: boolean; anyBusy: boolean; error: Record<string, string>; button: string; onSave: () => void;
+}) {
+  const id = useId();
+  const ready = required.every((k) => values[k]) && !!values.evidenceId;
+  const key = fieldKey === 'wosEvidence' ? 'wos' : 'scopus';
+  return (
+    <details className="border-b border-line">
+      <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">{title}</summary>
+      <div className="px-4 pb-4">
+        <p className="text-xs text-ink-muted">{intro}</p>
+        {blocked ? <Notice tone="info" className="mt-2">{blocked}</Notice> : null}
+        <div className="mt-2 grid gap-3 sm:grid-cols-5">
+          {fields.map(([k, label]) => (
+            <div key={k}>
+              <label htmlFor={`${id}-${k}`} className="mb-1 block text-xs font-semibold text-ink-muted">{label}</label>
+              <Input id={`${id}-${k}`} inputMode="numeric" value={values[k] ?? ''} onChange={(e) => onChange(k, e.target.value.replace(/\D/g, ''))} />
+            </div>
+          ))}
+          <div>
+            <label htmlFor={`${id}-asof`} className="mb-1 block text-xs font-semibold text-ink-muted">As on</label>
+            <Input id={`${id}-asof`} type="date" value={values.asOf ?? ''} onChange={(e) => onChange('asOf', e.target.value)} />
+          </div>
+        </div>
+        <div className="mt-3">
+          <span className="mb-1 block text-xs font-semibold text-ink-muted">{screenshot}</span>
+          <FileInput fieldKey={fieldKey} moduleKey="" accept={['png', 'jpg', 'jpeg', 'pdf']} maxSizeMB={2}
+            value={values.evidenceId || undefined} onUploaded={(fileId) => onChange('evidenceId', fileId)} />
+          {error.evidenceId ? <p className="mt-1 text-xs text-danger-700">{error.evidenceId}</p> : null}
+          {error.asOf ? <p className="mt-1 text-xs text-danger-700">{error.asOf}</p> : null}
+          {error.scopusAuthorId ? <p className="mt-1 text-xs text-danger-700">{error.scopusAuthorId}</p> : null}
+        </div>
+        <div className="mt-3">
+          <Button variant="secondary" disabled={anyBusy || !!blocked || !ready} onClick={onSave}>
+            {busy ? 'Saving…' : button}
+          </Button>
+          {error[key] ? <Notice tone="danger" className="mt-2">{error[key]}</Notice> : null}
+        </div>
+      </div>
+    </details>
+  );
+}
+
 /**
  * A researcher's figures from Scopus, Web of Science and OpenAlex. Connecting the IDs to ORCID is the
  * best route: DARP then reads them from ORCID and they count as verified. An ID can still be typed;
@@ -68,12 +114,20 @@ export function ResearchCard({ initial }: { initial: ResearchProfile }) {
   const [p, setP] = useState(initial);
   const [scopusId, setScopusId] = useState(initial.scopusAuthorId ?? '');
   const [rid, setRid] = useState(initial.researcherId ?? '');
-  const [wos, setWos] = useState({
+  const [wos, setWos] = useState<Record<string, string>>({
     documents: String(initial.wos?.typed ? initial.wos.documents ?? '' : ''),
     citationsExclSelf: String(initial.wos?.typed ? initial.wos.citationsExclSelf ?? '' : ''),
     hIndex: String(initial.wos?.typed ? initial.wos.hIndex ?? '' : ''),
     asOf: new Date().toISOString().slice(0, 10),
     evidenceId: initial.wos?.typed ? initial.wos.evidenceId ?? '' : '',
+  });
+  const [sc, setSc] = useState<Record<string, string>>({
+    documents: String(initial.scopusTyped?.documents ?? ''),
+    citations: String(initial.scopusTyped?.citations ?? ''),
+    citationsExclSelf: String(initial.scopusTyped?.citationsExclSelf ?? ''),
+    hIndex: String(initial.scopusTyped?.hIndex ?? ''),
+    asOf: new Date().toISOString().slice(0, 10),
+    evidenceId: initial.scopusTyped?.evidenceId ?? '',
   });
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<Record<string, string>>({});
@@ -125,12 +179,14 @@ export function ResearchCard({ initial }: { initial: ResearchProfile }) {
 
   const c = p.scopusCheck;
   const s = p.signal;
+  const scopusRow = effectiveScopus(p.scopus, p.scopusTyped);
   const scopusFromOrcid = p.idsFromOrcid.scopusAuthorId;
   const ridFromOrcid = p.idsFromOrcid.researcherId;
 
   const scopusStatus = ((): { tone: Tone; text: string } => {
     if (!p.scopusAuthorId) return { tone: 'neutral', text: 'No Scopus ID yet' };
-    if (!p.scopusConnected) return { tone: 'neutral', text: 'Waiting for BIT’s Elsevier key' };
+    if (!p.scopusConnected && !p.scopusTyped) return { tone: 'neutral', text: 'Waiting for BIT’s Elsevier key' };
+    if (!p.scopus && p.scopusTyped) return { tone: 'success', text: 'Typed by you, with a screenshot' };
     if (!p.scopus) return { tone: 'neutral', text: 'Not fetched yet: press Save and fetch' };
     if (scopusFromOrcid) return { tone: 'success', text: 'Verified: on your ORCID record' };
     if (p.scopus.verified !== false) return { tone: 'success', text: 'Verified: your surname is on the papers' };
@@ -203,8 +259,8 @@ export function ResearchCard({ initial }: { initial: ResearchProfile }) {
 
       {/* One card per source */}
       <div className="grid gap-3 p-4 lg:grid-cols-3">
-        <SourceCard title="Scopus" status={scopusStatus} row={p.scopus}
-          note={[dateOf(p.scopus), p.scopus && p.scopusBitDocuments !== null ? `${n(p.scopusBitDocuments)} written at BIT` : null].filter(Boolean).join(' · ') || undefined}>
+        <SourceCard title="Scopus" status={scopusStatus} row={scopusRow}
+          note={[dateOf(p.scopus), dateOf(p.scopusTyped, true), p.scopus && p.scopusBitDocuments !== null ? `${n(p.scopusBitDocuments)} written at BIT` : null].filter(Boolean).join(' · ') || undefined}>
           <div>
             <label htmlFor={`${id}-scopus`} className="mb-1 block text-xs font-semibold text-ink-muted">Scopus Author ID</label>
             {scopusFromOrcid ? (
@@ -256,7 +312,8 @@ export function ResearchCard({ initial }: { initial: ResearchProfile }) {
           <thead>
             <tr>
               <Th>Figure</Th>
-              <Th className="text-right">Scopus</Th>
+              <Th className="text-right">Scopus (fetched)</Th>
+              <Th className="text-right">Scopus (typed)</Th>
               <Th className="text-right">Web of Science</Th>
               <Th className="text-right">OpenAlex</Th>
             </tr>
@@ -271,7 +328,7 @@ export function ResearchCard({ initial }: { initial: ResearchProfile }) {
             ] as const).map(([label, get]) => (
               <tr key={label}>
                 <Td className="text-xs font-semibold">{label}</Td>
-                {[p.scopus, p.wos, p.openalex].map((row, i) => (
+                {[p.scopus, p.scopusTyped, p.wos, p.openalex].map((row, i) => (
                   <Td key={i} className="text-right font-mono tabular-nums">{row ? n(get(row)) : '—'}</Td>
                 ))}
               </tr>
@@ -284,53 +341,41 @@ export function ResearchCard({ initial }: { initial: ResearchProfile }) {
         </p>
       </details>
 
+      {/* Typed Scopus figures: always open, with a screenshot */}
+      <TypedForm
+        title="Type your Scopus figures"
+        intro="Use this when the fetched figures are missing, or to add the citations without self-citations (Scopus shows them on your author page under “Citation overview”). Attach a screenshot of your Scopus author page. IQAC can see it."
+        blocked={p.scopusAuthorId ? null : 'Save your Scopus Author ID first.'}
+        fields={[['documents', 'Documents'], ['citations', 'Citations'], ['citationsExclSelf', 'Citations without self-citations (optional)'], ['hIndex', 'h-index']]}
+        values={sc} onChange={(k, v) => setSc((x) => ({ ...x, [k]: v }))}
+        required={['documents', 'citations', 'hIndex']}
+        screenshot="Screenshot of your Scopus author page" fieldKey="scopusEvidence"
+        busy={busy === 'scopus'} anyBusy={busy !== null} error={error}
+        button="Save Scopus figures"
+        onSave={() => void call('scopus', '/api/profile/research/scopus', 'POST', {
+          documents: Number(sc.documents), citations: Number(sc.citations),
+          citationsExclSelf: sc.citationsExclSelf === '' ? null : Number(sc.citationsExclSelf), hIndex: Number(sc.hIndex),
+          asOf: sc.asOf, evidenceId: sc.evidenceId,
+        })}
+      />
+
       {/* Typed WoS figures, while Clarivate is not connected */}
       {!p.wosConnected ? (
-        <details className="border-b border-line">
-          <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">Type your Web of Science figures</summary>
-          <div className="px-4 pb-4">
-            <p className="text-xs text-ink-muted">
-              Until BIT connects Clarivate’s Web of Science API, type the figures from your Web of Science researcher profile
-              and attach a screenshot of them. IQAC can see the screenshot.
-            </p>
-            <div className="mt-2 grid gap-3 sm:grid-cols-4">
-              {([
-                ['documents', 'Documents'],
-                ['citationsExclSelf', 'Times cited without self-citations'],
-                ['hIndex', 'h-index'],
-              ] as const).map(([k, label]) => (
-                <div key={k}>
-                  <label htmlFor={`${id}-${k}`} className="mb-1 block text-xs font-semibold text-ink-muted">{label}</label>
-                  <Input id={`${id}-${k}`} inputMode="numeric" value={wos[k]} onChange={(e) => setWos((w) => ({ ...w, [k]: e.target.value.replace(/\D/g, '') }))} />
-                </div>
-              ))}
-              <div>
-                <label htmlFor={`${id}-asof`} className="mb-1 block text-xs font-semibold text-ink-muted">As on</label>
-                <Input id={`${id}-asof`} type="date" value={wos.asOf} onChange={(e) => setWos((w) => ({ ...w, asOf: e.target.value }))} />
-              </div>
-            </div>
-            <div className="mt-3">
-              <span className="mb-1 block text-xs font-semibold text-ink-muted">Screenshot of your Web of Science metrics</span>
-              <FileInput fieldKey="wosEvidence" moduleKey="" accept={['png', 'jpg', 'jpeg', 'pdf']} maxSizeMB={2}
-                value={wos.evidenceId || undefined} onUploaded={(fileId) => setWos((w) => ({ ...w, evidenceId: fileId }))} />
-              {error.evidenceId ? <p className="mt-1 text-xs text-danger-700">{error.evidenceId}</p> : null}
-              {error.asOf ? <p className="mt-1 text-xs text-danger-700">{error.asOf}</p> : null}
-            </div>
-            <div className="mt-3">
-              <Button
-                variant="secondary"
-                disabled={busy !== null || !wos.documents || !wos.citationsExclSelf || !wos.hIndex || !wos.evidenceId}
-                onClick={() => void call('wos', '/api/profile/research/wos', 'POST', {
-                  documents: Number(wos.documents), citationsExclSelf: Number(wos.citationsExclSelf), hIndex: Number(wos.hIndex),
-                  asOf: wos.asOf, evidenceId: wos.evidenceId,
-                })}
-              >
-                {busy === 'wos' ? 'Saving…' : 'Save Web of Science figures'}
-              </Button>
-              {error.wos ? <Notice tone="danger" className="mt-2">{error.wos}</Notice> : null}
-            </div>
-          </div>
-        </details>
+        <TypedForm
+          title="Type your Web of Science figures"
+          intro="Until BIT connects Clarivate’s Web of Science API, type the figures from your Web of Science researcher profile and attach a screenshot of them. IQAC can see the screenshot."
+          blocked={null}
+          fields={[['documents', 'Documents'], ['citationsExclSelf', 'Times cited without self-citations'], ['hIndex', 'h-index']]}
+          values={wos} onChange={(k, v) => setWos((x) => ({ ...x, [k]: v }))}
+          required={['documents', 'citationsExclSelf', 'hIndex']}
+          screenshot="Screenshot of your Web of Science metrics" fieldKey="wosEvidence"
+          busy={busy === 'wos'} anyBusy={busy !== null} error={error}
+          button="Save Web of Science figures"
+          onSave={() => void call('wos', '/api/profile/research/wos', 'POST', {
+            documents: Number(wos.documents), citationsExclSelf: Number(wos.citationsExclSelf), hIndex: Number(wos.hIndex),
+            asOf: wos.asOf, evidenceId: wos.evidenceId,
+          })}
+        />
       ) : null}
 
       {/* the signal */}

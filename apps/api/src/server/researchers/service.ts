@@ -12,7 +12,7 @@ import { istClock } from '@/server/lookup/scopusList';
 import { log } from '@/server/log';
 import { FACULTY_MEMBERS } from '@darp/shared/modules/types';
 import {
-  DEFAULT_THRESHOLDS, RESEARCHER_ID, SCOPUS_ID, NAME_SHARE_MIN, BIT_SCOPUS_AFFILIATION_ID, qualitySignal,
+  DEFAULT_THRESHOLDS, RESEARCHER_ID, SCOPUS_ID, NAME_SHARE_MIN, BIT_SCOPUS_AFFILIATION_ID, qualitySignal, effectiveScopus,
   type MetricsRow, type QualityThresholds, type ResearchProfile, type ResearchQualityRow, type ScopusCheck,
 } from '@darp/shared/research';
 import { scopusConnected, scopusFigures, nameShare, countDocuments, ScopusUnavailable } from './scopus';
@@ -70,11 +70,11 @@ const asMetrics = (r: Row): MetricsRow => ({
   verified: ((r.raw ?? {}) as { verified?: boolean }).verified !== false,
 });
 
-type Latest = { scopus: Row | null; wos: Row | null; openalex: Row | null };
+type Latest = { scopus: Row | null; scopusTyped: Row | null; wos: Row | null; openalex: Row | null };
 
 /** The newest Scopus, WoS and OpenAlex rows of each person. */
 async function latestRows(userIds: string[]): Promise<Map<string, Latest>> {
-  const out = new Map<string, Latest>(userIds.map((id) => [id, { scopus: null, wos: null, openalex: null }]));
+  const out = new Map<string, Latest>(userIds.map((id) => [id, { scopus: null, scopusTyped: null, wos: null, openalex: null }]));
   if (userIds.length === 0) return out;
   const rows = await db.select().from(researcherMetrics)
     .where(inArray(researcherMetrics.userId, userIds))
@@ -82,6 +82,7 @@ async function latestRows(userIds: string[]): Promise<Map<string, Latest>> {
   for (const r of rows) {
     const t = out.get(r.userId)!;
     if (r.source === 'scopus' && !t.scopus) t.scopus = r;
+    if (r.source === 'scopus-typed' && !t.scopusTyped) t.scopusTyped = r;
     if (r.source === 'wos' && !t.wos) t.wos = r;
     if (r.source === 'openalex' && !t.openalex) t.openalex = r;
   }
@@ -102,8 +103,9 @@ export async function researchProfile(actor: SessionUser, userId: string, chosen
   if (!u) throw new ServiceError('NOT_FOUND', 'Not found.');
   const range = chosen ?? await defaultRange();
   const [latest, papers, thresholds] = await Promise.all([latestRows([userId]), papersForUsers([userId], range), getThresholds()]);
-  const { scopus, wos, openalex } = latest.get(userId)!;
+  const { scopus, scopusTyped, wos, openalex } = latest.get(userId)!;
   const p = papers.get(userId)!;
+  const figures = effectiveScopus(scopus ? asMetrics(scopus) : null, scopusTyped ? asMetrics(scopusTyped) : null);
   const ext = trusted(u.orcid, u.orcidCheck) ? u.orcidCheck.externalIds : undefined;
   const wosRaw = (wos?.raw ?? {}) as { evidenceId?: string; typed?: boolean };
   return {
@@ -115,10 +117,11 @@ export async function researchProfile(actor: SessionUser, userId: string, chosen
     },
     scopusAuthorId: u.scopusAuthorId, scopusCheck: (u.scopusCheck ?? null) as ScopusCheck | null, researcherId: u.researcherId,
     scopus: scopus ? asMetrics(scopus) : null,
+    scopusTyped: scopusTyped ? { ...asMetrics(scopusTyped), evidenceId: ((scopusTyped.raw ?? {}) as { evidenceId?: string }).evidenceId ?? null } : null,
     scopusBitDocuments: ((scopus?.raw ?? {}) as { bitDocuments?: number | null }).bitDocuments ?? null,
     wos: wos ? { ...asMetrics(wos), evidenceId: wosRaw.evidenceId ?? null, typed: !!wosRaw.typed } : null,
     openalex: openalex ? asMetrics(openalex) : null,
-    signal: qualitySignal(scopus ? asMetrics(scopus) : null, wos ? asMetrics(wos) : null, p.papers, p.top, thresholds, openalex ? asMetrics(openalex) : null),
+    signal: qualitySignal(figures, wos ? asMetrics(wos) : null, p.papers, p.top, thresholds, openalex ? asMetrics(openalex) : null),
     range: { from: range.from, to: range.to },
     scopusConnected: scopusConnected(),
     wosConnected: wosConnected(),
@@ -179,6 +182,30 @@ export async function saveWos(
     hIndex: input.hIndex, hIndexExclSelf: null, raw: { evidenceId: input.evidenceId, typed: true },
   };
   await db.insert(researcherMetrics).values({ userId: actor.id, source: 'wos', asOf: input.asOf, ...values })
+    .onConflictDoUpdate({ target: [researcherMetrics.userId, researcherMetrics.source, researcherMetrics.asOf], set: { ...values, createdAt: new Date() } });
+  return researchProfile(actor, actor.id);
+}
+
+/**
+ * Saves the Scopus figures the person typed from their Scopus page, with a screenshot. Open whether or
+ * not Elsevier is connected: the key cannot give figures without self-citations, and a person can read
+ * them off the page. Kept apart from the fetched figures, so a fetch never overwrites them.
+ */
+export async function saveScopus(
+  actor: SessionUser,
+  input: { documents: number; citations: number; citationsExclSelf: number | null; hIndex: number; asOf: string; evidenceId: string },
+): Promise<ResearchProfile> {
+  const [me] = await db.select({ scopusAuthorId: users.scopusAuthorId }).from(users).where(eq(users.id, actor.id)).limit(1);
+  if (!me?.scopusAuthorId) throw new ServiceError('VALIDATION', 'Save your Scopus Author ID first.', { scopusAuthorId: 'Enter and save your Scopus Author ID first.' });
+  if (input.asOf > today()) throw new ServiceError('VALIDATION', 'The date is in the future.', { asOf: 'Use the date you read the figures.' });
+  const [ev] = await db.select({ id: evidenceFiles.id }).from(evidenceFiles)
+    .where(and(eq(evidenceFiles.id, input.evidenceId), eq(evidenceFiles.uploadedBy, actor.id), isNull(evidenceFiles.deletedAt))).limit(1);
+  if (!ev) throw new ServiceError('VALIDATION', 'Attach a screenshot of your Scopus author page.', { evidenceId: 'Upload the screenshot again.' });
+  const values = {
+    documents: input.documents, citations: input.citations, citationsExclSelf: input.citationsExclSelf,
+    hIndex: input.hIndex, hIndexExclSelf: null, raw: { evidenceId: input.evidenceId, typed: true },
+  };
+  await db.insert(researcherMetrics).values({ userId: actor.id, source: 'scopus-typed', asOf: input.asOf, ...values })
     .onConflictDoUpdate({ target: [researcherMetrics.userId, researcherMetrics.source, researcherMetrics.asOf], set: { ...values, createdAt: new Date() } });
   return researchProfile(actor, actor.id);
 }
@@ -385,14 +412,17 @@ export async function researchQuality(
   const ids = people.map((p) => p.id);
   const [latest, papers, thresholds] = await Promise.all([latestRows(ids), papersForUsers(ids, range), getThresholds()]);
   const rows = people.map((p) => {
-    const { scopus, wos, openalex } = latest.get(p.id)!;
+    const { scopus, scopusTyped, wos, openalex } = latest.get(p.id)!;
     const pp = papers.get(p.id)!;
+    const figures = effectiveScopus(scopus ? asMetrics(scopus) : null, scopusTyped ? asMetrics(scopusTyped) : null);
+    const evidenceOf = (r: Row | null) => ((r?.raw ?? {}) as { evidenceId?: string }).evidenceId ?? null;
     return {
       userId: p.id, name: p.name, department: p.department ?? '',
       scopusAuthorId: p.scopusAuthorId, researcherId: p.researcherId, orcid: p.orcid,
-      scopusAsOf: scopus?.asOf ?? null, wosAsOf: wos?.asOf ?? null,
-      scopus: scopus ? asMetrics(scopus) : null, wos: wos ? asMetrics(wos) : null, openalex: openalex ? asMetrics(openalex) : null,
-      signal: qualitySignal(scopus ? asMetrics(scopus) : null, wos ? asMetrics(wos) : null, pp.papers, pp.top, thresholds, openalex ? asMetrics(openalex) : null),
+      scopusAsOf: (scopus ?? scopusTyped)?.asOf ?? null, wosAsOf: wos?.asOf ?? null,
+      scopus: figures, wos: wos ? asMetrics(wos) : null, openalex: openalex ? asMetrics(openalex) : null,
+      scopusTyped: !!scopusTyped, scopusEvidenceId: evidenceOf(scopusTyped), wosEvidenceId: evidenceOf(wos),
+      signal: qualitySignal(figures, wos ? asMetrics(wos) : null, pp.papers, pp.top, thresholds, openalex ? asMetrics(openalex) : null),
     };
   });
   return { rows, range, thresholds, scopusConnected: scopusConnected(), wosConnected: wosConnected() };

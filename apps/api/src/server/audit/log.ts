@@ -12,7 +12,7 @@ export type AuditAction =
   | 'user.create' | 'user.update' | 'user.deactivate' | 'user.seed'
   | 'masterlist.update' | 'cycle.update' | 'baseline.update' | 'declaration.update'
   | 'bulk.start'
-  | 'research.ids' | 'research.wos' | 'research.refresh' | 'settings.update';
+  | 'research.ids' | 'research.wos' | 'research.scopus' | 'research.refresh' | 'settings.update';
 
 /** Strips values that must never be written to the audit trail. */
 function sanitise(obj: unknown): unknown {

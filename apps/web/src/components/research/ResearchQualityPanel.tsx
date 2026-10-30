@@ -170,6 +170,17 @@ export function ResearchQualityPanel({ isAdmin }: { isAdmin: boolean }) {
               <tr key={r.userId}>
                 <Td className="font-semibold">
                   {r.name}
+                  {r.scopusTyped || r.wosEvidenceId ? (
+                    <span className="ml-1 rounded-xs border border-line bg-surface-2 px-1 text-2xs font-semibold text-ink-muted" title="Some figures were typed by the person, with a screenshot.">
+                      typed
+                    </span>
+                  ) : null}
+                  {isAdmin && r.scopusEvidenceId ? (
+                    <a className="ml-1 text-2xs underline" target="_blank" rel="noreferrer" href={`/api/evidence/${r.scopusEvidenceId}`}>Scopus screenshot</a>
+                  ) : null}
+                  {isAdmin && r.wosEvidenceId ? (
+                    <a className="ml-1 text-2xs underline" target="_blank" rel="noreferrer" href={`/api/evidence/${r.wosEvidenceId}`}>WoS screenshot</a>
+                  ) : null}
                   {r.scopus?.verified === false || r.wos?.verified === false ? (
                     <span className="ml-1 rounded-xs border border-warning-100 bg-warning-50 px-1 text-2xs font-semibold text-warning-700"
                       title="The Scopus or Web of Science ID could not be matched to this person's name. Check it.">

@@ -20,7 +20,8 @@ export const RESEARCHER_ID = /^[A-Z]{1,3}-\d{4}-\d{4}$/;
 
 export interface MetricsRow {
   /** 'openalex': OpenAlex's author record, found by ORCID iD (free; counts more sources than Scopus or WoS). */
-  source: 'scopus' | 'wos' | 'openalex';
+  /** 'scopus-typed': figures the person typed from their Scopus page, with a screenshot. */
+  source: 'scopus' | 'scopus-typed' | 'wos' | 'openalex';
   asOf: string;
   documents: number | null;
   citations: number | null;
@@ -152,6 +153,8 @@ export interface ResearchProfile {
   scopusCheck: ScopusCheck | null;
   researcherId: string | null;
   scopus: MetricsRow | null;
+  /** Figures the person typed from their Scopus page, with the screenshot. */
+  scopusTyped: (MetricsRow & { evidenceId: string | null }) | null;
   /** Of the Scopus documents, how many were written at BIT (by affiliation ID); null when not known. */
   scopusBitDocuments: number | null;
   wos: (MetricsRow & { evidenceId: string | null; typed: boolean }) | null;
@@ -179,5 +182,23 @@ export interface ResearchQualityRow {
   scopus: MetricsRow | null;
   wos: MetricsRow | null;
   openalex: MetricsRow | null;
+  /** Part of the Scopus figures were typed by the person; the screenshots are for IQAC. */
+  scopusTyped: boolean;
+  scopusEvidenceId: string | null;
+  wosEvidenceId: string | null;
   signal: QualitySignal;
+}
+
+/** One set of Scopus figures: the fetched ones, with any gap filled from what the person typed. */
+export function effectiveScopus(fetched: MetricsRow | null, typed: MetricsRow | null): MetricsRow | null {
+  if (!fetched) return typed;
+  if (!typed) return fetched;
+  return {
+    ...fetched,
+    documents: fetched.documents ?? typed.documents,
+    citations: fetched.citations ?? typed.citations,
+    citationsExclSelf: fetched.citationsExclSelf ?? typed.citationsExclSelf,
+    hIndex: fetched.hIndex ?? typed.hIndex,
+    hIndexExclSelf: fetched.hIndexExclSelf ?? typed.hIndexExclSelf,
+  };
 }

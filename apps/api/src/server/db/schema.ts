@@ -490,7 +490,7 @@ export const bulkImportItems = pgTable('bulk_import_items', {
 export const researcherMetrics = pgTable('researcher_metrics', {
   id: uuid('id').primaryKey().defaultRandom(),
   userId: uuid('user_id').notNull().references(() => users.id),
-  /** 'scopus' | 'wos' */
+  /** 'scopus' | 'scopus-typed' (typed by the person, with a screenshot) | 'wos' | 'openalex' */
   source: text('source').notNull(),
   asOf: date('as_of').notNull(),
   documents: integer('documents'),

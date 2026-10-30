@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
-import { hIndex, qualitySignal, DEFAULT_THRESHOLDS, type MetricsRow } from '@darp/shared/research';
+import { hIndex, qualitySignal, effectiveScopus, DEFAULT_THRESHOLDS, type MetricsRow } from '@darp/shared/research';
 
 /* Phase 8: the h-index, the research-quality signal and the Scopus client (Elsevier mocked). */
 
@@ -175,5 +175,20 @@ describe('enough data', () => {
     expect(qualitySignal(null, null, 1, 0).label).toBe('unknown');
     const s = qualitySignal(null, null, 1, 0, DEFAULT_THRESHOLDS, oa);
     expect(s).toMatchObject({ label: 'balanced', wosShare: null, scopusDocuments: null });
+  });
+});
+
+describe('effectiveScopus', () => {
+  const row = (o: Partial<import('@darp/shared/research').MetricsRow>) => ({
+    source: 'scopus' as const, asOf: '2026-10-01', documents: null, citations: null, citationsExclSelf: null, hIndex: null, hIndexExclSelf: null, ...o,
+  });
+  it('is whichever exists when only one does', () => {
+    expect(effectiveScopus(null, null)).toBeNull();
+    expect(effectiveScopus(row({ documents: 3 }), null)?.documents).toBe(3);
+    expect(effectiveScopus(null, row({ documents: 9 }))?.documents).toBe(9);
+  });
+  it('keeps the fetched figures and fills only their gaps from the typed ones', () => {
+    const e = effectiveScopus(row({ documents: 3, citations: 30 }), row({ documents: 40, citations: 500, citationsExclSelf: 420, hIndex: 11 }))!;
+    expect(e).toMatchObject({ documents: 3, citations: 30, citationsExclSelf: 420, hIndex: 11 });
   });
 });

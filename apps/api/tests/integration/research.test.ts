@@ -5,7 +5,7 @@ import { users } from '@/server/db/schema';
 import { makeUser } from '../helpers/factories';
 import { uploadEvidence } from '@/server/evidence/service';
 import {
-  saveResearchIds, saveWos, researchProfile, researchQuality, refreshNow, setThresholds, refreshSomeResearchers, adoptOrcidIds, dropOrcidIds,
+  saveResearchIds, saveWos, saveScopus, researchProfile, researchQuality, refreshNow, setThresholds, refreshSomeResearchers, adoptOrcidIds, dropOrcidIds,
 } from '@/server/researchers/service';
 import type { SessionUser } from '@/server/auth/session';
 
@@ -146,6 +146,45 @@ describe('Scopus Author ID', () => {
     process.env.ELSEVIER_API_KEY = 'test-key';
     elsevier({ given: 'Zed', surname: 'Nobody' });
     expect(await refreshSomeResearchers()).toBe(1);
+  });
+});
+
+describe('Typed Scopus figures', () => {
+  const figures = { documents: 40, citations: 500, citationsExclSelf: 420, hIndex: 11, asOf: '2026-10-01' };
+  const shot = (u: SessionUser) => uploadEvidence(u, { bytes: PNG, fileName: 'scopus.png', declaredMime: 'image/png', fieldKey: 'scopusEvidence', moduleKey: null }).then((e) => e.id);
+
+  it('needs a saved Scopus ID, and the person’s own screenshot', async () => {
+    const typist = await makeUser({ role: 'faculty', dept: 'CSE' });
+    const mine = await shot(typist);
+    await expect(saveScopus(typist, { ...figures, evidenceId: mine })).rejects.toMatchObject({ fields: { scopusAuthorId: expect.any(String) } });
+    await db.update(users).set({ scopusAuthorId: '57200000881' }).where(eq(users.id, typist.id));
+    const theirs = await shot(other);
+    await expect(saveScopus(typist, { ...figures, evidenceId: theirs })).rejects.toMatchObject({ fields: { evidenceId: expect.any(String) } });
+    await expect(saveScopus(typist, { ...figures, asOf: '2099-01-01', evidenceId: mine })).rejects.toMatchObject({ code: 'VALIDATION' });
+    const p = await saveScopus(typist, { ...figures, evidenceId: mine });
+    expect(p.scopusTyped).toMatchObject({ documents: 40, citations: 500, citationsExclSelf: 420, hIndex: 11, asOf: '2026-10-01', evidenceId: mine });
+    expect(p.scopus).toBeNull();                              // nothing fetched: the typed row is kept apart
+    expect(p.signal.scopusDocuments).toBe(40);                // and still counts in the research profile
+  });
+
+  it('is not overwritten by a later fetch, and fills the gaps of a fetched row', async () => {
+    process.env.ELSEVIER_API_KEY = 'test-key';
+    const typist = await makeUser({ role: 'faculty', dept: 'CSE' });
+    await db.update(users).set({ scopusAuthorId: '57200000882', firstName: 'Test', lastName: 'Faculty' }).where(eq(users.id, typist.id));
+    const mine = await shot(typist);
+    await saveScopus(typist, { ...figures, evidenceId: mine });
+    elsevierSearchOnly(10);                                   // fetched: 3 documents, no figures without self-citations
+    const p = await refreshNow(typist, typist.id);
+    expect(p.scopus).toMatchObject({ documents: 3, citationsExclSelf: null });
+    expect(p.scopusTyped).toMatchObject({ documents: 40, citationsExclSelf: 420 });
+    expect(p.signal.citationsInclSelf).toBe(false);           // the typed figure without self-citations fills the gap
+  });
+
+  it('shows IQAC the typed flag and the screenshot', async () => {
+    const q = await researchQuality(admin, null, null);
+    const row = q.rows.find((r) => r.scopusTyped && r.scopusEvidenceId);
+    expect(row).toBeTruthy();
+    expect(row!.scopus?.documents).toBeGreaterThan(0);
   });
 });
 

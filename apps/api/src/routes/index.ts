@@ -82,6 +82,7 @@ api.get('/reports/research-quality', research.QUALITY);
 api.get('/profile/research', research.GET);
 api.put('/profile/research/ids', research.PUT_IDS);
 api.post('/profile/research/wos', research.POST_WOS);
+api.post('/profile/research/scopus', research.POST_SCOPUS);
 api.post('/profile/research/refresh', research.POST_REFRESH);
 api.get('/admin/research/thresholds', research.GET_THRESHOLDS);
 api.put('/admin/research/thresholds', research.PUT_THRESHOLDS);

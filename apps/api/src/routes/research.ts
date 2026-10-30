@@ -4,7 +4,7 @@ import { toResponse } from '@/server/records/toResponse';
 import { parseRange } from '@/server/records/range';
 import { audit } from '@/server/audit/log';
 import {
-  researchProfile, saveResearchIds, saveWos, refreshNow, researchQuality, getThresholds, setThresholds,
+  researchProfile, saveResearchIds, saveWos, saveScopus, refreshNow, researchQuality, getThresholds, setThresholds,
 } from '@/server/researchers/service';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -52,6 +52,27 @@ export const POST_WOS = withRoute(
     try {
       const after = await saveWos(actor, body);
       await audit({ actor, action: 'research.wos', entity: 'user', entityId: actor.id, ip, userAgent, after: body });
+      return ok(after);
+    } catch (e) { return toResponse(e); }
+  },
+);
+
+const scopusSchema = z.object({
+  documents: z.number().int().min(0).max(100_000),
+  citations: z.number().int().min(0).max(10_000_000),
+  citationsExclSelf: z.number().int().min(0).max(10_000_000).nullable(),
+  hIndex: z.number().int().min(0).max(1000),
+  asOf: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  evidenceId: z.string().uuid(),
+});
+
+/** POST /api/profile/research/scopus — Scopus figures typed by the person, with a screenshot. */
+export const POST_SCOPUS = withRoute(
+  { schema: scopusSchema, rate: { limit: 20, windowSeconds: 300 } },
+  async ({ actor, body, ip, userAgent }) => {
+    try {
+      const after = await saveScopus(actor, body);
+      await audit({ actor, action: 'research.scopus', entity: 'user', entityId: actor.id, ip, userAgent, after: body });
       return ok(after);
     } catch (e) { return toResponse(e); }
   },
