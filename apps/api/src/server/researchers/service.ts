@@ -7,6 +7,7 @@ import { defaultRange, type YearRange } from '@/server/records/range';
 import { papersForUsers } from '@/server/rollups/completion';
 import { namesMatch } from '@/server/lookup/names';
 import { partsOf } from '@/server/lookup/identity';
+import { splitName } from '@darp/shared/names';
 import { istClock } from '@/server/lookup/scopusList';
 import { log } from '@/server/log';
 import { FACULTY_MEMBERS } from '@darp/shared/modules/types';
@@ -220,8 +221,10 @@ export async function refreshScopus(userId: string, opts: { strict?: boolean } =
   // papers carry the person's surname and first initial.
   let share: number | undefined;
   if (!a && !fromOrcid) {
+    // A name typed in one piece ("Dr Vandana Bhattacharjee") is split first, so the title is not the initial.
+    const np = splitName(typeof parts === 'string' ? parts : [parts.first, parts.middle, parts.last].filter(Boolean).join(' '));
     const who = typeof parts === 'string'
-      ? { surname: parts.trim().split(/\s+/).filter((w) => /\p{L}/u.test(w)).slice(-1)[0] ?? '', initial: parts.trim().charAt(0) }
+      ? { surname: np.last || np.first, initial: np.first.charAt(0) }
       : { surname: parts.last || parts.first, initial: parts.first.charAt(0) };
     try { share = await nameShare(u.scopusAuthorId, who.surname, who.initial); } catch (e) {
       if (!(e instanceof ScopusUnavailable) && !(e instanceof Error && e.name === 'NotEntitled')) throw e;

@@ -63,6 +63,7 @@ beforeAll(async () => {
   hodMe = await makeUser({ role: 'hod', dept: 'ME' });
   admin = await makeUser({ role: 'admin' });
   process.env.ELSEVIER_GAP_MS = '0';
+  delete process.env.ELSEVIER_API_KEY;      // a real key in .env.local must never reach these tests
 });
 afterEach(() => { vi.unstubAllGlobals(); delete process.env.ELSEVIER_API_KEY; });
 afterAll(async () => { await closeDb(); });
