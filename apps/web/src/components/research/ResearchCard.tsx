@@ -92,6 +92,37 @@ export function ResearchCard({ initial }: { initial: ResearchProfile }) {
     setSaved(what);
   }
 
+  /** One button: saves the typed IDs when they changed, then fetches every source. */
+  async function saveAndFetch() {
+    setBusy('fetch');
+    setError({});
+    setSaved(null);
+    let latest = p;
+    if (typedIdChanged) {
+      const res = await apiJson<ResearchProfile>('/api/profile/research/ids', {
+        method: 'PUT',
+        body: JSON.stringify({
+          ...(scopusFromOrcid ? {} : { scopusAuthorId: scopusId.trim() || null }),
+          ...(ridFromOrcid ? {} : { researcherId: rid.trim() || null }),
+        }),
+      });
+      if (!res.ok) {
+        setBusy(null);
+        setError({ ...(res.error.fields ?? {}), ids: res.error.fields ? '' : res.error.message });
+        return;
+      }
+      latest = res.data;
+      setP(res.data);
+    }
+    const fetched = await apiJson<ResearchProfile>('/api/profile/research/refresh', { method: 'POST', body: JSON.stringify({}) });
+    setBusy(null);
+    if (!fetched.ok) { setP(latest); setError({ refresh: fetched.error.message }); return; }
+    setP(fetched.data);
+    setScopusId(fetched.data.scopusAuthorId ?? '');
+    setRid(fetched.data.researcherId ?? '');
+    setSaved('fetch');
+  }
+
   const c = p.scopusCheck;
   const s = p.signal;
   const scopusFromOrcid = p.idsFromOrcid.scopusAuthorId;
@@ -100,7 +131,7 @@ export function ResearchCard({ initial }: { initial: ResearchProfile }) {
   const scopusStatus = ((): { tone: Tone; text: string } => {
     if (!p.scopusAuthorId) return { tone: 'neutral', text: 'No Scopus ID yet' };
     if (!p.scopusConnected) return { tone: 'neutral', text: 'Waiting for BIT’s Elsevier key' };
-    if (!p.scopus) return { tone: 'neutral', text: 'Not fetched yet: press Fetch now' };
+    if (!p.scopus) return { tone: 'neutral', text: 'Not fetched yet: press Save and fetch' };
     if (scopusFromOrcid) return { tone: 'success', text: 'Verified: on your ORCID record' };
     if (p.scopus.verified !== false) return { tone: 'success', text: 'Verified: your surname is on the papers' };
     return {
@@ -112,7 +143,7 @@ export function ResearchCard({ initial }: { initial: ResearchProfile }) {
     if (p.wos?.typed) return { tone: 'success', text: 'Typed by you, with a screenshot' };
     if (!p.researcherId) return { tone: 'neutral', text: 'No ResearcherID yet' };
     if (!p.wosConnected) return { tone: 'neutral', text: 'Not connected yet: type the figures below' };
-    if (!p.wos) return { tone: 'neutral', text: 'Not fetched yet: press Fetch now' };
+    if (!p.wos) return { tone: 'neutral', text: 'Not fetched yet: press Save and fetch' };
     if (ridFromOrcid) return { tone: 'success', text: 'Verified: on your ORCID record' };
     if (p.wos.verified !== false) return { tone: 'success', text: 'Verified: the profile is yours' };
     return { tone: 'warning', text: `Not verified: the profile is under ${c?.wos?.wosName || 'another name'}` };
@@ -165,7 +196,7 @@ export function ResearchCard({ initial }: { initial: ResearchProfile }) {
           </Notice>
         ) : null}
         <p className="mt-3 text-xs text-ink-muted">
-          After connecting, press <strong>Fetch now</strong>. Not connected? Type your IDs below. DARP still fetches your figures and compares your
+          After connecting, press <strong>Save and fetch</strong>. Not connected? Type your IDs below. DARP still fetches your figures and compares your
           surname with the papers; it marks them “Not verified” when unsure.
         </p>
       </div>
@@ -208,24 +239,12 @@ export function ResearchCard({ initial }: { initial: ResearchProfile }) {
       </div>
 
       <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 pb-4">
-        {!(scopusFromOrcid && ridFromOrcid) ? (
-          <Button
-            variant="secondary"
-            disabled={busy !== null || !typedIdChanged}
-            onClick={() => void call('ids', '/api/profile/research/ids', 'PUT', {
-              ...(scopusFromOrcid ? {} : { scopusAuthorId: scopusId || null }),
-              ...(ridFromOrcid ? {} : { researcherId: rid || null }),
-            })}
-          >
-            {busy === 'ids' ? 'Saving…' : 'Save typed IDs'}
+        {p.orcidTrusted || scopusId.trim() || rid.trim() ? (
+          <Button disabled={busy !== null} onClick={() => void saveAndFetch()}>
+            {busy === 'fetch' ? 'Saving and fetching…' : 'Save and fetch'}
           </Button>
         ) : null}
-        {p.orcidTrusted || p.scopusAuthorId || p.researcherId ? (
-          <Button disabled={busy !== null} onClick={() => void call('refresh', '/api/profile/research/refresh', 'POST', {})}>
-            {busy === 'refresh' ? 'Fetching…' : 'Fetch now'}
-          </Button>
-        ) : null}
-        {saved ? <span className="text-xs text-success-700">{saved === 'refresh' ? 'Fetched.' : 'Saved.'}</span> : null}
+        {saved ? <span className="text-xs text-success-700">Saved and fetched.</span> : null}
         {error.ids || error.refresh ? <Notice tone="danger" className="w-full">{error.ids || error.refresh}</Notice> : null}
         <p className="w-full text-2xs text-ink-muted">Refreshed automatically each month.</p>
       </div>
