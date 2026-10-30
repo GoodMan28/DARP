@@ -210,3 +210,23 @@ export async function serialMetrics(issn: string): Promise<SerialMetrics | null>
     citeScore: num(obj(e.citeScoreYearInfoList).citeScoreCurrentMetric),
   };
 }
+
+/** How many papers a Scopus Search query finds. */
+export async function countDocuments(query: string): Promise<number> {
+  const page = await elsevier(`/search/scopus?query=${encodeURIComponent(query)}&field=dc:identifier&count=1`);
+  return num(obj(obj(page)['search-results'])['opensearch:totalResults']) ?? 0;
+}
+
+/**
+ * The share (0 to 1) of an author's papers that carry this surname and first initial. Author views
+ * are refused off campus, so the name on a typed Scopus ID is checked through the paper search instead:
+ * every paper of an author carries their surname, while a stranger's surname is on few of them.
+ */
+export async function nameShare(authorId: string, surname: string, initial: string): Promise<number> {
+  const last = (surname.replace(/[^\p{L}\s'-]/gu, ' ').trim().split(/\s+/).pop() ?? '');
+  const first = initial.replace(/[^\p{L}]/gu, '').slice(0, 1);
+  if (!last || !first) return 0;
+  const total = await countDocuments(`AU-ID(${authorId})`);
+  if (total === 0) return 0;
+  return (await countDocuments(`AU-ID(${authorId}) AND AUTHLASTNAME(${last}) AND AUTHFIRST(${first})`)) / total;
+}

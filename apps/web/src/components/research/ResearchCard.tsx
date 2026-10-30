@@ -51,7 +51,9 @@ export function ResearchCard({ initial }: { initial: ResearchProfile }) {
     if (source === 'scopus') {
       if (!p.scopusAuthorId) return 'No Scopus Author ID';
       if (!p.scopusConnected) return 'Not connected yet (Elsevier key)';
-      if (c && !c.nameMatches && !c.unchecked) return `This ID belongs to ${c.scopusName || 'someone else'}`;
+      if (c && !c.nameMatches && !c.unchecked) {
+        return c.nameShare !== undefined ? 'The papers of this ID do not carry your name' : `This ID belongs to ${c.scopusName || 'someone else'}`;
+      }
       return 'Not fetched yet';
     }
     if (!p.researcherId) return 'No ResearcherID';
@@ -121,6 +123,12 @@ export function ResearchCard({ initial }: { initial: ResearchProfile }) {
               {busy === 'refresh' ? 'Fetching…' : 'Fetch now'}
             </Button>
           ) : null}
+          {p.scopusAuthorId ? (
+            <a className="text-xs underline" target="_blank" rel="noreferrer"
+              href={`https://www.scopus.com/authid/detail.uri?authorId=${encodeURIComponent(p.scopusAuthorId)}`}>
+              Open my Scopus author page
+            </a>
+          ) : null}
           {saved ? <span className="text-xs text-success-700">{saved === 'refresh' ? 'Fetched.' : 'Saved.'}</span> : null}
           {error.ids || error.refresh ? <Notice tone="danger" className="w-full">{error.ids || error.refresh}</Notice> : null}
         </div>
@@ -156,6 +164,14 @@ export function ResearchCard({ initial }: { initial: ResearchProfile }) {
               ))}
             </tr>
           ))}
+          {p.scopus ? (
+            <tr>
+              <Td className="text-xs font-semibold">Of the Scopus documents, written at BIT</Td>
+              <Td className="text-right font-mono tabular-nums">{n(p.scopusBitDocuments)}</Td>
+              <Td className="text-right font-mono tabular-nums">—</Td>
+              <Td className="text-right font-mono tabular-nums">—</Td>
+            </tr>
+          ) : null}
         </tbody>
       </Table>
       <p className="border-b border-line px-4 py-2 text-2xs text-ink-muted">

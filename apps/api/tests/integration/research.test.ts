@@ -38,6 +38,23 @@ function elsevier(name: { given: string; surname: string }, citations: 'ok' | 'f
   }));
 }
 
+/** Elsevier off campus: author views refused (401), the paper search answering; `matching` of 10 papers carry the name. */
+function elsevierSearchOnly(matching: number, calls: string[] = []) {
+  vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+    const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+    calls.push(decodeURIComponent(url));
+    if (url.includes('/author/')) return json({}, 401);
+    if (url.includes('/abstract/citations')) return json({}, 403);
+    if (url.includes('/search/scopus')) {
+      const q = decodeURIComponent(url);
+      const total = q.includes('AUTHLASTNAME') ? matching : q.includes('AF-ID') ? 4 : 10;
+      const asks = q.includes('count=1&') || q.includes('count=1');
+      return json({ 'search-results': { 'opensearch:totalResults': String(total), entry: asks && !q.includes('count=25') ? [{ 'dc:identifier': 'SCOPUS_ID:1' }] : [1, 2, 3].map((i) => ({ 'dc:identifier': `SCOPUS_ID:${i}`, 'citedby-count': '9' })) } });
+    }
+    return new Response('{}', { status: 404 });
+  }));
+}
+
 beforeAll(async () => {
   await truncateAll();
   verma = await makeUser({ role: 'faculty', dept: 'CSE' });
@@ -89,6 +106,29 @@ describe('Scopus Author ID', () => {
     expect(p.scopus).toMatchObject({ documents: 12, hIndex: 5, citationsExclSelf: null, hIndexExclSelf: null });
     expect(p.scopusCheck?.noCitationOverview).toBe(true);
     expect(p.signal).toMatchObject({ citationsPerPaper: 7.5, citationsInclSelf: true });
+  });
+
+  it('checks a typed ID by the papers’ author names when Elsevier refuses the author views', async () => {
+    process.env.ELSEVIER_API_KEY = 'test-key';
+    const typist = await makeUser({ role: 'faculty', dept: 'CSE' });
+    await db.update(users).set({ scopusAuthorId: '57200000777', firstName: 'Test', lastName: 'Faculty' }).where(eq(users.id, typist.id));
+    const calls: string[] = [];
+    elsevierSearchOnly(10, calls);
+    const p = await refreshNow(typist, typist.id);
+    expect(p.scopusCheck).toMatchObject({ nameMatches: true, nameShare: 1 });
+    expect(p.scopus).toMatchObject({ documents: 3 });
+    expect(p.scopusBitDocuments).toBe(4);
+    expect(calls.some((c) => c.includes('AUTHLASTNAME(Faculty)') && c.includes('AUTHFIRST(T)'))).toBe(true);
+  });
+
+  it('stores nothing when too few of the ID’s papers carry the person’s name', async () => {
+    process.env.ELSEVIER_API_KEY = 'test-key';
+    const stranger = await makeUser({ role: 'faculty', dept: 'CSE' });
+    await db.update(users).set({ scopusAuthorId: '57200000778', firstName: 'Test', lastName: 'Faculty' }).where(eq(users.id, stranger.id));
+    elsevierSearchOnly(2);
+    const p = await refreshNow(stranger, stranger.id);
+    expect(p.scopusCheck).toMatchObject({ nameMatches: false, nameShare: 0.2 });
+    expect(p.scopus).toBeNull();
   });
 
   it('refreshes about a thirtieth of the people each night, oldest first', async () => {

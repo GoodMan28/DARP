@@ -11,10 +11,10 @@ import { istClock } from '@/server/lookup/scopusList';
 import { log } from '@/server/log';
 import { FACULTY_MEMBERS } from '@darp/shared/modules/types';
 import {
-  DEFAULT_THRESHOLDS, RESEARCHER_ID, SCOPUS_ID, qualitySignal,
+  DEFAULT_THRESHOLDS, RESEARCHER_ID, SCOPUS_ID, NAME_SHARE_MIN, BIT_SCOPUS_AFFILIATION_ID, qualitySignal,
   type MetricsRow, type QualityThresholds, type ResearchProfile, type ResearchQualityRow, type ScopusCheck,
 } from '@darp/shared/research';
-import { scopusConnected, scopusFigures, ScopusUnavailable } from './scopus';
+import { scopusConnected, scopusFigures, nameShare, countDocuments, ScopusUnavailable } from './scopus';
 import { wosConnected, wosResearcher, WosUnavailable } from './wos';
 import { openAlexByOrcid } from './openalex';
 import { isLookupUnavailable } from '@/server/lookup/http';
@@ -112,6 +112,7 @@ export async function researchProfile(actor: SessionUser, userId: string, chosen
     },
     scopusAuthorId: u.scopusAuthorId, scopusCheck: (u.scopusCheck ?? null) as ScopusCheck | null, researcherId: u.researcherId,
     scopus: scopus ? asMetrics(scopus) : null,
+    scopusBitDocuments: ((scopus?.raw ?? {}) as { bitDocuments?: number | null }).bitDocuments ?? null,
     wos: wos ? { ...asMetrics(wos), evidenceId: wosRaw.evidenceId ?? null, typed: !!wosRaw.typed } : null,
     openalex: openalex ? asMetrics(openalex) : null,
     signal: qualitySignal(scopus ? asMetrics(scopus) : null, wos ? asMetrics(wos) : null, p.papers, p.top, thresholds, openalex ? asMetrics(openalex) : null),
@@ -215,19 +216,38 @@ export async function refreshScopus(userId: string, opts: { strict?: boolean } =
   // With the profile's name, compare it. Without it (author views refused off campus), the ID counts as the
   // person's only when their trusted ORCID record lists it: ORCID already vouches for the name.
   const fromOrcid = trusted(u.orcid, u.orcidCheck) && !!u.orcidCheck.externalIds?.scopusAuthorIds.includes(u.scopusAuthorId);
+  // Without the profile's name and without ORCID's word, the paper search is asked how many of the ID's
+  // papers carry the person's surname and first initial.
+  let share: number | undefined;
+  if (!a && !fromOrcid) {
+    const who = typeof parts === 'string'
+      ? { surname: parts.trim().split(/\s+/).filter((w) => /\p{L}/u.test(w)).slice(-1)[0] ?? '', initial: parts.trim().charAt(0) }
+      : { surname: parts.last || parts.first, initial: parts.first.charAt(0) };
+    try { share = await nameShare(u.scopusAuthorId, who.surname, who.initial); } catch (e) {
+      if (!(e instanceof ScopusUnavailable) && !(e instanceof Error && e.name === 'NotEntitled')) throw e;
+      return save({ checkedAt, scopusName: '', nameMatches: false, unchecked: 'unreachable' });
+    }
+  }
   const nameMatches = a
     ? namesMatch(parts, { given: a.given, family: a.family, full: scopusName })
       || (!!a.indexed && namesMatch(parts, { given: '', family: '', full: a.indexed }))
-    : fromOrcid;
+    : fromOrcid || (share ?? 0) >= NAME_SHARE_MIN;
+  const named = fromOrcid ? 'listed on your ORCID record'
+    : share !== undefined && nameMatches ? `matched on ${Math.round(share * 100)}% of the papers` : '';
   const check: ScopusCheck = {
-    checkedAt, scopusName: scopusName || (nameMatches ? 'listed on your ORCID record' : ''), nameMatches,
+    checkedAt, scopusName: scopusName || (nameMatches ? named : ''), nameMatches,
+    ...(share !== undefined ? { nameShare: Math.round(share * 100) / 100 } : {}),
     noCitationOverview: figures.citationsExclSelf === null,
   };
   if (!nameMatches) return save(check);   // a stranger's figures are never stored as this person's
 
+  // How many of the papers were written at BIT (by the affiliation ID in the paper search).
+  let bitDocuments: number | null = null;
+  try { bitDocuments = await countDocuments(`AU-ID(${u.scopusAuthorId}) AND AF-ID(${BIT_SCOPUS_AFFILIATION_ID})`); } catch { /* optional */ }
+
   const values = {
     documents: figures.documents, citations: figures.citations, citationsExclSelf: figures.citationsExclSelf,
-    hIndex: figures.hIndex, hIndexExclSelf: figures.hIndexExclSelf, raw: { scopusName },
+    hIndex: figures.hIndex, hIndexExclSelf: figures.hIndexExclSelf, raw: { scopusName, bitDocuments },
   };
   await db.insert(researcherMetrics).values({ userId, source: 'scopus', asOf: today(), ...values })
     .onConflictDoUpdate({ target: [researcherMetrics.userId, researcherMetrics.source, researcherMetrics.asOf], set: { ...values, createdAt: new Date() } });

@@ -11,6 +11,10 @@ export function hIndex(counts: number[]): number {
 
 /** A Scopus Author ID: 10 or 11 digits. */
 export const SCOPUS_ID = /^\d{10,11}$/;
+/** A typed Scopus ID is the person's when at least this share of its papers carry their surname and first initial. */
+export const NAME_SHARE_MIN = 0.9;
+/** BIT Mesra in Scopus (found through the paper search, Oct 2026; the library should confirm it). */
+export const BIT_SCOPUS_AFFILIATION_ID = '60026714';
 /** A Web of Science ResearcherID, e.g. AAB-1234-2020. */
 export const RESEARCHER_ID = /^[A-Z]{1,3}-\d{4}-\d{4}$/;
 
@@ -123,6 +127,8 @@ export interface ScopusCheck {
   /** The name on the Scopus profile, as Scopus indexes it. */
   scopusName: string;
   nameMatches: boolean;
+  /** Author views refused: the share of the ID's papers that carry the person's surname and first initial. */
+  nameShare?: number;
   /** Not checked: no Elsevier key yet, or Elsevier could not be reached. */
   unchecked?: 'no-key' | 'unreachable';
   /** Citation Overview (needed for figures without self-citations) is not enabled for BIT. */
@@ -144,6 +150,8 @@ export interface ResearchProfile {
   scopusCheck: ScopusCheck | null;
   researcherId: string | null;
   scopus: MetricsRow | null;
+  /** Of the Scopus documents, how many were written at BIT (by affiliation ID); null when not known. */
+  scopusBitDocuments: number | null;
   wos: (MetricsRow & { evidenceId: string | null; typed: boolean }) | null;
   openalex: MetricsRow | null;
   signal: QualitySignal;
