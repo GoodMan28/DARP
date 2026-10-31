@@ -6,10 +6,9 @@ import { Button, Card, CardHeader, FileInput, Input, Notice, Table, Td, Th } fro
 import { IconAlert, IconCheck } from '@/components/shell/Icon';
 import { cx } from '@/lib/cx';
 import { formatDate } from '@darp/shared/format';
-import { QUALITY_LABEL, effectiveScopus, type MetricsRow, type ResearchProfile } from '@darp/shared/research';
+import { effectiveScopus, type MetricsRow, type ResearchProfile } from '@darp/shared/research';
 
 const n = (v: number | null | undefined) => (v === null || v === undefined ? 'NA' : v.toLocaleString('en-IN'));
-const pct = (v: number | null) => (v === null ? 'NA' : `${v}%`);
 
 type Tone = 'success' | 'warning' | 'neutral';
 const TONE: Record<Tone, string> = {
@@ -59,8 +58,8 @@ function SourceCard({ title, status, row, note, children }: {
 }
 
 /** A box for figures read off a profile page: numbers, the date, and a screenshot as the evidence. */
-function TypedForm({ title, intro, blocked, fields, values, onChange, required, screenshot, fieldKey, busy, anyBusy, error, button, onSave }: {
-  title: string; intro: string; blocked: string | null;
+function TypedForm({ open, title, intro, blocked, fields, values, onChange, required, screenshot, fieldKey, busy, anyBusy, error, button, onSave }: {
+  open: boolean; title: string; intro: string; blocked: string | null;
   fields: Array<[string, string]>; values: Record<string, string>; onChange: (key: string, value: string) => void; required: string[];
   screenshot: string; fieldKey: string; busy: boolean; anyBusy: boolean; error: Record<string, string>; button: string; onSave: () => void;
 }) {
@@ -68,7 +67,7 @@ function TypedForm({ title, intro, blocked, fields, values, onChange, required, 
   const ready = required.every((k) => values[k]) && !!values.evidenceId;
   const key = fieldKey === 'wosEvidence' ? 'wos' : 'scopus';
   return (
-    <details className="border-b border-line">
+    <details className="border-b border-line" open={open}>
       <summary className="cursor-pointer px-4 py-3 text-sm font-semibold">{title}</summary>
       <div className="px-4 pb-4">
         <p className="text-xs text-ink-muted">{intro}</p>
@@ -178,7 +177,6 @@ export function ResearchCard({ initial }: { initial: ResearchProfile }) {
   }
 
   const c = p.scopusCheck;
-  const s = p.signal;
   const scopusRow = effectiveScopus(p.scopus, p.scopusTyped);
   const scopusFromOrcid = p.idsFromOrcid.scopusAuthorId;
   const ridFromOrcid = p.idsFromOrcid.researcherId;
@@ -343,6 +341,7 @@ export function ResearchCard({ initial }: { initial: ResearchProfile }) {
 
       {/* Typed Scopus figures: always open, with a screenshot */}
       <TypedForm
+        open={!p.scopus && !p.scopusTyped}
         title="Type your Scopus figures"
         intro="Use this when the fetched figures are missing, or to add the citations without self-citations (Scopus shows them on your author page under “Citation overview”). Attach a screenshot of your Scopus author page. IQAC can see it."
         blocked={p.scopusAuthorId ? null : 'Save your Scopus Author ID first.'}
@@ -362,6 +361,7 @@ export function ResearchCard({ initial }: { initial: ResearchProfile }) {
       {/* Typed WoS figures, while Clarivate is not connected */}
       {!p.wosConnected ? (
         <TypedForm
+          open={!p.wos}
           title="Type your Web of Science figures"
           intro="Until BIT connects Clarivate’s Web of Science API, type the figures from your Web of Science researcher profile and attach a screenshot of them. IQAC can see the screenshot."
           blocked={null}
@@ -377,28 +377,6 @@ export function ResearchCard({ initial }: { initial: ResearchProfile }) {
           })}
         />
       ) : null}
-
-      {/* the signal */}
-      <div className="p-4">
-        <h3 className="text-sm font-semibold">
-          Research profile: <span className="text-primary">{QUALITY_LABEL[s.label]}</span>
-        </h3>
-        <dl className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4">
-          {[
-            ['WoS share of Scopus', pct(s.wosShare)],
-            [s.citationsInclSelf ? 'Citations per paper (with self-citations)' : 'Citations per paper', n(s.citationsPerPaper)],
-            ['h-index (Scopus · WoS)', `${n(s.scopusHIndex)} · ${n(s.wosHIndex)}`],
-            [`Q1+Q2 papers ${p.range.from}–${p.range.to}`, s.papers ? `${s.topPapers} of ${s.papers} (${pct(s.topShare)})` : 'NA'],
-          ].map(([k, v]) => (
-            <div key={k}><dt className="text-2xs font-semibold text-ink-muted">{k}</dt><dd className="font-mono text-sm tabular-nums">{v}</dd></div>
-          ))}
-        </dl>
-        <p className="mt-2 text-xs text-ink-muted">
-          Citation habits differ by subject; compare within a department. Quality-leaning: at least {p.thresholds.qualityWosShare}% of
-          papers in Web of Science and {p.thresholds.qualityTopShare}% in Q1/Q2 journals. Volume-leaning: {p.thresholds.volumeDocuments}+
-          Scopus documents with under {p.thresholds.volumeTopShare}% in Q1/Q2 and under {p.thresholds.volumeCitationsPerPaper} citations per paper.
-        </p>
-      </div>
     </Card>
   );
 }
