@@ -483,7 +483,7 @@ function renderInput(
     case 'select':
       return (
         <Select {...common} value={String(value ?? '')} onChange={(e) => onChange(e.target.value)}>
-          <option value="">— Select —</option>
+          <option value="">{f.emptyLabel ?? '— Select —'}</option>
           {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
         </Select>
       );

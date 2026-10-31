@@ -76,6 +76,17 @@ export const publications: ModuleConfig = {
       autofill: { from: 'issue', locked: true } },
     { key: 'pages', label: 'Pages / article number', type: 'text', maxLength: 40, section: 'Journal',
       autofill: { from: 'pages', locked: true } },
+    /* Typed by the owner when the journal's lists are wrong or do not have it. Empty = use the lists. */
+    { key: 'manualSjrQuartile', label: 'Quartile (SJR), if different or missing', type: 'select',
+      options: ['Q1', 'Q2', 'Q3', 'Q4', 'NA'], emptyLabel: '— Use the list value —', section: 'Journal ranking',
+      help: 'Choose NA if the journal is not in SCImago.' },
+    { key: 'manualJifQuartile', label: 'JIF quartile, if different or missing', type: 'select',
+      options: ['Q1', 'Q2', 'Q3', 'Q4', 'NA'], emptyLabel: '— Use the list value —', section: 'Journal ranking',
+      help: 'Choose NA if the journal has no Impact Factor.' },
+    { key: 'manualJif', label: 'Impact Factor, if different or missing', type: 'text', maxLength: 10,
+      normalise: 'impactFactor', section: 'Journal ranking', placeholder: '5.2 or NA',
+      help: 'A number such as 5.2, or NA.' },
+
     { key: 'bibliographic',
       label: 'Bibliographic information of publication (Chicago reference style)',
       type: 'textarea', required: true, maxLength: 1200, colSpan: 2, section: 'Citation',

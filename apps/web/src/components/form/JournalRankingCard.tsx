@@ -60,7 +60,7 @@ export function JournalRankingCard({ issn, year }: { issn: string; year: string 
           </dl>
         )}
         <p className="mt-3 text-xs text-ink-muted">
-          Worked out from the ISSN and the newest journal lists, not typed. NA means the journal is not in that list.
+          Worked out from the ISSN and the newest journal lists. If a figure is wrong or missing, type it under Journal ranking below. NA means the journal is not in that list.
         </p>
       </div>
     </Card>

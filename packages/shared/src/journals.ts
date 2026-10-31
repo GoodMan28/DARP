@@ -203,17 +203,29 @@ export interface JournalRanking {
   jif: string | null;
   jifQuartile: string | null;
   jifYear: number | null;
+  /** Which of the three the owner typed (the figure above is then theirs, or NA). */
+  typed?: { sjrQuartile?: boolean; jifQuartile?: boolean; jif?: boolean };
 }
 
 export const NOT_AVAILABLE = 'NA';
 
 /** Each derived column's text: "Scopus, SCIE", "Q1 (SJR 2024)", "5.2 (JIF 2024)", "NA". */
 export function rankingTexts(r: JournalRanking): Record<'indexes' | 'sjrQuartile' | 'jif' | 'jifQuartile' | 'ranking', string> {
-  const sjr = r.sjrQuartile ? `${r.sjrQuartile} (SJR ${r.sjrYear}${r.sjrEstimated ? ', estimated' : ''})` : NOT_AVAILABLE;
-  const jif = r.jif ? `${r.jif} (JIF ${r.jifYear})` : NOT_AVAILABLE;
-  const jifQ = r.jifQuartile ? `${r.jifQuartile} (JIF ${r.jifYear})` : NOT_AVAILABLE;
+  const t = r.typed ?? {};
+  const sjr = r.sjrQuartile
+    ? (t.sjrQuartile ? `${r.sjrQuartile} (typed)` : `${r.sjrQuartile} (SJR ${r.sjrYear}${r.sjrEstimated ? ', estimated' : ''})`)
+    : (t.sjrQuartile ? `${NOT_AVAILABLE} (typed)` : NOT_AVAILABLE);
+  const jif = r.jif
+    ? (t.jif ? `${r.jif} (typed)` : `${r.jif} (JIF ${r.jifYear})`)
+    : (t.jif ? `${NOT_AVAILABLE} (typed)` : NOT_AVAILABLE);
+  const jifQ = r.jifQuartile
+    ? (t.jifQuartile ? `${r.jifQuartile} (typed)` : `${r.jifQuartile} (JIF ${r.jifYear})`)
+    : (t.jifQuartile ? `${NOT_AVAILABLE} (typed)` : NOT_AVAILABLE);
   // A table cell: "Q1 SJR · IF 5.2".
-  const summary = [r.sjrQuartile ? `${r.sjrQuartile} SJR` : null, r.jif ? `IF ${r.jif}` : null].filter(Boolean).join(' · ');
+  const summary = [
+    r.sjrQuartile ? `${r.sjrQuartile} SJR${t.sjrQuartile ? ' (typed)' : ''}` : null,
+    r.jif ? `IF ${r.jif}${t.jif ? ' (typed)' : ''}` : null,
+  ].filter(Boolean).join(' · ');
   return {
     indexes: r.indexes.length > 0 ? r.indexes.join(', ') : NOT_AVAILABLE,
     sjrQuartile: sjr,

@@ -200,6 +200,8 @@ export interface FormFieldDef {
   help: string | null;
   placeholder: string | null;
   options: string[];
+  /** What a dropdown's empty choice says, when empty means something. */
+  emptyLabel?: string | null;
   showIf: { field: string; in: string[] } | null;
   section: string | null;
   colSpan: number;

@@ -129,7 +129,9 @@ export interface FieldConfig {
   /** Shown after a number input, e.g. 'years'. */
   unit?: string;
   /** Server-side normalisation that needs other fields of the record. */
-  normalise?: 'patentNumber';
+  normalise?: 'patentNumber' | 'impactFactor';
+  /** The text of a dropdown's empty choice, when empty means something ("use the list value"). */
+  emptyLabel?: string;
 }
 
 /**

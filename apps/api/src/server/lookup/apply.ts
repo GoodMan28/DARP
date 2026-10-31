@@ -6,6 +6,7 @@ import { isLookupUnavailable } from './http';
 import { ownerNamed } from './names';
 import { identityOfName, type OwnerIdentity } from './identity';
 import { buildCitation } from './citation';
+import { rankingFor, rankingItemOf } from '@/server/journals/ranking';
 import type { LookupResult, Person } from './types';
 
 /**
@@ -77,7 +78,32 @@ export async function applyLookup(
 ): Promise<Applied> {
   const applied = await applyLookupCore(m, input, ctx);
   if (m.lookup?.kind === 'patent') applied.data.statusDate = patentStatusDate(applied.data);
+  // A quartile or Impact Factor the owner typed over the journal lists is a point to check, never a block.
+  const typedRanking = await typedRankingReasons(m, applied.data);
+  if (typedRanking.length && applied.verification) {
+    applied.verification.reasons = [...new Set([...applied.verification.reasons, ...typedRanking])];
+    applied.eligible = false;
+  }
   return applied;
+}
+
+const RANKING_FIELDS = [
+  ['manualSjrQuartile', 'Quartile (SJR)', 'sjrQuartile'],
+  ['manualJifQuartile', 'JIF quartile', 'jifQuartile'],
+  ['manualJif', 'Impact Factor', 'jif'],
+] as const;
+
+/** Where a typed ranking differs from what the journal lists say, worded for DRIE and IQAC. */
+async function typedRankingReasons(m: ModuleConfig, data: Record<string, unknown>): Promise<string[]> {
+  const typed = RANKING_FIELDS.filter(([key]) => m.fields.some((f) => f.key === key) && text(data[key]).trim() !== '');
+  if (typed.length === 0) return [];
+  const item = rankingItemOf('0', data);
+  const lists = await rankingFor(item.issns, item.year);
+  return typed.flatMap(([key, label, prop]) => {
+    const mine = text(data[key]).trim().toUpperCase();
+    const theirs = lists[prop] ?? 'NA';
+    return mine === String(theirs).toUpperCase() ? [] : [`The author typed ${label} ${mine}; the journal lists say ${theirs}.`];
+  });
 }
 
 async function applyLookupCore(

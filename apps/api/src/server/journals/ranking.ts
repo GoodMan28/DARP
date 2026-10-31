@@ -25,6 +25,23 @@ export interface RankingItem {
   issns: string[];
   /** The paper's year: decides whether Scopus covered the journal. */
   year: number | null;
+  /** What the owner typed over the lists ('NA' = none): wins over the lists. */
+  manual?: { sjrQuartile?: string; jifQuartile?: string; jif?: string };
+}
+
+/** The owner's own quartiles and Impact Factor win over the lists; NA means there is none. */
+function applyManual(r: JournalRanking, m: RankingItem['manual']): JournalRanking {
+  if (!m || !(m.sjrQuartile || m.jifQuartile || m.jif)) return r;
+  const out: JournalRanking = { ...r, typed: {} };
+  if (m.sjrQuartile) {
+    out.sjrQuartile = m.sjrQuartile === 'NA' ? null : m.sjrQuartile;
+    out.sjrYear = null;
+    out.sjrEstimated = false;
+    out.typed!.sjrQuartile = true;
+  }
+  if (m.jifQuartile) { out.jifQuartile = m.jifQuartile === 'NA' ? null : m.jifQuartile; out.typed!.jifQuartile = true; }
+  if (m.jif) { out.jif = m.jif === 'NA' ? null : m.jif; out.typed!.jif = true; }
+  return out;
 }
 
 const empty = (): JournalRanking => ({
@@ -38,7 +55,7 @@ export async function rankingsFor(items: RankingItem[]): Promise<Map<string, Jou
   const out = new Map<string, JournalRanking>();
   const all = [...new Set(items.flatMap((i) => issnsOf(i.issns)))];
   if (all.length === 0) {
-    for (const i of items) out.set(i.key, empty());
+    for (const i of items) out.set(i.key, applyManual(empty(), i.manual));
     return out;
   }
 
@@ -64,7 +81,7 @@ export async function rankingsFor(items: RankingItem[]): Promise<Map<string, Jou
 
   for (const item of items) {
     const keys = new Set(issnsOf(item.issns));
-    if (keys.size === 0) { out.set(item.key, empty()); continue; }
+    if (keys.size === 0) { out.set(item.key, applyManual(empty(), item.manual)); continue; }
     const r = empty();
     const mine = <T extends { issn: string }>(rows: T[]) => rows.filter((x) => keys.has(x.issn));
 
@@ -94,7 +111,7 @@ export async function rankingsFor(items: RankingItem[]): Promise<Map<string, Jou
       if (l.listName !== 'Scopus' && l.year === newestYear.get(l.listName)) names.add(l.listName);
     }
     r.indexes = [...names].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
-    out.set(item.key, r);
+    out.set(item.key, applyManual(r, item.manual));
   }
   return out;
 }
@@ -110,6 +127,11 @@ export function rankingItemOf(key: string, data: Record<string, unknown>): Ranki
     key,
     issns: String(data.issn ?? '').split(/[,;\s]+/).filter(Boolean),
     year: Number.isInteger(year) && year > 0 ? year : null,
+    manual: {
+      sjrQuartile: String(data.manualSjrQuartile ?? '') || undefined,
+      jifQuartile: String(data.manualJifQuartile ?? '') || undefined,
+      jif: String(data.manualJif ?? '') || undefined,
+    },
   };
 }
 

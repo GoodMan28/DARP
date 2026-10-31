@@ -155,6 +155,12 @@ export async function validateRecord(
       out[f.key] = n.value;
       continue;
     }
+    if (f.normalise === 'impactFactor' && typeof parsed.data === 'string') {
+      const v = parsed.data.trim().toUpperCase();
+      if (v !== 'NA' && !/^<?\d{1,3}(\.\d{1,3})?$/.test(v)) { errors[f.key] = 'Enter a number such as 5.2, or NA.'; continue; }
+      out[f.key] = v;
+      continue;
+    }
     out[f.key] = parsed.data;
   }
 

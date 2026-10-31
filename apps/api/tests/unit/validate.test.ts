@@ -58,6 +58,17 @@ describe('field validation', () => {
     expect(r.errors.quartile).toBe('Unknown field.');
   });
 
+  it('takes a typed quartile and Impact Factor, including NA, but only a number or NA for the Impact Factor', async () => {
+    for (const ok of ['5.2', '<0.1', 'na', '12']) {
+      const r = await validateRecord(pubs, { ...paper, manualJif: ok, manualSjrQuartile: 'NA', manualJifQuartile: 'Q2' }, 'draft');
+      expect(r.errors.manualJif).toBeUndefined();
+      expect(r.data.manualJif).toBe(ok.toUpperCase());
+    }
+    const bad = await validateRecord(pubs, { ...paper, manualJif: 'five', manualSjrQuartile: 'Q9' }, 'draft');
+    expect(bad.errors.manualJif).toBe('Enter a number such as 5.2, or NA.');
+    expect(bad.errors.manualSjrQuartile).toBe('Choose one of the listed values.');
+  });
+
   it('rejects unknown fields (JSONB injection guard)', async () => {
     const r = await validateRecord(pubs, { title: 't', isAdmin: true }, 'draft');
     expect(r.ok).toBe(false);

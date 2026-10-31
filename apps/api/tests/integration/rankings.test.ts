@@ -2,7 +2,9 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { inArray } from 'drizzle-orm';
 import { db, closeDb } from '../helpers/db';
 import { journalMetrics, journalIndexListings, journalCoverage, journalJcr } from '@/server/db/schema';
-import { rankingFor, derivedValues } from '@/server/journals/ranking';
+import { rankingFor, rankingsFor, rankingItemOf, derivedValues } from '@/server/journals/ranking';
+import { applyLookup } from '@/server/lookup/apply';
+import { identityOfName } from '@/server/lookup/identity';
 import { storeJcrRows } from '@/server/lookup/journals';
 import { generateWorkbookFromRows } from '@/server/export/excel';
 import { MODULES } from '@darp/shared/modules';
@@ -127,5 +129,59 @@ describe('where the ranking is shown', () => {
     expect(sheet.getRow(at + 1).getCell(col('Impact Factor (WoS)')).text).toBe('5.2 (JIF 2024)');
     expect(sheet.getRow(at + 2).getCell(col('Indexing')).text).toBe('NA');
     expect(sheet.getRow(at + 2).getCell(col('JIF quartile (WoS)')).text).toBe('NA');
+  });
+});
+
+describe('a quartile or Impact Factor the owner typed', () => {
+  const paper = { issn: '9999-0001', year: '2024' };
+  const of = (extra: Record<string, unknown>) => derivedValues(MODULES.publications!, [{ key: 'p', data: { ...paper, ...extra } }]).then((m) => m.get('p')!);
+
+  it('wins over the lists, and says so', async () => {
+    expect(await of({ manualSjrQuartile: 'Q3', manualJifQuartile: 'Q4', manualJif: '1.5' })).toEqual({
+      indexes: 'SCIE, Scopus',
+      sjrQuartile: 'Q3 (typed)',
+      jif: '1.5 (typed)',
+      jifQuartile: 'Q4 (typed)',
+      ranking: 'Q3 SJR (typed) · IF 1.5 (typed)',
+    });
+  });
+
+  it('leaves the lists alone for anything left empty', async () => {
+    const r = await of({ manualSjrQuartile: 'Q3' });
+    expect(r.sjrQuartile).toBe('Q3 (typed)');
+    expect(r.jif).toBe('5.2 (JIF 2024)');
+  });
+
+  it('takes NA as an answer: the figure does not apply', async () => {
+    const r = await of({ manualSjrQuartile: 'NA', manualJif: 'NA' });
+    expect(r).toMatchObject({ sjrQuartile: 'NA (typed)', jif: 'NA (typed)', jifQuartile: 'Q2 (JIF 2024)' });
+  });
+
+  it('works for a journal with no ISSN or in no list at all', async () => {
+    const none = await derivedValues(MODULES.publications!, [{ key: 'p', data: { year: '2024', manualSjrQuartile: 'Q2', manualJif: '3.1' } }]);
+    expect(none.get('p')).toMatchObject({ sjrQuartile: 'Q2 (typed)', jif: '3.1 (typed)', jifQuartile: 'NA' });
+    const unlisted = await derivedValues(MODULES.publications!, [{ key: 'p', data: { issn: '9999-0005', year: '2024', manualJifQuartile: 'Q1' } }]);
+    expect(unlisted.get('p')).toMatchObject({ jifQuartile: 'Q1 (typed)', sjrQuartile: 'NA' });
+  });
+
+  it('reaches the counters and filters, which read rankings from the same function', async () => {
+    const ranks = await rankingsFor([
+      rankingItemOf('typed-q1', { issn: '9999-0003', year: '2021', manualSjrQuartile: 'Q1' }),     // the list says Q3
+      rankingItemOf('typed-na', { ...paper, manualSjrQuartile: 'NA', manualJifQuartile: 'NA' }),   // the lists say Q1 and Q2
+    ]);
+    expect(ranks.get('typed-q1')!.sjrQuartile).toBe('Q1');
+    expect(ranks.get('typed-na')).toMatchObject({ sjrQuartile: null, jifQuartile: null });
+  });
+
+  it('is a point to check for DRIE and IQAC only where it differs from the lists', async () => {
+    const owner = identityOfName('Dr X');
+    const base = { ...paper, title: 'T', authors: 'X', journal: 'J' };
+    const differs = await applyLookup(MODULES.publications!, { ...base, manualSjrQuartile: 'Q3', manualJif: '9.9' }, { owner });
+    expect(differs.verification!.reasons).toEqual(expect.arrayContaining([
+      expect.stringContaining('typed Quartile (SJR) Q3; the journal lists say Q1'),
+      expect.stringContaining('typed Impact Factor 9.9; the journal lists say 5.2'),
+    ]));
+    const agrees = await applyLookup(MODULES.publications!, { ...base, manualSjrQuartile: 'Q1', manualJif: '5.2' }, { owner });
+    expect(agrees.verification!.reasons.join(' ')).not.toContain('The author typed');
   });
 });
