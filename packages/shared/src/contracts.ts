@@ -206,7 +206,11 @@ export interface FormFieldDef {
   custom?: string | null;
   /** An institute field that refuses BIT Mesra itself (places outside BIT). */
   excludeHome?: boolean;
-  showIf: { field: string; in: string[] } | null;
+  showIf: { field: string; in?: string[]; notIn?: string[] } | null;
+  /** Worked out by the server, shown read-only (see packages/shared/src/computed.ts). */
+  computed?: import('./computed').ComputedRule | null;
+  /** Not shown on the form. */
+  hidden?: boolean;
   section: string | null;
   colSpan: number;
   maxLength: number | null;

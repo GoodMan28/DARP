@@ -43,7 +43,7 @@ export const finsupport: ModuleConfig = {
         dofa: 'Start Date of the conference/workshop',
       } },
 
-    { key: 'endDate', label: 'End Date of the conference/workshop', type: 'date', section: 'Dates',
+    { key: 'endDate', notBefore: 'startDate', label: 'End Date of the conference/workshop', type: 'date', section: 'Dates',
       showIf: { field: 'purpose', in: ['Conference/Workshop/Seminar/Symposium, etc'] },
       exportAs: {
         faculty: 'End Date of the conference/workshop', dofa: 'End Date of the conference/workshop',

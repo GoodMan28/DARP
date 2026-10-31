@@ -8,6 +8,7 @@ import { validateRecord } from '@/server/records/validate';
 import { getList } from '@/server/records/masterLists';
 import { institutions } from '@/server/db/schema';
 import { MODULES } from '@darp/shared/modules';
+import { generateWorkbookFromRows } from '@/server/export/excel';
 import type { ModuleConfig } from '@darp/shared/modules/types';
 import type { SessionUser } from '@/server/auth/session';
 
@@ -39,13 +40,13 @@ describe('an institute chosen from the directory', () => {
   });
 
   it('refuses a code the directory does not have', async () => {
-    await expect(createRecord(faculty, 'fdpattended', form({ organisingInstitutionCode: 'U-9999', startDate: '2025-04-04' }), 'draft'))
+    await expect(createRecord(faculty, 'fdpattended', form({ organisingInstitutionCode: 'U-9999', startDate: '2025-04-04', endDate: '2025-04-08' }), 'draft'))
       .rejects.toMatchObject({ fields: { organisingInstitution: 'Choose the institute from the list again.' } });
   });
 
   it('takes an institute merged into another as the one it was merged into', async () => {
     await db.update(institutions).set({ status: 'merged', mergedInto: 'U-0391' }).where(eq(institutions.code, 'C-1111'));
-    const rec = await createRecord(faculty, 'fdpattended', form({ organisingInstitutionCode: 'C-1111', startDate: '2025-05-05' }), 'submit');
+    const rec = await createRecord(faculty, 'fdpattended', form({ organisingInstitutionCode: 'C-1111', startDate: '2025-05-05', endDate: '2025-05-09' }), 'submit');
     const read = await getRecord(faculty, 'fdpattended', rec.id);
     expect(read.data.organisingInstitutionCode).toBe('U-0391');
     await db.update(institutions).set({ status: 'active', mergedInto: null }).where(eq(institutions.code, 'C-1111'));
@@ -108,5 +109,42 @@ describe('where the institute fields are', () => {
       faculty: 'Name of the Organising Institution - Institute ID', dofa: 'Name of the Organising Institution - Institute ID',
     });
     expect(idColumn('profile')).toBeUndefined();
+  });
+});
+
+describe('worked-out fields and date order', () => {
+  it('counts the days of an FDP from its two dates, whatever the browser sent', async () => {
+    const rec = await createRecord(faculty, 'fdpattended', form({ durationDays: '99', startDate: '2025-06-02', endDate: '2025-06-06' }), 'submit');
+    expect((await getRecord(faculty, 'fdpattended', rec.id)).data.durationDays).toBe(5);
+  });
+
+  it('needs no days typed at all', async () => {
+    const { durationDays: _drop, ...without } = form({ startDate: '2025-07-01', endDate: '2025-07-01' });
+    const rec = await createRecord(faculty, 'fdpattended', without, 'submit');
+    expect((await getRecord(faculty, 'fdpattended', rec.id)).data.durationDays).toBe(1);
+  });
+
+  it('refuses an end date before the start, in a draft too', async () => {
+    for (const mode of ['draft', 'submit'] as const) {
+      await expect(createRecord(faculty, 'fdpattended', form({ startDate: '2025-08-10', endDate: '2025-08-05' }), mode))
+        .rejects.toMatchObject({ fields: { endDate: 'End Date cannot be before Start Date.' } });
+    }
+  });
+
+  it('knows which date fields follow another', () => {
+    const order = Object.values(MODULES).flatMap((m) => m.fields.filter((f) => f.notBefore).map((f) => `${m.key}.${f.key}>=${f.notBefore}`)).sort();
+    expect(order).toEqual([
+      'fdpattended.endDate>=startDate', 'fdporganised.endDate>=startDate', 'finsupport.endDate>=startDate', 'outreach.memberTo>=memberFrom',
+    ]);
+  });
+
+  it('writes an FDP organised by a department with its two dates in one "from – to" column', async () => {
+    const { workbook } = await generateWorkbookFromRows('hod', { includePii: false }, {
+      fdporganised: [{ data: { title: 'T', startDate: '2025-03-03', endDate: '2025-03-07', internalFaculty: '4', externalFaculty: '2' }, ownerName: 'Dr X', department: 'CSE', profile: {} }],
+    });
+    const sheet = workbook.getWorksheet('FDPs')!;
+    const cells: string[] = [];
+    sheet.eachRow((row) => row.eachCell((c) => cells.push(c.text)));
+    expect(cells).toContain('03-03-2025 – 07-03-2025');
   });
 });

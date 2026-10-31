@@ -302,6 +302,12 @@ async function renderValue(
     return divisor === 1 ? n : n / divisor;
   }
 
+  if (field?.exportWith) {
+    // A start date with its end date in one column: "03-03-2025 – 07-03-2025".
+    const dmy = (v: unknown) => String(v ?? '').replace(/^(\d{4})-(\d{2})-(\d{2}).*$/, '$3-$2-$1');
+    const end = row.data[field.exportWith];
+    return end ? `${dmy(raw)} – ${dmy(end)}` : dmy(raw);
+  }
   if (field?.exportYear && row.periodYear && !plan.rawDates) return row.periodYear;
   // "1 year", "1.5 years", "3 years".
   if (field?.type === 'decimal') return field.unit ? `${raw} ${Number(raw) === 1 ? field.unit.replace(/s$/, '') : field.unit}` : String(raw);

@@ -33,11 +33,12 @@ export const fdpattended: ModuleConfig = {
     { key: 'startDate', label: 'Start Date', type: 'date', required: true, section: 'Dates',
       exportAs: { faculty: 'Start Date', dofa: 'Start Date' } },
 
-    { key: 'endDate', label: 'End Date', type: 'date', required: true, section: 'Dates',
+    { key: 'endDate', label: 'End Date', type: 'date', required: true, section: 'Dates', notBefore: 'startDate',
       exportAs: { faculty: 'End Date', dofa: 'End Date' } },
 
-    { key: 'durationDays', label: 'Duration (in No. of days)', type: 'integer', required: true,
-      min: 1, max: 365, section: 'Dates',
+    { key: 'durationDays', label: 'Duration (in No. of days)', type: 'integer',
+      min: 1, max: 365, section: 'Dates', computed: { kind: 'daysInclusive', from: 'startDate', to: 'endDate' },
+      help: 'Counted from the two dates, both days included.',
       exportAs: { faculty: 'Duration (in No. of days)', dofa: 'Duration (in No. of days)' } },
 
     { key: 'evidence', label: 'Attach e-copy of Certificate', type: 'file',

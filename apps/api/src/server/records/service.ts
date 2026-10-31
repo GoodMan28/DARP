@@ -473,7 +473,7 @@ async function validateSubmission(
   m: ModuleConfig, looked: Looked, ownerWho: OwnerIdentity, mode: 'draft' | 'submit',
 ) {
   refuseOnSubmit(m, looked, mode);
-  const v = await validateRecord(m, looked.data, mode);
+  const v = await validateRecord(m, looked.data, mode, { account: ownerWho.account });
   const errors = { ...submitErrors(m, looked, ownerWho, mode), ...(v.ok ? {} : v.errors) };
   if (!v.ok || Object.keys(errors).length > 0) throw new ServiceError('VALIDATION', 'Some fields need attention.', errors);
   return v;

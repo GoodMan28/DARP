@@ -14,6 +14,8 @@ export interface OwnerIdentity {
   parts: NameParts | string;
   otherNames: string[];
   orcid: string | null;
+  /** The account's own name and joining date, for fields that are worked out from them. */
+  account?: { name: string; dateOfJoining: string | null };
 }
 
 /** A name alone, for callers that have no account behind them (and for tests). */
@@ -24,7 +26,7 @@ export function identityOfName(name: string): OwnerIdentity {
 export async function ownerIdentity(userId: string, fallbackName: string): Promise<OwnerIdentity> {
   const [u] = await db.select({
     name: users.name, prefix: users.namePrefix, first: users.firstName, middle: users.middleName, last: users.lastName,
-    orcid: users.orcid, orcidCheck: users.orcidCheck,
+    orcid: users.orcid, orcidCheck: users.orcidCheck, dateOfJoining: users.dateOfJoining,
   }).from(users).where(eq(users.id, userId)).limit(1);
   if (!u) return identityOfName(fallbackName);
   const check = u.orcidCheck as (OrcidCheck & { otherNames?: string[] }) | null;
@@ -34,6 +36,7 @@ export async function ownerIdentity(userId: string, fallbackName: string): Promi
     parts: partsOf(u),
     otherNames: trusted ? check?.otherNames ?? [] : [],
     orcid: trusted ? u.orcid : null,
+    account: { name: u.name, dateOfJoining: u.dateOfJoining ? String(u.dateOfJoining).slice(0, 10) : null },
   };
 }
 

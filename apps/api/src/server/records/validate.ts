@@ -6,6 +6,7 @@ import { isbn13 } from '@/server/lookup/isbn';
 import { normalisePatentNumber } from './patentNumber';
 import { institutesByCode } from '@/server/institutions/service';
 import { HOME_INSTITUTE, institutionText } from '@darp/shared/institutions';
+import { applyComputed, computeValue, type ComputeContext } from '@darp/shared/computed';
 
 /** Patterns that are checked server-side, never only in the browser. */
 export const PATTERNS = {
@@ -104,7 +105,10 @@ function isVisible(f: FieldConfig, data: Record<string, unknown>): boolean {
   if (!f.showIf) return true;
   // As the form compares it: a checkbox reads 'true' or 'false', a missing value ''.
   const actual = data[f.showIf.field];
-  return ['string', 'boolean', 'undefined'].includes(typeof actual) && f.showIf.in.includes(String(actual ?? ''));
+  if (!['string', 'boolean', 'undefined'].includes(typeof actual)) return false;
+  const value = String(actual ?? '');
+  if (f.showIf.in) return f.showIf.in.includes(value);
+  return !!f.showIf.notIn && !f.showIf.notIn.includes(value);
 }
 
 export interface ValidationResult {
@@ -120,13 +124,19 @@ export interface ValidationResult {
  */
 export async function validateRecord(
   m: ModuleConfig,
-  input: Record<string, unknown>,
+  rawInput: Record<string, unknown>,
   mode: 'draft' | 'submit',
+  ctx: ComputeContext = {},
 ): Promise<ValidationResult> {
   const lists = await getAllLists();
+  const input = rawInput;
   // Institutes chosen from the directory: looked up once, by the codes the form sent.
   const codes = m.fields.filter((f) => f.type === 'institution').map((f) => String(input[`${f.key}Code`] ?? '').trim()).filter(Boolean);
   const institutes = codes.length > 0 ? await institutesByCode(codes) : new Map();
+  // Fields worked out from others are replaced here, whatever the browser sent.
+  const merged = applyComputed(m.fields, input, {
+    ...ctx, institutes: new Map([...institutes].map(([k, r]) => [k, { country: r.country }])),
+  });
   const out: Record<string, unknown> = {};
   const errors: Record<string, string> = {};
 
@@ -137,15 +147,15 @@ export async function validateRecord(
   }
 
   for (const f of m.fields) {
-    const visible = isVisible(f, input);
-    const raw = input[f.key];
+    const visible = isVisible(f, merged);
+    const raw = merged[f.key];
     const empty = raw === undefined || raw === null || raw === '' || (Array.isArray(raw) && raw.length === 0);
 
     if (!visible) continue;                    // hidden conditional fields are not stored
 
     if (f.type === 'institutionCode') continue;  // written together with its institute below
     if (f.type === 'institution') {
-      const code = String(input[`${f.key}Code`] ?? '').trim();
+      const code = String(merged[`${f.key}Code`] ?? '').trim();
       const inst = code ? institutes.get(code) : undefined;
       if (code && !inst) { errors[f.key] = 'Choose the institute from the list again.'; continue; }
       if (inst) {
@@ -166,7 +176,9 @@ export async function validateRecord(
     }
 
     if (empty) {
-      if (f.required && mode === 'submit') errors[f.key] = `${f.label} is required.`;
+      // A figure the system works out is never asked for: it is blank only when nothing can give it.
+      const workedOut = !!f.computed && computeValue(f.computed, merged, ctx) !== undefined;
+      if (f.required && !workedOut && mode === 'submit') errors[f.key] = `${f.label} is required.`;
       if (f.type === 'checkbox') out[f.key] = false;
       continue;
     }
@@ -189,6 +201,16 @@ export async function validateRecord(
       continue;
     }
     out[f.key] = parsed.data;
+  }
+
+  // A date or year may not come before the one it follows.
+  for (const f of m.fields) {
+    if (!f.notBefore || !isVisible(f, merged)) continue;
+    const a = String(out[f.notBefore] ?? '');
+    const b = String(out[f.key] ?? '');
+    if (a && b && b < a && !errors[f.key]) {
+      errors[f.key] = `${f.label} cannot be before ${m.fields.find((x) => x.key === f.notBefore)?.label ?? f.notBefore}.`;
+    }
   }
 
   return { ok: Object.keys(errors).length === 0, data: out, errors };

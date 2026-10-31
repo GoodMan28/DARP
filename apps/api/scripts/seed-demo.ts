@@ -328,9 +328,10 @@ function buildRecord(m: ModuleConfig, ctx: GenContext): Record<string, unknown> 
   for (const f of m.fields) {
     if (f.showIf) {
       const decided = values[f.showIf.field];
-      if (typeof decided !== 'string' || !f.showIf.in.includes(decided)) continue;
+      if (typeof decided !== 'string') continue;
+      if (f.showIf.in ? !f.showIf.in.includes(decided) : !f.showIf.notIn || f.showIf.notIn.includes(decided)) continue;
     }
-    if (f.type === 'file') continue;                     // nothing to upload in a seed
+    if (f.type === 'file' || f.computed || f.hidden) continue;   // worked out or filled elsewhere, not seeded                     // nothing to upload in a seed
     if (!f.required && ctx.rng() < 0.25) continue;        // leave some optional fields blank
     const v = valueFor(f, ctx);
     // Never let a generated value break a field's own length rule.

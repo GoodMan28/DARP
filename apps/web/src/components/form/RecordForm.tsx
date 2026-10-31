@@ -12,6 +12,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { SPAN_MODULES, spanText } from '@darp/shared/projectPeriod';
 import { JournalRankingCard } from './JournalRankingCard';
 import { InstitutionPicker } from './InstitutionPicker';
+import { applyComputed, computeValue } from '@darp/shared/computed';
 import { useLeaveGuard } from './useLeaveGuard';
 
 export type { FormFieldDef } from '@darp/shared/contracts';
@@ -121,14 +122,21 @@ export function RecordForm({
   }, [handedOver]);
 
   const visible = useCallback(
-    (f: FormFieldDef) => !f.showIf || f.showIf.in.includes(String(values[f.showIf.field] ?? '')),
+    (f: FormFieldDef) => {
+      if (!f.showIf) return true;
+      const v = String(values[f.showIf.field] ?? '');
+      return f.showIf.in ? f.showIf.in.includes(v) : !!f.showIf.notIn && !f.showIf.notIn.includes(v);
+    },
     [values],
   );
+
+  /** Every figure the system works out, over what is typed so far: shown live, and replaced by the server on saving. */
+  const shownValues = useMemo(() => applyComputed(fields, values), [fields, values]);
 
   const sections = useMemo(() => {
     const map = new Map<string, FormFieldDef[]>();
     for (const f of fields) {
-      if (f.custom) continue;      // drawn inside the journal ranking card
+      if (f.custom || f.hidden) continue;      // drawn inside the journal ranking card, or not on the form
       if (f.type === 'institutionCode') continue;      // chosen together with its institute
       const s = f.section ?? 'Details';
       if (!map.has(s)) map.set(s, []);
@@ -328,7 +336,10 @@ export function RecordForm({
                 const typed = looked && !!f.autofill && !system && !mirror && fetched === undefined
                   && values[f.key] !== undefined && values[f.key] !== '';
                 const mayChange = isLocked && !readOnly && !system && !mirror;
-                const hint = mirror && !readOnly ? `From the ${lookup!.idLabel} box above`
+                // A figure the system works out from other fields: shown, never typed.
+                const workedOut = !!f.computed && computeValue(f.computed, values) !== undefined;
+                const hint = workedOut ? 'Worked out for you'
+                  : mirror && !readOnly ? `From the ${lookup!.idLabel} box above`
                   : f.autofill?.alwaysLocked ? 'Filled automatically'
                   : f.autofill?.generated && isLocked ? 'Generated from the details'
                     : isLocked ? `From ${source}`
@@ -350,8 +361,8 @@ export function RecordForm({
                       hint={hint}
                     >
                       {renderInput(
-                        f, mirror && !readOnly ? identifier : values[f.key], (v) => set(f.key, v),
-                        !!readOnly || mirror || isLocked || !!f.autofill?.alwaysLocked, !!errors[f.key], { moduleKey, recordId, values, setField: set },
+                        f, workedOut ? shownValues[f.key] : mirror && !readOnly ? identifier : values[f.key], (v) => set(f.key, v),
+                        !!readOnly || workedOut || mirror || isLocked || !!f.autofill?.alwaysLocked, !!errors[f.key], { moduleKey, recordId, values, setField: set },
                       )}
                       {mayChange && confirming !== f.key ? (
                         <button

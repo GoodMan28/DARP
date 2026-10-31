@@ -19,10 +19,10 @@ export const fdporganised: ModuleConfig = {
       colSpan: 2, section: 'Programme',
       exportAs: { hod: 'Title of the program' } },
 
-    { key: 'startDate', label: 'Start date', type: 'date', required: true, section: 'Duration',
+    { key: 'startDate', label: 'Start date', type: 'date', required: true, section: 'Duration', exportWith: 'endDate',
       exportAs: { hod: 'Duration (from – to) (DD-MM-YYYY)' } },
 
-    { key: 'endDate', label: 'End date', type: 'date', required: true, section: 'Duration',
+    { key: 'endDate', label: 'End date', type: 'date', required: true, section: 'Duration', notBefore: 'startDate',
       help: 'The export writes the start and end dates into the single "from – to" column.' },
 
     { key: 'internalFaculty', label: 'Number of internal faculty who attended', type: 'integer',

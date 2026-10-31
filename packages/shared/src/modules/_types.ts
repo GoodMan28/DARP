@@ -1,3 +1,5 @@
+import type { ComputedRule } from '../computed';
+
 export type Role = 'faculty' | 'hod' | 'dofa' | 'drie' | 'dugs' | 'cdc' | 'admin';
 
 /**
@@ -90,7 +92,7 @@ export interface FieldConfig {
   max?: number;
   maxLength?: number;             // text/textarea
   /** Show this field only when another field has one of these values (conditional columns). */
-  showIf?: { field: string; in: string[] };
+  showIf?: { field: string; in?: string[]; notIn?: string[] };
   section?: string;               // groups fields into form sections
   colSpan?: 1 | 2;                // form layout, 2 = full width
   pii?: PiiLevel;                 // default 'none'
@@ -131,6 +133,14 @@ export interface FieldConfig {
   unit?: string;
   /** Server-side normalisation that needs other fields of the record. */
   normalise?: 'patentNumber' | 'impactFactor';
+  /** Worked out, never typed: shown read-only. The value is stored and exported as usual. */
+  computed?: ComputedRule;
+  /** Not shown on the form at all (a computed field shown elsewhere, or a second column filled from the first). */
+  hidden?: boolean;
+  /** This date or year may not be before that field's. */
+  notBefore?: string;
+  /** Written in the Excel file as "this – that" in one column (a start date with its end date). */
+  exportWith?: string;
   /** institution: BIT Mesra itself may not be chosen (a field for places outside BIT). */
   excludeHome?: boolean;
   /** Drawn inside a card of its own, not in the field list (the journal ranking's three editable figures). */

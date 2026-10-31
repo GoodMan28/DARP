@@ -61,6 +61,8 @@ export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async 
         options: f.listKey ? (lists[f.listKey] ?? []) : (f.options ?? []),
         emptyLabel: f.emptyLabel ?? null,
         custom: f.custom ?? null,
+        computed: f.computed ?? null,
+        hidden: !!f.hidden,
         excludeHome: !!f.excludeHome,
         showIf: f.showIf ?? null,
         section: f.section ?? null,

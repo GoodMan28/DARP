@@ -66,7 +66,7 @@ export const outreach: ModuleConfig = {
     { key: 'memberFrom', label: 'Member from (year)', type: 'year', min: 1960, max: 2100, notFuture: true,
       section: 'Activity', showIf: when(T.body),
       exportAs: { faculty: 'Member from (year)', dofa: 'Member from (year)' } },
-    { key: 'memberTo', label: 'Member to (year)', type: 'year', min: 1960, max: 2100,
+    { key: 'memberTo', label: 'Member to (year)', type: 'year', notBefore: 'memberFrom', min: 1960, max: 2100,
       section: 'Activity', showIf: when(T.body), help: 'Leave empty while you are still a member.',
       exportAs: { faculty: 'Member to (year)', dofa: 'Member to (year)' } },
 
