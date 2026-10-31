@@ -4,6 +4,8 @@ import { getAllLists } from './masterLists';
 import { isValidAadhaar, isValidPan } from '@/server/crypto/pii';
 import { isbn13 } from '@/server/lookup/isbn';
 import { normalisePatentNumber } from './patentNumber';
+import { institutesByCode } from '@/server/institutions/service';
+import { HOME_INSTITUTE, institutionText } from '@darp/shared/institutions';
 
 /** Patterns that are checked server-side, never only in the browser. */
 export const PATTERNS = {
@@ -122,6 +124,9 @@ export async function validateRecord(
   mode: 'draft' | 'submit',
 ): Promise<ValidationResult> {
   const lists = await getAllLists();
+  // Institutes chosen from the directory: looked up once, by the codes the form sent.
+  const codes = m.fields.filter((f) => f.type === 'institution').map((f) => String(input[`${f.key}Code`] ?? '').trim()).filter(Boolean);
+  const institutes = codes.length > 0 ? await institutesByCode(codes) : new Map();
   const out: Record<string, unknown> = {};
   const errors: Record<string, string> = {};
 
@@ -137,6 +142,28 @@ export async function validateRecord(
     const empty = raw === undefined || raw === null || raw === '' || (Array.isArray(raw) && raw.length === 0);
 
     if (!visible) continue;                    // hidden conditional fields are not stored
+
+    if (f.type === 'institutionCode') continue;  // written together with its institute below
+    if (f.type === 'institution') {
+      const code = String(input[`${f.key}Code`] ?? '').trim();
+      const inst = code ? institutes.get(code) : undefined;
+      if (code && !inst) { errors[f.key] = 'Choose the institute from the list again.'; continue; }
+      if (inst) {
+        if (f.excludeHome && inst.code === HOME_INSTITUTE) { errors[f.key] = 'Choose an institute outside BIT.'; continue; }
+        // Always the directory's own spelling, never what the browser sent.
+        out[f.key] = institutionText(inst);
+        out[`${f.key}Code`] = inst.code;
+        continue;
+      }
+      if (empty) {
+        if (f.required && mode === 'submit') errors[f.key] = `${f.label} is required.`;
+        continue;
+      }
+      // A name typed before the directory existed: a draft may keep it, a submission needs a choice from the list.
+      if (mode === 'submit') { errors[f.key] = 'Choose this institute from the list, or add it.'; continue; }
+      out[f.key] = String(raw).trim().slice(0, 300);
+      continue;
+    }
 
     if (empty) {
       if (f.required && mode === 'submit') errors[f.key] = `${f.label} is required.`;

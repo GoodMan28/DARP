@@ -1,6 +1,6 @@
 // src/modules/studentsguided.ts
 import type { ModuleConfig } from './_types';
-import { FACULTY_MEMBERS } from './_types';
+import { FACULTY_MEMBERS, institutionField } from './_types';
 
 export const studentsguided: ModuleConfig = {
   key: 'studentsguided',
@@ -93,12 +93,12 @@ export const studentsguided: ModuleConfig = {
       maxSizeMB: 2, colSpan: 2, section: 'Employment',
       showIf: { field: 'statusAfterPassing', in: ['Employed'] } },
 
-    { key: 'institutionEnrolled', label: 'Name of institution enrolled in', type: 'text',
+    ...institutionField({ key: 'institutionEnrolled', label: 'Name of institution enrolled in',
       required: true, maxLength: 200, section: 'Higher studies',
       showIf: { field: 'statusAfterPassing', in: ['Higher Studies'] },
       exportAs: {
         faculty: 'Name of institution enrolled in', dofa: 'Name of institution enrolled in',
-      } },
+      } }),
 
     { key: 'programEnrolled', label: 'Program enrolled in', type: 'text', required: true,
       maxLength: 200, section: 'Higher studies',

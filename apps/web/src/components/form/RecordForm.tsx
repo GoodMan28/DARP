@@ -11,6 +11,7 @@ import {
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { SPAN_MODULES, spanText } from '@darp/shared/projectPeriod';
 import { JournalRankingCard } from './JournalRankingCard';
+import { InstitutionPicker } from './InstitutionPicker';
 import { useLeaveGuard } from './useLeaveGuard';
 
 export type { FormFieldDef } from '@darp/shared/contracts';
@@ -128,6 +129,7 @@ export function RecordForm({
     const map = new Map<string, FormFieldDef[]>();
     for (const f of fields) {
       if (f.custom) continue;      // drawn inside the journal ranking card
+      if (f.type === 'institutionCode') continue;      // chosen together with its institute
       const s = f.section ?? 'Details';
       if (!map.has(s)) map.set(s, []);
       map.get(s)!.push(f);
@@ -349,7 +351,7 @@ export function RecordForm({
                     >
                       {renderInput(
                         f, mirror && !readOnly ? identifier : values[f.key], (v) => set(f.key, v),
-                        !!readOnly || mirror || isLocked || !!f.autofill?.alwaysLocked, !!errors[f.key], { moduleKey, recordId },
+                        !!readOnly || mirror || isLocked || !!f.autofill?.alwaysLocked, !!errors[f.key], { moduleKey, recordId, values, setField: set },
                       )}
                       {mayChange && confirming !== f.key ? (
                         <button
@@ -475,10 +477,23 @@ export function RecordForm({
 
 function renderInput(
   f: FormFieldDef, value: unknown, onChange: (v: unknown) => void, readOnly: boolean, invalid: boolean,
-  ctx: { moduleKey: string; recordId?: string },
+  ctx: { moduleKey: string; recordId?: string; values: Record<string, unknown>; setField: (key: string, value: unknown) => void },
 ) {
   const common = { id: `i-${f.key}`, disabled: readOnly, 'aria-invalid': invalid || undefined };
   switch (f.type) {
+    case 'institution':
+      return (
+        <InstitutionPicker
+          id={common.id}
+          name={String(value ?? '')}
+          code={String(ctx.values[`${f.key}Code`] ?? '')}
+          disabled={readOnly}
+          invalid={invalid}
+          excludeHome={!!f.excludeHome}
+          onPick={(hit) => { ctx.setField(f.key, hit.name); ctx.setField(`${f.key}Code`, hit.code); }}
+          onClear={() => { ctx.setField(f.key, ''); ctx.setField(`${f.key}Code`, ''); }}
+        />
+      );
     case 'textarea':
       return (
         <Textarea

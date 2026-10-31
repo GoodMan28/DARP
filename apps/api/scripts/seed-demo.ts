@@ -178,6 +178,9 @@ interface GenContext {
   uniqueKeys: Set<string>;
 }
 
+/** AISHE codes of BIT Mesra, IIT Kharagpur, NIT Rourkela, IISc Bangalore and Anna University, for institute fields. */
+const DEMO_INSTITUTES = ['U-0202', 'U-0573', 'U-0357', 'U-0220', 'U-0439'];
+
 /** One plausible, valid value for a field, decided entirely by its config. */
 function valueFor(f: FieldConfig, ctx: GenContext): unknown {
   const { rng, lists } = ctx;
@@ -243,6 +246,10 @@ function valueFor(f: FieldConfig, ctx: GenContext): unknown {
     }
     case 'decimal':
       return String(1 + Math.floor(rng() * 3));
+    case 'institution':
+      return 'Chosen from the institute directory';             // rewritten from its ID when the record is saved
+    case 'institutionCode':
+      return pick(DEMO_INSTITUTES, rng);                          // real AISHE codes: load the directory first
     case 'checkbox':
       return rng() > 0.5;
     case 'multiselect':

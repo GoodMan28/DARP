@@ -24,6 +24,7 @@ export type FieldType =
   | 'date' | 'year'
   | 'email' | 'phone' | 'url'
   | 'doi' | 'issn' | 'isbn' | 'pan' | 'aadhaar'
+  | 'institution' | 'institutionCode'   // an institute from the directory: its name, and its ID beside it
   | 'file';
 
 /** How a field is protected. 'encrypted' fields are AES-GCM at rest and never leave the
@@ -130,6 +131,8 @@ export interface FieldConfig {
   unit?: string;
   /** Server-side normalisation that needs other fields of the record. */
   normalise?: 'patentNumber' | 'impactFactor';
+  /** institution: BIT Mesra itself may not be chosen (a field for places outside BIT). */
+  excludeHome?: boolean;
   /** Drawn inside a card of its own, not in the field list (the journal ranking's three editable figures). */
   custom?: 'journalRanking';
   /** The text of a dropdown's empty choice, when empty means something ("use the list value"). */
@@ -199,4 +202,23 @@ export interface ModuleConfig {
 
   /** Profile counter keys this module feeds (see 06-rollups-dashboard.md). */
   feedsCounters?: string[];
+}
+
+/**
+ * An institute chosen from the directory (AISHE, ROR or one added here): the name is kept as text, as
+ * "Name, State, Country", and its ID in a second field beside it (U-0202, ROR-028vtqb15, DARP-000012).
+ * The server writes the name from the directory, so the same institute is always spelled the same way.
+ * `exportId: false` keeps the ID out of the Excel files (the Profile sheet has a fixed row for each question).
+ */
+export function institutionField(f: Omit<FieldConfig, 'type'>, opts: { exportId?: boolean } = {}): FieldConfig[] {
+  const exportAs = f.exportAs && opts.exportId !== false
+    ? Object.fromEntries(Object.entries(f.exportAs).map(([k, v]) => [k, `${v} - Institute ID`])) as FieldConfig['exportAs']
+    : undefined;
+  return [
+    { ...f, type: 'institution', maxLength: 300 },
+    {
+      key: `${f.key}Code`, label: `${f.label} - Institute ID`, type: 'institutionCode',
+      ...(f.section ? { section: f.section } : {}), ...(f.showIf ? { showIf: f.showIf } : {}), ...(exportAs ? { exportAs } : {}),
+    },
+  ];
 }

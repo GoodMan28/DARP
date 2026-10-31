@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import type ExcelJS from 'exceljs';
 import { truncateAll, closeDb } from '../helpers/db';
 import { makeUser } from '../helpers/factories';
+import { loadTestInstitutes } from '../helpers/institutes';
 import { createRecord } from '@/server/records/service';
 import {
   readReportRequest, summariseReport, generateReport, reportOptions,
@@ -45,6 +46,7 @@ const fellowship = (name: string, awardDate: string) => ({
 
 beforeAll(async () => {
   await truncateAll();
+  await loadTestInstitutes();
   cse = await makeUser({ role: 'faculty', dept: 'CSE' });
   me = await makeUser({ role: 'faculty', dept: 'ME' });
   hodCse = await makeUser({ role: 'hod', dept: 'CSE' });
@@ -163,7 +165,7 @@ describe('the workbook', () => {
     const dofa = await makeUser({ role: 'dofa' });
     await createRecord(cse, 'profile', {
       name: cse.name, pan: 'ABCDE1234F', aadhaar: '234123412346', designation: 'Professor', natureOfAssociation: 'Regular',
-      ugQualification: 'B.E./B.Tech', ugInstitution: 'BIT', pgQualification: 'M.E./M.Tech', pgInstitution: 'IIT', hasPhd: 'No',
+      ugQualification: 'B.E./B.Tech', ugInstitutionCode: 'U-0202', pgQualification: 'M.E./M.Tech', pgInstitutionCode: 'U-0050', hasPhd: 'No',
       hasPostdoc: 'No', highestDegreeDate: '2010-01-01', joiningDate: '2012-07-01', teachingExperienceMonths: '120',
       industryExperienceMonths: '0', teachingHours: '300', researchHours: '200', consultancyHours: '10',
     }, 'submit');

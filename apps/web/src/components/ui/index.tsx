@@ -99,7 +99,7 @@ const CONTROL = [
   'aria-[invalid=true]:border-danger-500 aria-[invalid=true]:bg-danger-50',
 ].join(' ');
 
-export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputElement>) {
+export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputElement> & { ref?: Ref<HTMLInputElement> }) {
   return <input {...rest} className={cx(CONTROL, className)} />;
 }
 

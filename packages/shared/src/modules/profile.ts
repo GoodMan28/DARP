@@ -1,6 +1,6 @@
 // src/modules/profile.ts
 import type { ModuleConfig } from './_types';
-import { FACULTY_MEMBERS } from './_types';
+import { FACULTY_MEMBERS, institutionField } from './_types';
 
 export const profile: ModuleConfig = {
   key: 'profile',
@@ -43,26 +43,23 @@ export const profile: ModuleConfig = {
       listKey: 'ugQualifications', section: 'Qualifications',
       exportAs: { faculty: 'UG Qualification' } },
 
-    { key: 'ugInstitution', label: 'Name of College/University, State and Country of UG Degree',
-      type: 'text', required: true, maxLength: 240, colSpan: 2, section: 'Qualifications',
-      exportAs: { faculty: 'Name of College/University, State and Country of UG Degree' } },
+    ...institutionField({ key: 'ugInstitution', label: 'Name of College/University, State and Country of UG Degree', required: true, maxLength: 240, colSpan: 2, section: 'Qualifications',
+      exportAs: { faculty: 'Name of College/University, State and Country of UG Degree' } }, { exportId: false }),
 
     { key: 'pgQualification', label: 'PG Qualification', type: 'select', required: true,
       listKey: 'pgQualifications', section: 'Qualifications',
       exportAs: { faculty: 'PG Qualification' } },
 
-    { key: 'pgInstitution', label: 'Name of College/University, State and Country of PG Degree',
-      type: 'text', maxLength: 240, colSpan: 2, section: 'Qualifications',
-      exportAs: { faculty: 'Name of College/University, State and Country of PG Degree' } },
+    ...institutionField({ key: 'pgInstitution', label: 'Name of College/University, State and Country of PG Degree', maxLength: 240, colSpan: 2, section: 'Qualifications',
+      exportAs: { faculty: 'Name of College/University, State and Country of PG Degree' } }, { exportId: false }),
 
     { key: 'hasPhd', label: 'PhD Qualification? (Yes/No)', type: 'select', required: true,
       options: ['Yes', 'No'], section: 'Qualifications',
       exportAs: { faculty: 'PhD Qualification? (Yes/No)' } },
 
-    { key: 'phdInstitution', label: 'Name of College/University, State and Country of PhD Degree',
-      type: 'text', maxLength: 240, colSpan: 2, section: 'Qualifications',
+    ...institutionField({ key: 'phdInstitution', label: 'Name of College/University, State and Country of PhD Degree', maxLength: 240, colSpan: 2, section: 'Qualifications',
       showIf: { field: 'hasPhd', in: ['Yes'] },
-      exportAs: { faculty: 'Name of College/University, State and Country of PhD Degree' } },
+      exportAs: { faculty: 'Name of College/University, State and Country of PhD Degree' } }, { exportId: false }),
 
     { key: 'hasPostdoc', label: 'Post Doctoral Research Experience (Yes/No)', type: 'select',
       required: true, options: ['Yes', 'No'], section: 'Qualifications',
@@ -74,11 +71,10 @@ export const profile: ModuleConfig = {
       showIf: { field: 'hasPostdoc', in: ['Yes'] },
       exportAs: { faculty: 'Total Duration of Post Doctoral Research Experience (in months)' } },
 
-    { key: 'postdocInstitution',
-      label: 'Name of College/University, State and Country of Post-doc qualification',
-      type: 'text', maxLength: 240, colSpan: 2, section: 'Qualifications',
+    ...institutionField({ key: 'postdocInstitution',
+      label: 'Name of College/University, State and Country of Post-doc qualification', maxLength: 240, colSpan: 2, section: 'Qualifications',
       showIf: { field: 'hasPostdoc', in: ['Yes'] },
-      exportAs: { faculty: 'Name of College/University, State and Country of Post-doc qualification' } },
+      exportAs: { faculty: 'Name of College/University, State and Country of Post-doc qualification' } }, { exportId: false }),
 
     { key: 'highestDegreeDate', label: 'Date of Receiving Highest Degree (Either PhD or PG)',
       type: 'date', required: true, section: 'Appointment',

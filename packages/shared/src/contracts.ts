@@ -204,6 +204,8 @@ export interface FormFieldDef {
   emptyLabel?: string | null;
   /** Drawn inside a card of its own (the journal ranking), not in the field list. */
   custom?: string | null;
+  /** An institute field that refuses BIT Mesra itself (places outside BIT). */
+  excludeHome?: boolean;
   showIf: { field: string; in: string[] } | null;
   section: string | null;
   colSpan: number;

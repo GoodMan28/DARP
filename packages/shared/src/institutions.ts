@@ -55,7 +55,8 @@ export function shortForms(name: string): string[] {
 
 /** The text kept on a record: "Name, State, Country", leaving out any part the name already says. */
 export function institutionText(i: { name: string; state: string | null; country: string }): string {
-  const has = (part: string) => normInstitution(i.name).includes(normInstitution(part));
+  // Whole words: "Indian Institute…" does not already say "India".
+  const has = (part: string) => ` ${normInstitution(i.name)} `.includes(` ${normInstitution(part)} `);
   const parts = [i.name];
   if (i.state && !has(i.state)) parts.push(i.state);
   if (i.country && !has(i.country)) parts.push(i.country);

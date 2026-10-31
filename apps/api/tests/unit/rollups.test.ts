@@ -28,7 +28,8 @@ describe('counter catalogue', () => {
 
   it('adds up to the 84 rows of the Faculty Profile sheet, plus conference papers, journal rankings and valid awards', () => {
     // The sheet has no conference-paper row; NAAC 3.4 counts them with books and chapters.
-    expect(getModule('profile')!.fields).toHaveLength(22);
+    // The institute IDs beside the four qualification institutes are not rows of the sheet.
+    expect(getModule('profile')!.fields.filter((f) => f.type !== 'institutionCode')).toHaveLength(22);
     expect(COUNTERS).toHaveLength(67);
     expect(COUNTERS.filter((c) => c.key.startsWith('books.count.conference'))).toHaveLength(2);
     // Papers by their journal's indexing and quartile (Scopus, Web of Science, Q1/Q2).

@@ -1,6 +1,6 @@
 // src/modules/fdpattended.ts
 import type { ModuleConfig } from './_types';
-import { FACULTY_MEMBERS } from './_types';
+import { FACULTY_MEMBERS, institutionField } from './_types';
 
 export const fdpattended: ModuleConfig = {
   key: 'fdpattended',
@@ -15,7 +15,7 @@ export const fdpattended: ModuleConfig = {
   verifierRoles: ['dofa'],
   viewRoles: ['hod', 'dofa', 'admin'],
   scope: 'self',
-  naturalKey: ['organisingInstitution', 'startDate'],
+  naturalKey: ['organisingInstitutionCode', 'startDate'],
   fields: [
     { key: 'programType', label: 'Type of Program', type: 'select', required: true,
       listKey: 'fdpProgramTypes', section: 'Programme',
@@ -24,11 +24,11 @@ export const fdpattended: ModuleConfig = {
         dofa: 'Type of Program (Professional Development Programmes, Orientation/Induction Programmes, Refresher Course, Short Term Course )',
       } },
 
-    { key: 'organisingInstitution', label: 'Name of the Organising Institution', type: 'text',
+    ...institutionField({ key: 'organisingInstitution', label: 'Name of the Organising Institution',
       required: true, maxLength: 240, colSpan: 2, section: 'Programme',
       exportAs: {
         faculty: 'Name of the Organising Institution', dofa: 'Name of the Organising Institution',
-      } },
+      } }),
 
     { key: 'startDate', label: 'Start Date', type: 'date', required: true, section: 'Dates',
       exportAs: { faculty: 'Start Date', dofa: 'Start Date' } },

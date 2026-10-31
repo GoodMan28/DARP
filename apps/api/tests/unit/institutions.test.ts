@@ -38,5 +38,7 @@ describe('institutionText', () => {
     expect(institutionText({ name: 'University of Texas at Austin, Texas', state: 'Texas', country: 'United States' }))
       .toBe('University of Texas at Austin, Texas, United States');
     expect(institutionText({ name: 'Université de Paris', state: null, country: 'France' })).toBe('Université de Paris, France');
+    expect(institutionText({ name: 'Indian Institute of Science, Bangalore', state: 'Karnataka', country: 'India' }))
+      .toBe('Indian Institute of Science, Bangalore, Karnataka, India');
   });
 });

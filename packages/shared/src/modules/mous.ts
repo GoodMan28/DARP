@@ -1,5 +1,6 @@
 // src/modules/mous.ts
 import type { ModuleConfig } from './_types';
+import { institutionField } from './_types';
 
 export const mous: ModuleConfig = {
   key: 'mous',
@@ -14,20 +15,19 @@ export const mous: ModuleConfig = {
   verifierRoles: ['drie'],
   viewRoles: ['faculty', 'hod', 'drie', 'admin'],
   scope: 'department',
-  naturalKey: ['organisation', 'signingDate'],
+  naturalKey: ['organisationCode', 'signingDate'],
   fields: [
-    { key: 'organisation', label: 'Organisation with which MoU is signed', type: 'text',
+    ...institutionField({ key: 'organisation', label: 'Organisation with which MoU is signed',
       required: true, maxLength: 240, colSpan: 2, section: 'MoU',
       exportAs: {
         drie: 'Organisation with which MoU is signed', hod: 'Organisation with which MoU is signed',
-      } },
+      } }),
 
-    { key: 'institutionName', label: 'Name of the institution/ industry/ corporate house',
-      type: 'text', required: true, maxLength: 240, colSpan: 2, section: 'MoU',
+    ...institutionField({ key: 'institutionName', label: 'Name of the institution/ industry/ corporate house', required: true, maxLength: 240, colSpan: 2, section: 'MoU',
       exportAs: {
         drie: 'Name of the institution/ industry/ corporate house',
         hod: 'Name of the institution/ industry/ corporate house',
-      } },
+      } }),
 
     { key: 'signingDate', label: 'Date of signing the MoU', type: 'date', required: true,
       notFuture: true, periodSource: true, exportYear: true, section: 'MoU',

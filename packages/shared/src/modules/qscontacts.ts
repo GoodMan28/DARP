@@ -1,6 +1,6 @@
 // src/modules/qscontacts.ts
 import type { ModuleConfig } from './_types';
-import { FACULTY_MEMBERS } from './_types';
+import { FACULTY_MEMBERS, institutionField } from './_types';
 
 export const qscontacts: ModuleConfig = {
   key: 'qscontacts',
@@ -37,9 +37,9 @@ export const qscontacts: ModuleConfig = {
       section: 'Affiliation',
       exportAs: { faculty: 'Department', dofa: 'Department' } },
 
-    { key: 'institution', label: 'Institution', type: 'text', required: true, maxLength: 200,
+    ...institutionField({ key: 'institution', label: 'Institution', required: true, maxLength: 200,
       section: 'Affiliation',
-      exportAs: { faculty: 'Institution', dofa: 'Institution' } },
+      exportAs: { faculty: 'Institution', dofa: 'Institution' } }),
 
     { key: 'country', label: 'Country or Territory', type: 'select', required: true,
       listKey: 'countries', section: 'Affiliation',

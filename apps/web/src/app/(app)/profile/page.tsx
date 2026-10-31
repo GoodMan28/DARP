@@ -108,7 +108,7 @@ export default async function ProfilePage() {
           />
           <div className="grid gap-x-8 gap-y-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
             {profileModule.fields
-              .filter((f) => f.type !== 'file')
+              .filter((f) => f.type !== 'file' && f.type !== 'institutionCode')
               .map((f) => (
                 <div key={f.key} className="min-w-0">
                   <div className="text-2xs font-semibold text-ink-muted">
