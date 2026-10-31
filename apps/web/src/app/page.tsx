@@ -77,7 +77,7 @@ export default function Home() {
         <div className="relative max-w-3xl px-4 pt-16 md:px-10 md:pt-20">
           <div className="flex items-center gap-2.5">
             <span className="h-0.5 w-6 bg-gold-500" />
-            <span className="text-2xs font-bold uppercase tracking-[0.16em] text-gold-200">
+            <span className="text-2xs font-bold tracking-[0.16em] text-gold-200">
               NAAC · NIRF · QS
             </span>
           </div>
@@ -117,7 +117,7 @@ export default function Home() {
             className="mt-0.5 hidden h-[60px] w-[60px] shrink-0 rounded-full object-cover ring-1 ring-line sm:block"
           />
           <div>
-            <div className="text-2xs font-bold uppercase tracking-[0.14em] text-ink-faint">How it works</div>
+            <div className="text-2xs font-bold tracking-[0.14em] text-ink-faint">How it works</div>
             <h2 className="mt-2 text-2xl font-bold tracking-tight">Three steps, one source of truth.</h2>
             <p className="mb-8 mt-1.5 max-w-xl text-sm text-ink-muted">No one re-types anyone else’s record.</p>
             <div className="grid gap-6 md:grid-cols-3">
@@ -190,7 +190,7 @@ export default function Home() {
             </p>
           </div>
           <div>
-            <div className="mb-3 text-2xs font-bold uppercase tracking-wider text-white">Portal</div>
+            <div className="mb-3 text-2xs font-bold  text-white">Portal</div>
             <div className="text-xs leading-8">
               <Link href="/login" className="hover:text-white">Sign in</Link>
               <br />
@@ -198,7 +198,7 @@ export default function Home() {
             </div>
           </div>
           <div>
-            <div className="mb-3 text-2xs font-bold uppercase tracking-wider text-white">Resources</div>
+            <div className="mb-3 text-2xs font-bold  text-white">Resources</div>
             <div className="text-xs leading-8">
               Entry guidelines
               <br />
@@ -208,7 +208,7 @@ export default function Home() {
             </div>
           </div>
           <div>
-            <div className="mb-3 text-2xs font-bold uppercase tracking-wider text-white">Support</div>
+            <div className="mb-3 text-2xs font-bold  text-white">Support</div>
             <div className="text-xs leading-8">
               iqac@bitmesra.ac.in
               <br />

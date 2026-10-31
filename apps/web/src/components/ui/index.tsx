@@ -2,7 +2,7 @@
 
 import type {
   ButtonHTMLAttributes, InputHTMLAttributes, SelectHTMLAttributes,
-  TextareaHTMLAttributes, ReactNode,
+  TextareaHTMLAttributes, ReactNode, Ref,
 } from 'react';
 import { useId, useState } from 'react';
 import { cx } from '@/lib/cx';
@@ -11,10 +11,10 @@ import { IconCheck, IconClock, IconAlert, IconLock, IconUpload, IconDoc } from '
 /* ───────────────────────────── surfaces ───────────────────────────── */
 
 export function Card({
-  className, children, padded = true,
-}: { className?: string; children: ReactNode; padded?: boolean }) {
+  className, children, padded = true, id,
+}: { className?: string; children: ReactNode; padded?: boolean; id?: string }) {
   return (
-    <section className={cx('rounded-sm border border-line bg-surface', padded && 'p-4', className)}>
+    <section id={id} className={cx('rounded-sm border border-line bg-surface', padded && 'p-4', className)}>
       {children}
     </section>
   );
@@ -34,10 +34,10 @@ export function CardHeader({
   );
 }
 
-/** The small uppercase label that opens a section in the enterprise layout. */
+/** The small label that opens a section in the enterprise layout. */
 export function Eyebrow({ children }: { children: ReactNode }) {
   return (
-    <div className="text-2xs font-bold uppercase tracking-[0.1em] text-ink-faint">{children}</div>
+    <div className="text-xs font-semibold text-ink-muted">{children}</div>
   );
 }
 
@@ -60,7 +60,7 @@ export function Button({
     <button
       {...rest}
       className={cx(
-        'inline-flex min-h-9 items-center justify-center gap-1.5 rounded-sm px-3.5 py-2 text-sm font-semibold',
+        'inline-flex min-h-11 items-center justify-center gap-1.5 rounded-sm px-3.5 py-2 text-sm font-semibold',
         'transition-colors disabled:cursor-not-allowed disabled:opacity-50',
         BUTTON_STYLES[variant],
         className,
@@ -79,7 +79,7 @@ export function LinkButton({
     <a
       href={href}
       className={cx(
-        'inline-flex min-h-9 items-center justify-center gap-1.5 rounded-sm px-3.5 py-2 text-sm font-semibold',
+        'inline-flex min-h-11 items-center justify-center gap-1.5 rounded-sm px-3.5 py-2 text-sm font-semibold',
         'transition-colors no-underline',
         BUTTON_STYLES[variant],
         className,
@@ -103,7 +103,7 @@ export function Input({ className, ...rest }: InputHTMLAttributes<HTMLInputEleme
   return <input {...rest} className={cx(CONTROL, className)} />;
 }
 
-export function Textarea({ className, rows = 3, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export function Textarea({ className, rows = 3, ...rest }: TextareaHTMLAttributes<HTMLTextAreaElement> & { ref?: Ref<HTMLTextAreaElement> }) {
   return <textarea {...rest} rows={rows} className={cx(CONTROL, 'resize-y', className)} />;
 }
 
@@ -224,7 +224,7 @@ export function FileInput({
         <label
           htmlFor={id ?? inputId}
           className={cx(
-            'inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-sm border border-line-strong',
+            'inline-flex min-h-11 cursor-pointer items-center gap-1.5 rounded-sm border border-line-strong',
             'bg-surface px-3 py-2 text-sm font-semibold text-ink hover:bg-surface-2',
             disabled && 'pointer-events-none opacity-50',
           )}
@@ -302,10 +302,10 @@ const NOTICE_STYLES: Record<NoticeTone, string> = {
 };
 
 export function Notice({
-  tone = 'info', title, children, className,
-}: { tone?: NoticeTone; title?: string; children?: ReactNode; className?: string }) {
+  tone = 'info', title, children, className, id,
+}: { tone?: NoticeTone; title?: string; children?: ReactNode; className?: string; id?: string }) {
   return (
-    <div role={tone === 'danger' ? 'alert' : undefined} className={cx('rounded-sm border px-3 py-2.5 text-sm', NOTICE_STYLES[tone], className)}>
+    <div id={id} role={tone === 'danger' ? 'alert' : undefined} className={cx('rounded-sm border px-3 py-2.5 text-sm', NOTICE_STYLES[tone], className)}>
       {title ? <p className="font-semibold">{title}</p> : null}
       {children ? <div className={cx('text-sm', title && 'mt-1')}>{children}</div> : null}
     </div>
@@ -341,8 +341,8 @@ export function Th({
     <th
       scope={scope}
       className={cx(
-        'border-b border-line bg-surface-2 px-3 py-2 text-left text-2xs font-bold uppercase',
-        'tracking-wider text-ink-muted',
+        'border-b border-line bg-surface-2 px-3 py-2.5 text-left text-xs font-semibold',
+        'text-ink-muted',
         className,
       )}
     >
@@ -351,8 +351,8 @@ export function Th({
   );
 }
 
-export function Td({ children, className }: { children?: ReactNode; className?: string }) {
-  return <td className={cx('border-b border-line px-3 py-2 align-top text-ink', className)}>{children}</td>;
+export function Td({ children, className, colSpan }: { children?: ReactNode; className?: string; colSpan?: number }) {
+  return <td colSpan={colSpan} className={cx('border-b border-line px-3 py-2 align-top text-ink', className)}>{children}</td>;
 }
 
 /* ───────────────────────────── stat tile ──────────────────────────── */
@@ -364,7 +364,7 @@ export function StatTile({
   const body = (
     <>
       <div className="flex items-baseline justify-between gap-2">
-        <span className="text-2xs font-semibold uppercase tracking-wider text-ink-faint">{label}</span>
+        <span className="text-xs font-semibold text-ink-muted">{label}</span>
         {locked ? <IconLock width={11} height={11} className="shrink-0 text-ink-faint" /> : null}
       </div>
       <div className="mt-1 font-mono text-2xl font-semibold tabular-nums text-ink">{value}</div>

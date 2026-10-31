@@ -3,7 +3,7 @@ import { truncateAll, closeDb } from '../helpers/db';
 import { makeUser } from '../helpers/factories';
 import {
   createRecord, updateRecord, getRecord, listRecords, transitionRecord, deleteRecord,
-  setNilDeclaration, getNilDeclaration, statusCounts,
+  setNilDeclaration, getNilDeclarations, statusCounts, correctionsFor, acknowledgeCorrection,
 } from '@/server/records/service';
 import { departmentCompletion, verificationQueue } from '@/server/rollups/completion';
 import type { SessionUser } from '@/server/auth/session';
@@ -21,7 +21,6 @@ const paper = (doi: string) => ({
   title: 'Edge scheduling',
   authors: 'A. K. Verma',
   journal: 'IEEE TCC',
-  indexing: 'SCIE',
   year: '2024',
   issn: '2168-7161',
   bibliographic: 'A. K. Verma. "Edge scheduling." IEEE TCC (2024).',
@@ -135,33 +134,52 @@ describe('create and read', () => {
   });
 });
 
-// The generic verify/return workflow runs on Consultancy, which still goes to DRIE for checking.
-// Publications, books and patents are approved on submission instead (lookup.test.ts, patents-lookup.test.ts).
+// Every module approves on submission; the offices and HODs check afterwards and may return a record.
+// Consultancy has no lookup, so it shows the plain path.
 describe('workflow', () => {
-  it('walks draft → submitted → verified → approved with the right actors', async () => {
+  it('approves on submission, and lets the office return an approved record with a remark', async () => {
     const { id } = await createRecord(faculty, WORKFLOW, engagement('w'), 'draft');
-    await expect(transitionRecord(drie, WORKFLOW, id, 'verify'))
-      .rejects.toMatchObject({ code: 'FORBIDDEN' });
-
-    expect((await transitionRecord(faculty, WORKFLOW, id, 'submit')).status).toBe('submitted');
-    await expect(transitionRecord(faculty, WORKFLOW, id, 'verify'))
-      .rejects.toMatchObject({ code: 'FORBIDDEN' });
-    expect((await transitionRecord(drie, WORKFLOW, id, 'verify')).status).toBe('verified');
-    await expect(transitionRecord(drie, WORKFLOW, id, 'approve'))
-      .rejects.toMatchObject({ code: 'FORBIDDEN' });
-    expect((await transitionRecord(admin, WORKFLOW, id, 'approve')).status).toBe('approved');
-    expect((await transitionRecord(admin, WORKFLOW, id, 'unlock')).status).toBe('verified');
+    expect((await transitionRecord(faculty, WORKFLOW, id, 'submit')).status).toBe('approved');
+    const read = await getRecord(faculty, WORKFLOW, id);
+    expect(read.history.map((h) => h.toStatus)).toEqual(['submitted', 'approved']);
+    await expect(transitionRecord(faculty, WORKFLOW, id, 'return', 'x')).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(transitionRecord(drie, WORKFLOW, id, 'return')).rejects.toMatchObject({ code: 'VALIDATION' });
+    expect((await transitionRecord(drie, WORKFLOW, id, 'return', 'Attach the letter.')).status).toBe('returned');
   });
 
-  it('freezes a submitted record against owner edits, and frees it again on return', async () => {
-    const { id } = await createRecord(faculty, WORKFLOW, engagement('f'), 'submit');
-    await expect(updateRecord(faculty, WORKFLOW, id, engagement('f'), 'draft'))
-      .rejects.toMatchObject({ code: 'FORBIDDEN' });
+  it('lets a HOD return their own department\x27s record, and no other HOD', async () => {
+    const { id } = await createRecord(faculty, WORKFLOW, engagement('hod'), 'submit');
+    await expect(transitionRecord(otherHod, WORKFLOW, id, 'return', 'No.')).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    expect((await transitionRecord(hod, WORKFLOW, id, 'return', 'Check the agency name.')).status).toBe('returned');
+  });
 
-    await expect(transitionRecord(drie, WORKFLOW, id, 'return'))
-      .rejects.toMatchObject({ code: 'VALIDATION' });
-    await transitionRecord(drie, WORKFLOW, id, 'return', 'ISSN does not match the journal.');
-    await expect(updateRecord(faculty, WORKFLOW, id, engagement('f'), 'draft')).resolves.toBeDefined();
+  it('approves a corrected record again, flagged for whoever returned it until they look', async () => {
+    const { id } = await createRecord(faculty, WORKFLOW, engagement('fix'), 'submit');
+    await transitionRecord(drie, WORKFLOW, id, 'return', 'Wrong agency.');
+    expect(await correctionsFor(drie)).toEqual([]);
+    expect((await updateRecord(faculty, WORKFLOW, id, { ...engagement('fix'), agency: 'Tata Motors, Jamshedpur' }, 'submit')).status).toBe('approved');
+    expect((await correctionsFor(drie)).map((c) => c.id)).toContain(id);
+    await expect(acknowledgeCorrection(hod, WORKFLOW, id)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await acknowledgeCorrection(drie, WORKFLOW, id);
+    expect((await correctionsFor(drie)).map((c) => c.id)).not.toContain(id);
+  });
+
+  it('lets the owner edit an approved record and keeps every change in its history', async () => {
+    const { id } = await createRecord(faculty, WORKFLOW, engagement('edit'), 'submit');
+    const out = await updateRecord(faculty, WORKFLOW, id, { ...engagement('edit'), revenue: '300000' }, 'draft');
+    expect(out.status).toBe('approved');                       // an approved record never goes back to draft
+    const read = await getRecord(faculty, WORKFLOW, id);
+    expect(read.data.revenue).toBe('300000');
+    expect(read.edits).toHaveLength(1);
+    expect(read.edits[0]!.actorName).toBe(faculty.name);
+    expect(read.edits[0]!.changes).toEqual([
+      expect.objectContaining({ key: 'revenue', from: '250000', to: '300000' }),
+    ]);
+    // Saving with nothing changed adds nothing.
+    await updateRecord(faculty, WORKFLOW, id, { ...engagement('edit'), revenue: '300000' }, 'draft');
+    expect((await getRecord(faculty, WORKFLOW, id)).edits).toHaveLength(1);
+    // Nobody else may edit it.
+    await expect(updateRecord(otherFaculty, WORKFLOW, id, engagement('edit'), 'draft')).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 
   it('records a remark on the returned record and in its history', async () => {
@@ -185,23 +203,29 @@ describe('workflow', () => {
       .resolves.toBeDefined();
   });
 
-  it('refuses to delete a record that has left the owner’s hands', async () => {
+  it('lets the owner delete an approved record, but only with a reason; IQAC always gives one', async () => {
     const { id } = await createRecord(faculty, WORKFLOW, engagement('keep'), 'submit');
-    await expect(deleteRecord(faculty, WORKFLOW, id)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(deleteRecord(faculty, WORKFLOW, id)).rejects.toMatchObject({ code: 'VALIDATION' });
+    await expect(deleteRecord(hod, WORKFLOW, id, 'not mine to delete')).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(deleteRecord(admin, WORKFLOW, id)).rejects.toMatchObject({ code: 'VALIDATION' });
+    await expect(deleteRecord(faculty, WORKFLOW, id, 'Entered twice')).resolves.toBeDefined();
   });
 });
 
 describe('nil returns', () => {
-  it('records and clears "nothing to report this cycle"', async () => {
-    expect(await getNilDeclaration(faculty, 'patents')).toBe(false);
-    await setNilDeclaration(faculty, 'patents', true);
-    expect(await getNilDeclaration(faculty, 'patents')).toBe(true);
-    await setNilDeclaration(faculty, 'patents', false);
-    expect(await getNilDeclaration(faculty, 'patents')).toBe(false);
+  it('records and clears "nothing to report" for a year', async () => {
+    expect(await getNilDeclarations(faculty, 'patents')).toEqual([]);
+    await setNilDeclaration(faculty, 'patents', true, 2023);
+    await setNilDeclaration(faculty, 'patents', true, 2024);
+    expect(await getNilDeclarations(faculty, 'patents')).toEqual([2024, 2023]);
+    await setNilDeclaration(faculty, 'patents', false, 2023);
+    await setNilDeclaration(faculty, 'patents', false, 2024);
+    expect(await getNilDeclarations(faculty, 'patents')).toEqual([]);
   });
 
   it('does not let somebody declare a module that is not theirs to own', async () => {
-    await expect(setNilDeclaration(hod, 'publications', true)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    // Publications are every professor's, DRIE's included; CDC's exam results are CDC's alone.
+    await expect(setNilDeclaration(drie, 'exams', true)).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 });
 

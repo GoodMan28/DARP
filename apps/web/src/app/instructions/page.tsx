@@ -41,7 +41,7 @@ const FAQ = [
   },
   {
     q: 'I have nothing to report in a module.',
-    a: 'Open it and mark “Nothing to report this cycle”. An empty module and a completed-but-empty one look different on your head of department’s dashboard.',
+    a: 'Open it and mark “Nothing to report”. An empty module and a completed-but-empty one look different on your head of department’s dashboard.',
   },
   {
     q: 'Why does it ask for my Aadhaar?',
@@ -100,7 +100,7 @@ export default function InstructionsPage() {
         {/* table of contents */}
         <aside className="hidden w-56 shrink-0 lg:block">
           <div className="sticky top-6">
-            <div className="mb-3 text-2xs font-bold uppercase tracking-wider text-ink-faint">
+            <div className="mb-3 text-xs font-semibold text-ink-muted">
               On this page
             </div>
             <nav className="flex flex-col gap-2 text-sm">
@@ -147,13 +147,13 @@ export default function InstructionsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr>
-                    <th className="w-36 border-b border-line bg-surface-2 px-3 py-2 text-left text-2xs font-bold uppercase tracking-wider text-ink-muted">
+                    <th className="w-36 border-b border-line bg-surface-2 px-3 py-2 text-left text-2xs font-bold  text-ink-muted">
                       Role
                     </th>
-                    <th className="border-b border-line bg-surface-2 px-3 py-2 text-left text-2xs font-bold uppercase tracking-wider text-ink-muted">
+                    <th className="border-b border-line bg-surface-2 px-3 py-2 text-left text-2xs font-bold  text-ink-muted">
                       Enters
                     </th>
-                    <th className="w-36 border-b border-line bg-surface-2 px-3 py-2 text-left text-2xs font-bold uppercase tracking-wider text-ink-muted">
+                    <th className="w-36 border-b border-line bg-surface-2 px-3 py-2 text-left text-2xs font-bold  text-ink-muted">
                       Verified by
                     </th>
                   </tr>
@@ -178,7 +178,7 @@ export default function InstructionsPage() {
                   <tr>
                     <td className="px-3 py-2 align-top font-semibold">IQAC</td>
                     <td className="px-3 py-2 align-top text-ink-muted">
-                      Accounts, dropdown lists, the cycle and its deadline
+                      Accounts, dropdown lists, year ranges and journal lists
                     </td>
                     <td className="px-3 py-2 align-top text-ink-muted">
                       Approves everything, and has the final word
@@ -199,8 +199,8 @@ export default function InstructionsPage() {
             <div className="grid gap-3.5 md:grid-cols-3">
               {[
                 ['STEP 1', 'Fill the required fields', 'Fields marked with a red asterisk are required before you can submit. You can Save as draft at any point with the form half-finished.'],
-                ['STEP 2', 'Attach the evidence', 'PDF, JPG or PNG up to 5 MB. The file stays attached to the record, so nobody has to hunt through a shared drive at submission time.'],
-                ['STEP 3', 'Submit for verification', 'The record goes to the owning dean’s office. Until it is returned to you, it is locked — that is what stops figures changing after they are counted.'],
+                ['STEP 2', 'Attach the evidence', 'PDF, JPG or PNG up to 2 MB. The file stays attached to the record, so nobody has to hunt through a shared drive at submission time.'],
+                ['STEP 3', 'Submit', 'The record is approved at once and counts straight away. The verifying office checks it afterwards and can return it to you with a remark. You can edit it at any time; every change is kept in its history.'],
               ].map(([step, title, body]) => (
                 <div key={step} className="rounded-sm border border-line p-4">
                   <div className="font-mono text-2xs font-bold text-gold-500">{step}</div>
@@ -214,7 +214,7 @@ export default function InstructionsPage() {
           <section id="evidence" className="mt-10 scroll-mt-6">
             <h2 className="text-lg font-bold tracking-tight">Evidence rules</h2>
             <p className="mb-4 mt-2 max-w-[74ch] text-sm leading-relaxed text-ink-muted">
-              Only PDF, JPG and PNG files are accepted, up to 5 MB. The portal checks the file’s actual
+              Only PDF, JPG and PNG files are accepted, up to 2 MB. The portal checks the file’s actual
               contents, not just its name, and stores it outside the web root — an uploaded file can only
               be read back through an authorised download.
             </p>
@@ -222,10 +222,10 @@ export default function InstructionsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr>
-                    <th className="w-56 border-b border-line bg-surface-2 px-3 py-2 text-left text-2xs font-bold uppercase tracking-wider text-ink-muted">
+                    <th className="w-56 border-b border-line bg-surface-2 px-3 py-2 text-left text-2xs font-bold  text-ink-muted">
                       Module
                     </th>
-                    <th className="border-b border-line bg-surface-2 px-3 py-2 text-left text-2xs font-bold uppercase tracking-wider text-ink-muted">
+                    <th className="border-b border-line bg-surface-2 px-3 py-2 text-left text-2xs font-bold  text-ink-muted">
                       What to attach
                     </th>
                   </tr>
@@ -266,10 +266,10 @@ export default function InstructionsPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr>
-                    <th className="w-44 border-b border-line bg-surface-2 px-3 py-2 text-left text-2xs font-bold uppercase tracking-wider text-ink-muted">
+                    <th className="w-44 border-b border-line bg-surface-2 px-3 py-2 text-left text-2xs font-bold  text-ink-muted">
                       Window
                     </th>
-                    <th className="border-b border-line bg-surface-2 px-3 py-2 text-left text-2xs font-bold uppercase tracking-wider text-ink-muted">
+                    <th className="border-b border-line bg-surface-2 px-3 py-2 text-left text-2xs font-bold  text-ink-muted">
                       Modules
                     </th>
                   </tr>

@@ -24,11 +24,12 @@ import { feedback } from './feedback';
 import { edpmdp } from './edpmdp';
 import { quality } from './quality';
 import { exams } from './exams';
+import { outreach } from './outreach';
 
-/** The 24 modules, in the canonical order of 00-START-HERE §0.6. */
+/** The 25 modules, in the canonical order of 00-START-HERE §0.6, with Outreach Activities after FDPs attended. */
 export const MODULE_LIST: ModuleConfig[] = [
   profile, publications, patents, books, grants, consultancy, fellowships, seedmoney,
-  riawards, awards, extawards, finsupport, fdpattended, studentsguided, qscontacts, mentorship,
+  riawards, awards, extawards, finsupport, fdpattended, outreach, studentsguided, qscontacts, mentorship,
   econtent, mous, workshops, fdporganised, feedback, edpmdp, quality, exams,
 ];
 
@@ -77,3 +78,4 @@ export function groupModules(list: ModuleConfig[]): Array<{ group: ModuleGroup; 
 }
 
 export type { ModuleConfig };
+export { OUTREACH_TYPES } from './outreach';

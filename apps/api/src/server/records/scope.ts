@@ -13,10 +13,9 @@ const MATCHES_NOTHING = '00000000-0000-0000-0000-000000000000';
  * Never build a record query without calling this. There is a test
  * (tests/security/no-unscoped-queries.test.ts) that greps the codebase for violations.
  */
-export function scopeFilter(actor: SessionUser, m: ModuleConfig, cycleId: string): SQL {
+export function scopeFilter(actor: SessionUser, m: ModuleConfig): SQL {
   const base = and(
     eq(records.moduleKey, m.key),
-    eq(records.cycleId, cycleId),
     isNull(records.deletedAt),
   )!;
 
@@ -30,10 +29,17 @@ export function scopeFilter(actor: SessionUser, m: ModuleConfig, cycleId: string
     return and(base, eq(records.departmentId, actor.departmentId))!;
   }
 
+  // A faculty member viewing a department's module (MoUs) sees their own department's records only.
+  if (actor.role === 'faculty' && m.scope === 'department' && m.viewRoles.includes('faculty')) {
+    if (!actor.departmentId) return and(base, eq(records.id, MATCHES_NOTHING))!;
+    return and(base, eq(records.departmentId, actor.departmentId))!;
+  }
+
   // The owning office sees every record of the modules it owns or verifies.
   if (m.verifierRoles.includes(actor.role) || m.viewRoles.includes(actor.role)) return base;
 
-  if (actor.role === 'faculty') return and(base, eq(records.ownerUserId, actor.id))!;
+  // A faculty member, or an office holder in a module they fill in but do not oversee: their own records.
+  if (actor.role === 'faculty' || m.ownerRoles.includes(actor.role)) return and(base, eq(records.ownerUserId, actor.id))!;
 
   // Unknown combination: see nothing.
   return and(base, eq(records.id, MATCHES_NOTHING))!;

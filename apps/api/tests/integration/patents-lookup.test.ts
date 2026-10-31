@@ -104,9 +104,9 @@ describe('Fetch details on a patent number', () => {
     expect(res.notes.at(-1)).toContain('Everything matches');
   });
 
-  it('finds a granted patent by its patent number too, as Awarded/Granted on the grant\'s journal date', async () => {
+  it('finds a granted patent by its patent number too, as Granted on the grant\'s journal date', async () => {
     const res = await lookupForForm(faculty, 'patents', GRANTED_NO);
-    expect(res.fill).toMatchObject({ title: 'A sensing device', status: 'Awarded/Granted', statusDate: '2024-04-19' });
+    expect(res.fill).toMatchObject({ title: 'A sensing device', status: 'Granted', statusDate: '2024-04-19' });
   });
 
   it('says which journal issues were read when a number is not in them', async () => {
@@ -150,7 +150,7 @@ describe('patents follow the same flow as publications', () => {
   it('takes a patent the journal does not have, typed by hand, as a point to check', async () => {
     const { id, status } = await createRecord(faculty, 'patents', {
       applicationNo: UNKNOWN, inventors: faculty.name, applicant: 'BIT Mesra', country: 'India',
-      title: 'Typed by hand', status: 'Published', statusDate: '2025-01-03', evidence: await evidence(),
+      title: 'Typed by hand', status: 'Published', publishedDate: '2025-01-03', evidence: await evidence(),
     }, 'submit');
     expect(status).toBe('approved');
     const read = await getRecord(drie, 'patents', id);
@@ -161,14 +161,14 @@ describe('patents follow the same flow as publications', () => {
   it('takes a patent filed abroad by hand', async () => {
     const { id } = await createRecord(faculty, 'patents', {
       applicationNo: 'US 10,123,456', inventors: faculty.name, applicant: 'BIT Mesra', country: 'United States',
-      title: 'A US patent', status: 'Awarded/Granted', statusDate: '2024-02-02', evidence: await evidence(),
+      title: 'A US patent', status: 'Granted', grantDate: '2024-02-02', evidence: await evidence(),
     }, 'submit');
     expect((await getRecord(faculty, 'patents', id)).data.applicationNo).toBe('US10123456');
   });
 
   it('a grant whose application is older than the index: inventors typed, said so once', async () => {
     const values = await fetched(GRANT_ONLY_NO, { inventors: faculty.name });
-    expect(values).toMatchObject({ title: 'AN OLD INVENTION', status: 'Awarded/Granted' });
+    expect(values).toMatchObject({ title: 'AN OLD INVENTION', status: 'Granted' });
     const { id } = await createRecord(faculty, 'patents', values, 'submit');
     const reasons = (await getRecord(drie, 'patents', id)).verification?.reasons ?? [];
     expect(reasons.join(' ')).toContain('Only the grant was found');
@@ -181,12 +181,11 @@ describe('patents follow the same flow as publications', () => {
     expect(res.notes.join(' ')).toContain('the individual applicants were taken as the inventors');
   });
 
-  it('DRIE can return an approved patent; the resubmission goes to DRIE, whose Verify is final', async () => {
+  it('DRIE can return an approved patent; the corrected one is approved again', async () => {
     const [record] = (await listRecords(faculty, 'patents', { pageSize: 50 })).rows
       .filter((r) => r.data.applicationNo === PUBLISHED);
     expect((await transitionRecord(drie, 'patents', record!.id, 'return', 'Attach the grant certificate.')).status).toBe('returned');
     const again = await updateRecord(faculty, 'patents', record!.id, await fetched(PUBLISHED), 'submit');
-    expect(again.status).toBe('submitted');
-    expect((await transitionRecord(drie, 'patents', record!.id, 'verify')).status).toBe('approved');
+    expect(again.status).toBe('approved');
   });
 });

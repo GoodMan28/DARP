@@ -1,5 +1,6 @@
 // src/modules/books.ts
 import type { ModuleConfig } from './_types';
+import { FACULTY_MEMBERS } from './_types';
 
 export const books: ModuleConfig = {
   key: 'books',
@@ -10,7 +11,7 @@ export const books: ModuleConfig = {
   bodies: ['NAAC'],
   description:
     'Books, chapters in edited volumes, and papers in conference proceedings. Paste the DOI (or the ISBN) and press Fetch details — the details are filled in from the publisher\'s record. Each entry is entered once.',
-  ownerRoles: ['faculty'],
+  ownerRoles: FACULTY_MEMBERS,
   verifierRoles: ['drie'],
   viewRoles: ['hod', 'drie', 'admin'],
   scope: 'self',
@@ -63,7 +64,7 @@ export const books: ModuleConfig = {
       help: 'For a conference paper, the title of the paper.',
       exportAs: { faculty: 'Title of the chapters  published', drie: 'Title of the chapters  published' } },
 
-    { key: 'year', label: 'Year of publication', type: 'year', required: true, min: 1960, max: 2100,
+    { key: 'year', label: 'Year of publication', type: 'year', required: true, periodSource: true, min: 1960, max: 2100,
       section: 'Publication', autofill: { from: 'year', locked: true },
       help: 'The year the book or proceedings volume was published (its print year). A chapter that appeared online earlier still counts in that year.',
       exportAs: {
@@ -99,7 +100,7 @@ export const books: ModuleConfig = {
       } },
 
     { key: 'evidence', label: 'Attach documents', type: 'file',
-      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence', required: true,
+      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Evidence', required: true,
       help: 'Required for every entry: the first page of the book, chapter or paper as a PDF or image. DRIE and IQAC check it against the details above — especially anything you changed or typed yourself.',
       exportAs: {
         faculty: 'Attach documents (link that opens directly to book/book chapter or 1st page of book/book chapter in pdf)',

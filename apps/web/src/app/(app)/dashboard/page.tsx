@@ -1,26 +1,22 @@
 import Link from 'next/link';
 import { AppShell } from '@/components/shell/AppShell';
 import {
-  Card, CardHeader, Table, Th, Td, StatTile, Notice, EmptyState, LinkButton, StatePill,
+  Card, CardHeader, Table, Th, Td, StatTile, EmptyState, LinkButton,
 } from '@/components/ui';
+import { CorrectionActions } from '@/components/records/CorrectionActions';
 import { requireMe, loadPageData } from '@/lib/api.server';
 import type { DashboardPayload, ModuleProgress } from '@darp/shared/contracts';
-import { ROLE_PURPOSE, ROLE_LABEL } from '@darp/shared/roles';
-import { formatDate, plural } from '@darp/shared/format';
-import { modulesVerifiedBy } from '@darp/shared/modules';
+import { ROLE_PURPOSE } from '@darp/shared/roles';
+import { plural } from '@darp/shared/format';
 import type { Role } from '@darp/shared/modules/types';
+import { getModule } from '@darp/shared/modules';
+import { MyNumbers } from './MyNumbers';
 
 export const dynamic = 'force-dynamic';
 
-/**
- * The role's purpose, plus the modules whose records are approved on submission: there the
- * verifying office's check is the last word and IQAC does not sign them off again.
- */
+/** The role's purpose; every record is approved when its owner submits it, and checked afterwards. */
 function purposeFor(role: Role): string {
-  const final = modulesVerifiedBy(role).filter((m) => m.lookup?.autoApprove === 'always').map((m) => m.name);
-  if (final.length === 0) return ROLE_PURPOSE[role];
-  const names = final.length === 1 ? final[0] : `${final.slice(0, -1).join(', ')} and ${final[final.length - 1]}`;
-  return `${ROLE_PURPOSE[role]} ${names} ${final.length === 1 ? 'is' : 'are'} approved on submission: you check ${final.length === 1 ? 'it' : 'them'} afterwards, and your verification is final.`;
+  return ROLE_PURPOSE[role];
 }
 
 const PROGRESS_LABEL: Record<ModuleProgress, string> = {
@@ -50,12 +46,14 @@ function ProgressPill({ progress }: { progress: ModuleProgress }) {
 }
 
 export default async function DashboardPage() {
-  const { user, cycle, groups } = await requireMe();
+  const { user, groups } = await requireMe();
   const dashboard = await loadPageData<DashboardPayload>('/api/dashboard');
   if (!dashboard.ok) throw new Error(dashboard.message);
 
-  const { ownsModules, modules: myModules, queue, departments } = dashboard.data;
+  const { ownsModules, modules: myModules, departments, corrections, autoUpdates } = dashboard.data;
   const showDepartments = user.role !== 'faculty';
+  // Everyone who fills in a Faculty Profile (faculty, HODs, professors holding an office) has numbers.
+  const fillsProfile = !!getModule('profile')?.ownerRoles.includes(user.role);
 
   const totals = myModules.reduce(
     (acc, m) => ({
@@ -73,8 +71,6 @@ export default async function DashboardPage() {
   ).length;
   const pct = myModules.length ? Math.round((complete / myModules.length) * 100) : 0;
 
-  const awaitingMe = queue.reduce((n, q) => n + q.awaitingVerification, 0);
-  const awaitingApproval = queue.reduce((n, q) => n + q.awaitingApproval, 0);
 
   return (
     <AppShell
@@ -83,40 +79,24 @@ export default async function DashboardPage() {
       crumbs={[{ label: 'Overview' }]}
       title={`Good to see you, ${user.name}`}
       subtitle={purposeFor(user.role)}
-      cycleName={cycle.name}
       actions={
         ownsModules && myModules[0]
           ? <LinkButton href={`/m/${myModules[0].key}`}>Continue data entry</LinkButton>
           : null
       }
     >
-      {!cycle.id ? (
-        <Notice tone="warning" title="No active reporting cycle" className="mb-4">
-          IQAC has not opened a cycle yet. Records cannot be entered until one is active.
-        </Notice>
-      ) : null}
-
-      {cycle.deadlineAt ? (
-        <Notice tone="warning" className="mb-4">
-          <strong>Data entry closes {formatDate(cycle.deadlineAt)}.</strong>{' '}
-          Records still in draft after that date are not counted.
-        </Notice>
-      ) : null}
-
       {/* summary tiles */}
       <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {ownsModules ? (
           <>
             <StatTile label="My records" value={totals.records} note={`${plural(myModules.length, 'module')} assigned`} />
             <StatTile label="Still with me" value={totals.drafts} note="Draft or returned" />
-            <StatTile label="Awaiting verification" value={totals.submitted} note="With the dean’s office" />
-            <StatTile label="Approved by IQAC" value={totals.approved} note={`${pct}% of my modules complete`} />
+            <StatTile label="Approved" value={totals.approved} note={`${pct}% of my modules complete`} />
           </>
         ) : (
           <>
-            <StatTile label="Awaiting my verification" value={awaitingMe} note="Submitted records" />
-            <StatTile label="Awaiting IQAC approval" value={awaitingApproval} note="Verified records" />
-            <StatTile label="Departments" value={departments.length} note="Reporting this cycle" />
+            <StatTile label="Corrected after return" value={corrections.length} note="Waiting for your second look" />
+            <StatTile label="Departments" value={departments.length} note="Reporting" />
             <StatTile
               label="Institute completion"
               value={`${departments.length
@@ -128,17 +108,17 @@ export default async function DashboardPage() {
         )}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 [&>*]:min-w-0">
         {/* my modules */}
         {ownsModules ? (
           <Card className="lg:col-span-2" padded={false}>
             <CardHeader
               title="My modules"
-              subtitle="Everything your role is responsible for this cycle."
+              subtitle="Everything your role is responsible for."
             />
             {myModules.length === 0 ? (
               <EmptyState title="No modules assigned">
-                Your role does not own any data modules. Use the verification queue instead.
+                Your role does not own any data modules. Records are approved when their owners submit them; open a module to check them.
               </EmptyState>
             ) : (
               <Table>
@@ -175,67 +155,77 @@ export default async function DashboardPage() {
           </Card>
         ) : null}
 
-        {/* verification queue */}
-        {queue.length > 0 ? (
-          <Card className={ownsModules ? '' : 'lg:col-span-2'} padded={false}>
+        {/* corrections waiting for a second look */}
+        {corrections.length > 0 ? (
+          <Card className="lg:col-span-3" padded={false}>
             <CardHeader
-              title="Verification queue"
-              subtitle={`What ${ROLE_LABEL[user.role].split(' —')[0]} still has to act on.`}
+              title="Corrected after you returned them"
+              subtitle="They are already approved. Look at what changed, then mark it checked or return it again."
             />
-            {awaitingMe + awaitingApproval === 0 ? (
-              <EmptyState title="Nothing waiting">Every submitted record has been dealt with.</EmptyState>
-            ) : (
-              <Table>
-                <thead>
-                  <tr>
-                    <Th>Module</Th>
-                    <Th className="w-24 text-right">To verify</Th>
-                    <Th className="w-28 text-right">To approve</Th>
+            <Table>
+              <thead>
+                <tr><Th>Record</Th><Th>What changed</Th><Th>Owner</Th><Th className="text-right">&nbsp;</Th></tr>
+              </thead>
+              <tbody>
+                {corrections.map((c) => (
+                  <tr key={c.id} className="hover:bg-surface-2">
+                    <Td>
+                      <Link href={`/m/${c.moduleKey}/${c.id}`} className="font-medium text-primary hover:underline">{c.title}</Link>
+                      <span className="block text-xs text-ink-muted">{c.moduleName}</span>
+                    </Td>
+                    <Td>
+                      {c.changed.length > 0 ? (
+                        <>
+                          {c.changed.slice(0, 4).join(', ')}{c.changed.length > 4 ? ` and ${c.changed.length - 4} more` : ''}{' '}
+                          <Link href={`/m/${c.moduleKey}/${c.id}#edit-history`} className="font-semibold text-primary underline">See changes</Link>
+                        </>
+                      ) : (
+                        <span className="rounded-sm border border-warning-100 bg-warning-50 px-1.5 py-0.5 text-xs font-semibold text-warning-700">
+                          Resubmitted without changes
+                        </span>
+                      )}
+                    </Td>
+                    <Td>{c.ownerName}</Td>
+                    <Td className="text-right"><CorrectionActions moduleKey={c.moduleKey} recordId={c.id} /></Td>
                   </tr>
-                </thead>
-                <tbody>
-                  {queue
-                    .filter((q) => q.awaitingVerification + q.awaitingApproval > 0)
-                    .map((q) => (
-                      <tr key={q.moduleKey} className="hover:bg-surface-2">
-                        <Td>
-                          <Link
-                            href={`/m/${q.moduleKey}?status=submitted`}
-                            className="font-medium text-primary hover:underline"
-                          >
-                            {q.name}
-                          </Link>
-                        </Td>
-                        <Td className="text-right font-mono tabular-nums">
-                          {q.awaitingVerification || '—'}
-                        </Td>
-                        <Td className="text-right font-mono tabular-nums">
-                          {q.awaitingApproval || '—'}
-                        </Td>
-                      </tr>
-                    ))}
-                </tbody>
-              </Table>
-            )}
+                ))}
+              </tbody>
+            </Table>
+          </Card>
+        ) : null}
+
+        {/* patents the Patent Office Journal moved forward */}
+        {autoUpdates.length > 0 ? (
+          <Card className={ownsModules ? 'lg:col-span-3' : 'lg:col-span-2'} padded={false}>
+            <CardHeader
+              title="Updated automatically (last 30 days)"
+              subtitle="The Patent Office Journal moved these patents forward. You do not need to do anything."
+            />
+            <ul className="divide-y divide-line text-sm">
+              {autoUpdates.map((u) => (
+                <li key={`${u.id}-${u.at}`} className="px-4 py-2.5">
+                  <Link href={`/m/${u.moduleKey}/${u.id}#edit-history`} className="font-medium text-primary hover:underline">{u.text}</Link>
+                </li>
+              ))}
+            </ul>
           </Card>
         ) : null}
 
         {/* profile shortcut for faculty */}
-        {user.role === 'faculty' ? (
+        {fillsProfile ? (
           <Card padded={false}>
-            <CardHeader title="My profile" subtitle="Computed from your records." />
-            <div className="p-4 text-sm text-ink-muted">
-              <p>
-                Your profile carries 22 typed fields, 51 counters computed from the records above,
-                and 13 figures you declare yourself.
-              </p>
-              <div className="mt-3">
-                <LinkButton href="/profile" variant="secondary">Open my profile</LinkButton>
-              </div>
+            <CardHeader title="My profile" subtitle="Your details: designation, qualifications, identifiers." />
+            <div className="p-4">
+              <LinkButton href="/profile" variant="secondary">Open my profile</LinkButton>
             </div>
           </Card>
         ) : null}
       </div>
+
+      {/* the person's own totals, only when asked for */}
+      {fillsProfile ? (
+        <div className="mt-4"><MyNumbers /></div>
+      ) : null}
 
       {/* department completion */}
       {showDepartments && departments.length > 0 ? (
@@ -283,19 +273,6 @@ export default async function DashboardPage() {
           </Table>
         </Card>
       ) : null}
-
-      {/* legend */}
-      <div className="mt-4 flex flex-wrap items-center gap-3 text-2xs text-ink-muted">
-        <span className="font-semibold uppercase tracking-wider text-ink-faint">Record lifecycle</span>
-        <StatePill status="draft" />
-        <span aria-hidden="true">→</span>
-        <StatePill status="submitted" />
-        <span aria-hidden="true">→</span>
-        <StatePill status="verified" />
-        <span aria-hidden="true">→</span>
-        <StatePill status="approved" />
-        <span className="ml-2">A returned record comes back to its owner with a remark.</span>
-      </div>
     </AppShell>
   );
 }

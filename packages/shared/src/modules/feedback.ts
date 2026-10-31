@@ -34,7 +34,7 @@ export const feedback: ModuleConfig = {
       exportAs: { hod: 'If yes, pls provide links to the documents' } },
 
     { key: 'evidence', label: 'Attach supporting document', type: 'file',
-      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence' },
+      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Evidence' },
   ],
   listColumns: ['classification'],
   defaultSort: { key: 'classification', dir: 'asc' },

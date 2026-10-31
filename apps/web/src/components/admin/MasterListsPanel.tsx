@@ -9,6 +9,12 @@ import {
 import { IconPlus, IconSortAsc, IconSortDesc } from '@/components/shell/Icon';
 import type { MasterListGroup, MasterListsPayload } from './types';
 
+/** "agencyCategories" → "Agency categories": the list's key, readable. */
+const readable = (key: string) => {
+  const words = key.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
 export function MasterListsPanel() {
   const [groups, setGroups] = useState<MasterListGroup[] | null>(null);
   const [selected, setSelected] = useState<string>('');
@@ -87,23 +93,23 @@ export function MasterListsPanel() {
 
       <Card padded={false}>
         <CardHeader
-          title="Master lists"
-          subtitle="The dropdowns every module reads. Values are deactivated, never deleted — records already reference them."
+          title="Dropdown options"
+          subtitle="Pick a dropdown, then add, reorder or switch off its options. An option is never deleted, because saved records use it."
         />
 
         <div className="flex flex-wrap items-end gap-2 border-b border-line bg-surface-2 px-4 py-2.5">
           <label className="text-xs font-semibold text-ink">
-            <span className="mb-1 block">List</span>
+            <span className="mb-1 block">Dropdown</span>
             <Select className="w-72" value={selected} onChange={(e) => setSelected(e.target.value)}>
-              {(groups ?? []).map((g) => (
+              {[...(groups ?? [])].sort((a, b) => readable(a.listKey).localeCompare(readable(b.listKey))).map((g) => (
                 <option key={g.listKey} value={g.listKey}>
-                  {g.listKey} ({g.items.filter((i) => i.isActive).length})
+                  {readable(g.listKey)} ({g.items.filter((i) => i.isActive).length})
                 </option>
               ))}
             </Select>
           </label>
           <label className="flex-1 text-xs font-semibold text-ink">
-            <span className="mb-1 block">Add a value</span>
+            <span className="mb-1 block">Add an option</span>
             <div className="flex gap-2">
               <Input
                 className="max-w-md"

@@ -8,6 +8,10 @@ import {
 import {
   LOOKUP_SOURCE_LABEL, type FieldProvenance, type FormFieldDef, type LookupFillPayload,
 } from '@darp/shared/contracts';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { SPAN_MODULES, spanText } from '@darp/shared/projectPeriod';
+import { JournalRankingCard } from './JournalRankingCard';
+import { useLeaveGuard } from './useLeaveGuard';
 
 export type { FormFieldDef } from '@darp/shared/contracts';
 
@@ -26,6 +30,16 @@ interface Props {
   handedOver?: string;
   /** A saved record: the fields its owner changed from the publisher's record or typed by hand. */
   initialProvenance?: Record<string, FieldProvenance>;
+  /** Show the journal's ranking, looked up from the ISSN field, after the section holding it. */
+  showRanking?: boolean;
+  /** The saved record is already approved: saving keeps it approved and records the change. */
+  approved?: boolean;
+  /** Dates worked out from a year (October 2026 change): shown with a request for the exact date. */
+  estimatedDates?: string[];
+  /** Values that could not be carried over and must be entered again. */
+  needsInput?: string[];
+  /** Opened from an upload of many records: saving goes back there instead of to the module list. */
+  returnTo?: string;
 }
 
 /** The same text for this purpose: case and spacing aside (the server compares the same way). */
@@ -35,7 +49,7 @@ const sameText = (a: unknown, b: string) => (
 
 export function RecordForm({
   moduleKey, fields, recordId, initialValues, locked, readOnly, lookup, initialLocked, handedOver,
-  initialProvenance,
+  initialProvenance, showRanking, approved, estimatedDates, needsInput, returnTo,
 }: Props) {
   const [values, setValues] = useState<Record<string, unknown>>(initialValues ?? {});
   const [lockedKeys, setLockedKeys] = useState<Set<string>>(() => new Set(initialLocked ?? []));
@@ -86,7 +100,9 @@ export function RecordForm({
   } | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  const [dirty, setDirty] = useState(false);
+  /** A ref, so a save can clear it and navigate in the same tick without the browser asking. */
+  const dirtyRef = useRef(false);
+  const guard = useLeaveGuard(dirtyRef);
   const [banner, setBanner] = useState<string | null>(null);
   const errorSummary = useRef<HTMLDivElement>(null);
   /** "the publisher's record", "the Patent Office Journal" — and as a label, "Publisher's record". */
@@ -102,13 +118,6 @@ export function RecordForm({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [handedOver]);
-
-  /* Warn before losing typed data. */
-  useEffect(() => {
-    const onLeave = (e: BeforeUnloadEvent) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } };
-    window.addEventListener('beforeunload', onLeave);
-    return () => window.removeEventListener('beforeunload', onLeave);
-  }, [dirty]);
 
   const visible = useCallback(
     (f: FormFieldDef) => !f.showIf || f.showIf.in.includes(String(values[f.showIf.field] ?? '')),
@@ -128,7 +137,7 @@ export function RecordForm({
   function set(key: string, value: unknown) {
     setValues((v) => ({ ...v, [key]: value }));
     setErrors((e) => { const rest = { ...e }; delete rest[key]; return rest; });
-    setDirty(true);
+    dirtyRef.current = true;
   }
 
   async function fetchDetails() {
@@ -158,7 +167,7 @@ export function RecordForm({
     setFetchedValues(fetchedNow);
     setLooked(p.found && p.authoritative);
     setConfirming(null);
-    setDirty(true);
+    dirtyRef.current = true;
     const from = p.source ? LOOKUP_SOURCE_LABEL[p.source] : '';
     setLookupNote(
       p.moveTo !== undefined
@@ -201,8 +210,8 @@ export function RecordForm({
       errorSummary.current?.focus();
       return;                            // values stay on screen — nothing typed is ever lost
     }
-    setDirty(false);
-    window.location.href = `/m/${moduleKey}?saved=1`;
+    dirtyRef.current = false;
+    window.location.href = returnTo ?? `/m/${moduleKey}?saved=1`;
   }
 
   return (
@@ -232,15 +241,15 @@ export function RecordForm({
       <Card className="mb-4 bg-surface-2">
         <div className="grid gap-3 text-sm sm:grid-cols-3">
           <div>
-            <span className="text-2xs font-bold uppercase tracking-wider text-ink-faint">Reporting period</span>
+            <span className="text-xs font-semibold text-ink-muted">Counted in</span>
             <div className="font-semibold">{locked.period}</div>
           </div>
           <div>
-            <span className="text-2xs font-bold uppercase tracking-wider text-ink-faint">Department</span>
+            <span className="text-xs font-semibold text-ink-muted">Department</span>
             <div className="font-semibold">{locked.department}</div>
           </div>
           <div>
-            <span className="text-2xs font-bold uppercase tracking-wider text-ink-faint">Entered by</span>
+            <span className="text-xs font-semibold text-ink-muted">Entered by</span>
             <div className="font-semibold">{locked.enteredBy}</div>
           </div>
         </div>
@@ -301,7 +310,8 @@ export function RecordForm({
       {sections.map(([section, sectionFields]) => {
         const shown = sectionFields.filter(visible);
         if (shown.length === 0) return null;
-        return (
+        const rankingHere = showRanking && shown.some((f) => f.key === 'issn');
+        return [
           <Card key={section} className="mb-4" padded={false}>
             <h2 className="border-b border-line px-4 py-2.5 text-sm font-semibold">{section}</h2>
             <div className="grid gap-4 p-4 sm:grid-cols-2">
@@ -392,9 +402,25 @@ export function RecordForm({
                           ) : null}
                         </p>
                       ) : null}
+                      {!readOnly && estimatedDates?.includes(f.key) && values[f.key] === initialValues?.[f.key] ? (
+                        <p className="mt-1 text-xs text-warning-700">
+                          Worked out from the year entered earlier. Please enter the exact date.
+                        </p>
+                      ) : null}
+                      {!readOnly && needsInput?.includes(f.key) && !String(values[f.key] ?? '').trim() ? (
+                        <p className="mt-1 text-xs text-warning-700">Please enter this again, as a number.</p>
+                      ) : null}
+                      {(SPAN_MODULES[moduleKey]?.years === f.key
+                        || (SPAN_MODULES[moduleKey]?.lifetime === f.key && values[f.key] === true))
+                        && spanText(moduleKey, values) ? (
+                        <p className="mt-2 rounded-sm bg-surface-2 px-2 py-1.5 text-sm">
+                          <span className="font-semibold">{SPAN_MODULES[moduleKey]!.kind === 'validUntil' ? 'Valid until: ' : 'Project period: '}</span>
+                          {spanText(moduleKey, values)}
+                        </p>
+                      ) : null}
                       {typed && !readOnly ? (
                         <p className="mt-1 text-xs text-warning-700">
-                          Not found in {source}{lookup?.kind === 'patent' ? '' : ' or the journal lists'}. Attach evidence for it.
+                          Not found in {source}. Attach evidence for it.
                         </p>
                       ) : null}
                     </Field>
@@ -402,24 +428,38 @@ export function RecordForm({
                 );
               })}
             </div>
-          </Card>
-        );
+          </Card>,
+          rankingHere ? (
+            <JournalRankingCard key={`${section}-ranking`} issn={String(values.issn ?? '')} year={String(values.year ?? '')} />
+          ) : null,
+        ];
       })}
 
       {!readOnly ? (
         <div className="sticky bottom-0 flex flex-wrap items-center gap-2 border-t border-line bg-canvas py-3">
-          <Button type="button" variant="ghost" onClick={() => history.back()}>Cancel</Button>
-          <Button type="button" variant="secondary" disabled={busy} onClick={() => void save('draft')}>
-            Save as draft
-          </Button>
-          <Button type="submit" disabled={busy}>
-            {busy ? 'Saving…' : 'Save and submit'}
+          <LinkButton href={returnTo ?? `/m/${moduleKey}`} variant="ghost">Cancel</LinkButton>
+          {approved ? null : (
+            <Button type="button" variant={returnTo ? 'primary' : 'secondary'} disabled={busy} onClick={() => void save('draft')}>
+              {returnTo ? 'Save and return to the upload' : 'Save as draft'}
+            </Button>
+          )}
+          <Button type="submit" variant={returnTo && !approved ? 'secondary' : 'primary'} disabled={busy}>
+            {busy ? 'Saving…' : approved ? 'Save changes' : 'Save and submit'}
           </Button>
           <p className="ml-auto text-xs text-ink-muted">
-            Saving updates your profile totals and the department roll-up.
+            {approved ? 'Every change is kept in the edit history.' : 'Submitting approves the record; the verifying office checks it afterwards.'}
           </p>
         </div>
       ) : null}
+      <ConfirmDialog
+        open={guard.leaving}
+        title="Leave without saving?"
+        confirmLabel="Leave without saving"
+        onConfirm={guard.leave}
+        onCancel={guard.stay}
+      >
+        What you typed on this page has not been saved.
+      </ConfirmDialog>
     </form>
   );
 }
@@ -475,7 +515,7 @@ function renderInput(
           id={`i-${f.key}`}
           disabled={readOnly}
           accept={f.accept}
-          maxSizeMB={f.maxSizeMB ?? 5}
+          maxSizeMB={f.maxSizeMB ?? 2}
           value={String(value ?? '')}
           onUploaded={(id) => onChange(id)}
           fieldKey={f.key}
@@ -485,7 +525,27 @@ function renderInput(
       );
     case 'date':
       return (
-        <Input {...common} type="date" value={String(value ?? '')} onChange={(e) => onChange(e.target.value)} />
+        <Input
+          {...common}
+          type="date"
+          max={f.notFuture ? new Date().toISOString().slice(0, 10) : undefined}
+          value={String(value ?? '')}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      );
+    case 'decimal':
+      return (
+        <div className="flex items-center gap-2">
+          <Input
+            {...common}
+            inputMode="decimal"
+            className="max-w-32"
+            value={String(value ?? '')}
+            placeholder={f.placeholder ?? ''}
+            onChange={(e) => onChange(e.target.value.replace(/[^\d.]/g, '').replace(/(\..*)\./g, '$1'))}
+          />
+          {f.unit ? <span className="text-sm text-ink-muted">{f.unit}</span> : null}
+        </div>
       );
     case 'integer':
     case 'year':

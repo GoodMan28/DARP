@@ -31,7 +31,23 @@ export const departments = pgTable('departments', {
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
   email: text('email').notNull(),
+  /** The display name, always composed from the parts below (composeName in @darp/shared/names). */
   name: text('name').notNull(),
+  namePrefix: text('name_prefix').notNull().default(''),
+  firstName: text('first_name').notNull().default(''),
+  middleName: text('middle_name').notNull().default(''),
+  /** Optional: some names have no surname. */
+  lastName: text('last_name').notNull().default(''),
+  /** Scopus Author ID (10–11 digits), typed by the person; metrics are fetched from Elsevier with it. */
+  scopusAuthorId: text('scopus_author_id'),
+  /** What Elsevier says about that ID: whose it is, and whether the name matches the account. */
+  scopusCheck: jsonb('scopus_check'),
+  /** Web of Science ResearcherID, e.g. AAB-1234-2020. The WoS figures are typed by the person. */
+  researcherId: text('researcher_id'),
+  /** Typed by the person; used to confirm authorship only when `orcidCheck.nameMatches`. */
+  orcid: text('orcid'),
+  /** What ORCID's public record said when the iD was saved: OrcidCheck in @darp/shared/contracts. */
+  orcidCheck: jsonb('orcid_check'),
   role: roleEnum('role').notNull(),
   departmentId: uuid('department_id').references(() => departments.id, { onDelete: 'restrict' }),
   employeeId: text('employee_id'),
@@ -99,8 +115,8 @@ export const loginAttempts = pgTable('login_attempts', {
 ]);
 
 /* ────────────────────────────── cycles ─────────────────────────── */
-/** Decision #1: one active cycle — NAAC Cycle 4, data years 2022–2024,
- *  with a window per period type so CY/FY/AY never get mixed up. */
+/** Saved year ranges (October 2026): a name plus a window per period type so CY/FY/AY never get mixed up.
+ *  The active one is the DEFAULT range for profiles and reports; it never hides any record. */
 export const cycles = pgTable('cycles', {
   id: uuid('id').primaryKey().defaultRandom(),
   name: text('name').notNull(),                    // 'NAAC Cycle 4 · 2022–2024'
@@ -124,7 +140,8 @@ export const cycles = pgTable('cycles', {
 export const records = pgTable('records', {
   id: uuid('id').primaryKey().defaultRandom(),
   moduleKey: text('module_key').notNull(),
-  cycleId: uuid('cycle_id').notNull().references(() => cycles.id, { onDelete: 'restrict' }),
+  /** Legacy: the cycle a record was entered in. Not set on new records and never used to scope them. */
+  cycleId: uuid('cycle_id').references(() => cycles.id, { onDelete: 'set null' }),
 
   /** Who owns the record. Always set — even office-scoped modules have a creating user. */
   ownerUserId: uuid('owner_user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
@@ -153,6 +170,11 @@ export const records = pgTable('records', {
   approvedAt: timestamp('approved_at', { withTimezone: true }),
   approvedBy: uuid('approved_by').references(() => users.id, { onDelete: 'set null' }),
   returnedRemark: text('returned_remark'),
+  /**
+   * Set when a record that a reviewer returned is corrected and resubmitted: that reviewer's id, so
+   * the correction shows in their "Corrected after return" list until they acknowledge it.
+   */
+  correctionForUserId: uuid('correction_for_user_id').references(() => users.id, { onDelete: 'set null' }),
 
   createdBy: uuid('created_by').notNull().references(() => users.id, { onDelete: 'restrict' }),
   updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
@@ -160,26 +182,40 @@ export const records = pgTable('records', {
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
   deletedBy: uuid('deleted_by').references(() => users.id, { onDelete: 'set null' }),
+  /** Why the record was deleted (required for an approved record, or when IQAC removes another's). */
+  deleteReason: text('delete_reason'),
+  /** Marks on fields after the October 2026 conversion: dates estimated from a year, values still to be entered. */
+  dataNotes: jsonb('data_notes').$type<{ estimated?: string[]; needsInput?: string[] }>().notNull().default({}),
+  /**
+   * The record's year in each year type. A full date fills all three; a year alone fills only the
+   * module's own type (a year cannot place a record in a different FY or AY).
+   */
+  cyYear: integer('cy_year'),
+  fyYear: integer('fy_year'),
+  ayYear: integer('ay_year'),
 }, (t) => [
-  index('records_module_cycle_idx').on(t.moduleKey, t.cycleId, t.status),
+  index('records_module_status_idx').on(t.moduleKey, t.status),
+  index('records_cy_year_idx').on(t.moduleKey, t.cyYear),
+  index('records_fy_year_idx').on(t.moduleKey, t.fyYear),
+  index('records_ay_year_idx').on(t.moduleKey, t.ayYear),
   index('records_owner_idx').on(t.ownerUserId, t.moduleKey),
   index('records_dept_idx').on(t.departmentId, t.moduleKey),
   index('records_status_idx').on(t.status),
-  index('records_live_idx').on(t.moduleKey, t.cycleId).where(sql`${t.deletedAt} is null`),
+  index('records_live_idx').on(t.moduleKey).where(sql`${t.deletedAt} is null`),
   index('records_data_gin').using('gin', t.data),
   index('records_search_trgm').using('gin', sql`${t.searchText} gin_trgm_ops`),
-  // Duplicate guard: one live record per natural key per module per cycle.
+  // Duplicate guard: one live record per natural key per module.
   uniqueIndex('records_natural_key_uq')
-    .on(t.moduleKey, t.cycleId, t.naturalKey)
+    .on(t.moduleKey, t.naturalKey)
     .where(sql`${t.naturalKey} is not null and ${t.deletedAt} is null`),
-  // Exactly one profile record per user per cycle.
+  // Exactly one profile record per user.
   uniqueIndex('records_one_profile_uq')
-    .on(t.ownerUserId, t.cycleId)
+    .on(t.ownerUserId)
     .where(sql`${t.moduleKey} = 'profile' and ${t.deletedAt} is null`),
-  // Curriculum Feedback (1.4.1) is one answer per department per cycle — the HOD
+  // Curriculum Feedback (1.4.1) is one answer per department per academic year — the HOD
   // picks one option from A–E, so a second row would be a contradiction.
   uniqueIndex('records_one_feedback_uq')
-    .on(t.departmentId, t.cycleId)
+    .on(t.departmentId, t.ayYear)
     .where(sql`${t.moduleKey} = 'feedback' and ${t.deletedAt} is null`),
   check('records_period_year_rule', sql`${t.periodYear} between 1950 and 2100`),
 ]);
@@ -196,6 +232,19 @@ export const recordTransitions = pgTable('record_transitions', {
   remark: text('remark'),
   at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [index('record_transitions_record_idx').on(t.recordId, t.at)]);
+
+/**
+ * Every change to a record after it was first submitted: who, when and old → new for each field.
+ * userId is null for a change the system made (a patent moving on to Granted).
+ */
+export const recordEdits = pgTable('record_edits', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  recordId: uuid('record_id').notNull().references(() => records.id, { onDelete: 'cascade' }),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  at: timestamp('at', { withTimezone: true }).notNull().defaultNow(),
+  note: text('note'),
+  changes: jsonb('changes').notNull().$type<Array<{ key: string; label: string; from: string; to: string }>>(),
+}, (t) => [index('record_edits_record_idx').on(t.recordId, t.at)]);
 
 /* ───────────────────────── evidence files ──────────────────────── */
 
@@ -239,12 +288,13 @@ export const masterListItems = pgTable('master_list_items', {
 export const moduleDeclarations = pgTable('module_declarations', {
   id: uuid('id').primaryKey().defaultRandom(),
   moduleKey: text('module_key').notNull(),
-  cycleId: uuid('cycle_id').notNull().references(() => cycles.id, { onDelete: 'cascade' }),
+  /** The year the declaration is for: "nothing to report for 2024". */
+  periodYear: integer('period_year').notNull(),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   declaredNil: boolean('declared_nil').notNull().default(true),
   declaredAt: timestamp('declared_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
-  uniqueIndex('module_declarations_uq').on(t.moduleKey, t.cycleId, t.userId),
+  uniqueIndex('module_declarations_uq').on(t.userId, t.moduleKey, t.periodYear),
 ]);
 
 /* ───────────────────────── profile baselines ───────────────────── */
@@ -321,6 +371,22 @@ export const journalIndexListings = pgTable('journal_index_listings', {
 }, (t) => [uniqueIndex('journal_index_issn_list_year_uq').on(t.issn, t.listName, t.year)]);
 
 /**
+ * Web of Science Impact Factors, from a Journal Citation Reports export IQAC uploads (the library
+ * makes it with BIT's subscription). One row per ISSN per JIF year; the best quartile across the
+ * journal's categories.
+ */
+export const journalJcr = pgTable('journal_jcr', {
+  issn: text('issn').notNull(),              // 8 characters, no hyphen, upper-case X
+  jifYear: integer('jif_year').notNull(),    // the year in the "2024 JIF" column
+  title: text('title').notNull().default(''),
+  jif: text('jif'),                          // as JCR prints it ("5.2", "<0.1"); null = N/A
+  jifQuartile: text('jif_quartile'),         // Q1..Q4, or null
+  categories: text('categories').notNull().default(''),
+  editions: text('editions').notNull().default(''),
+  importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.issn, t.jifYear] })]);
+
+/**
  * The years Scopus covered a journal, from Elsevier's list ('scopus-list': active titles, the last
  * range open-ended; 'scopus-discontinued': titles Scopus dropped, from_year 0 and to_year the final
  * year covered) or from SCImago's file ('scimago'). A paper counts as Scopus-indexed only when its
@@ -386,6 +452,79 @@ export const patentJournalParts = pgTable('patent_journal_parts', {
   error: text('error'),
   indexedAt: timestamp('indexed_at', { withTimezone: true }).notNull().defaultNow(),
 });
+
+/**
+ * A file of DOIs, ISBNs or patent numbers uploaded to add many records at once. Each identifier is
+ * one item, fetched in the background and saved as a draft the owner then completes and submits.
+ */
+export const bulkImports = pgTable('bulk_imports', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  ownerUserId: uuid('owner_user_id').notNull().references(() => users.id),
+  moduleKey: text('module_key').notNull(),
+  fileName: text('file_name').notNull(),
+  /** 'running' | 'done' | 'failed' */
+  status: text('status').notNull(),
+  total: integer('total').notNull(),
+  done: integer('done').notNull().default(0),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('bulk_imports_owner_idx').on(t.ownerUserId, t.createdAt)]);
+
+export const bulkImportItems = pgTable('bulk_import_items', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  importId: uuid('import_id').notNull().references(() => bulkImports.id, { onDelete: 'cascade' }),
+  /** Its place in the file, so the review table keeps the file's order. */
+  position: integer('position').notNull(),
+  /** The identifier as found in the file. */
+  raw: text('raw').notNull(),
+  /** 'pending' | 'created' | 'exists' | 'not-found' | 'wrong-module' | 'not-yours' | 'error' */
+  status: text('status').notNull().default('pending'),
+  recordId: uuid('record_id').references(() => records.id, { onDelete: 'set null' }),
+  message: text('message'),
+}, (t) => [index('bulk_items_import_idx').on(t.importId, t.position)]);
+
+/**
+ * A researcher's figures on one day, from one source: Scopus (fetched with the person's Scopus
+ * Author ID) or Web of Science (typed by the person, with a screenshot). Kept as history, one row
+ * per person, source and day, so a trend can be shown.
+ */
+export const researcherMetrics = pgTable('researcher_metrics', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull().references(() => users.id),
+  /** 'scopus' | 'scopus-typed' (typed by the person, with a screenshot) | 'wos' | 'openalex' */
+  source: text('source').notNull(),
+  asOf: date('as_of').notNull(),
+  documents: integer('documents'),
+  citations: integer('citations'),
+  /** Null when not known: Scopus without Elsevier's Citation Overview, or WoS not typed. */
+  citationsExclSelf: integer('citations_excl_self'),
+  hIndex: integer('h_index'),
+  hIndexExclSelf: integer('h_index_excl_self'),
+  /** Where the figures came from: the evidence file of a typed WoS row, notes from Elsevier. */
+  raw: jsonb('raw'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex('researcher_metrics_once').on(t.userId, t.source, t.asOf)]);
+
+/** Small settings IQAC can change, by key (e.g. the research-quality thresholds). */
+export const appSettings = pgTable('app_settings', {
+  key: text('key').primaryKey(),
+  value: jsonb('value').notNull(),
+  updatedBy: uuid('updated_by').references(() => users.id),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * A named view of a module's records (conditions, sort, grouping, shown columns). Personal, or shared by
+ * IQAC with everyone who can open the module.
+ */
+export const savedViews = pgTable('saved_views', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  moduleKey: text('module_key').notNull(),
+  ownerUserId: uuid('owner_user_id').notNull().references(() => users.id),
+  name: text('name').notNull(),
+  shared: boolean('shared').notNull().default(false),
+  view: jsonb('view').notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('saved_views_module_idx').on(t.moduleKey, t.ownerUserId)]);
 
 /* ───────────────────────────── relations ───────────────────────── */
 

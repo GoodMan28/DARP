@@ -13,7 +13,7 @@ export const GET = withRoute(
   { allowPendingPasswordChange: true, rate: { limit: 240, windowSeconds: 60 } },
   async ({ actor }) => {
     const cycle = await getActiveCycle();
-    const groups = actor.mustChangePassword ? [] : await getSidebarGroups(actor, cycle.id);
+    const groups = actor.mustChangePassword ? [] : await getSidebarGroups(actor);
 
     // `sessionId` stays on the server: it is the session's database key.
     const { sessionId: _sessionId, ...user } = actor;

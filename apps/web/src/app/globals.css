@@ -14,21 +14,21 @@
   --font-mono: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas,
     "Liberation Mono", monospace;
 
-  --text-2xs: 0.6875rem;   /* 11px — table meta, pill text */
+  --text-2xs: 0.8125rem;   /* 13px — table meta, pill text */
   --text-2xs--line-height: 1rem;
-  --text-xs: 0.75rem;      /* 12px — help text, captions */
+  --text-xs: 0.875rem;     /* 14px — help text, captions */
   --text-xs--line-height: 1.125rem;
-  --text-sm: 0.8125rem;    /* 13px — table body */
+  --text-sm: 0.9375rem;    /* 15px — table body */
   --text-sm--line-height: 1.25rem;
-  --text-base: 0.875rem;   /* 14px — app body */
+  --text-base: 1rem;        /* 16px — app body */
   --text-base--line-height: 1.5rem;
   --text-md: 1rem;
   --text-md--line-height: 1.5rem;
   --text-lg: 1.125rem;
   --text-lg--line-height: 1.625rem;
-  --text-xl: 1.375rem;
+  --text-xl: 1.5rem;
   --text-xl--line-height: 1.875rem;
-  --text-2xl: 1.75rem;
+  --text-2xl: 1.875rem;
   --text-2xl--line-height: 2.125rem;
   --text-3xl: 2.25rem;
   --text-3xl--line-height: 2.5rem;
@@ -154,50 +154,12 @@
   --c-line-strong: var(--color-ink-400);
   --c-ink: var(--color-ink-900);
   --c-ink-muted: var(--color-ink-600);
-  --c-ink-faint: var(--color-ink-500);
+  --c-ink-faint: var(--color-ink-600);   /* same as muted: the lighter grey failed contrast */
   --c-ink-invert: #ffffff;
   --c-primary: var(--color-brand-700);
   --c-primary-hover: var(--color-brand-800);
   --c-primary-soft: var(--color-brand-50);
   --c-focus: var(--color-brand-500);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    color-scheme: dark;
-    --c-canvas: #0b0a20;
-    --c-surface: #14132e;
-    --c-surface-2: #1b1a3a;
-    --c-surface-inset: #1b1a3a;
-    --c-line: #2d2b52;
-    --c-line-strong: #3d3a68;
-    --c-ink: #e8e9f2;
-    --c-ink-muted: #a9adc4;
-    --c-ink-faint: #868ba6;
-    --c-ink-invert: #0b0a20;
-    --c-primary: #a8a3e0;
-    --c-primary-hover: #c0bcea;
-    --c-primary-soft: #221f4d;
-    --c-focus: #a8a3e0;
-  }
-}
-
-:root[data-theme="dark"] {
-  color-scheme: dark;
-  --c-canvas: #0b0a20;
-  --c-surface: #14132e;
-  --c-surface-2: #1b1a3a;
-  --c-surface-inset: #1b1a3a;
-  --c-line: #2d2b52;
-  --c-line-strong: #3d3a68;
-  --c-ink: #e8e9f2;
-  --c-ink-muted: #a9adc4;
-  --c-ink-faint: #868ba6;
-  --c-ink-invert: #0b0a20;
-  --c-primary: #a8a3e0;
-  --c-primary-hover: #c0bcea;
-  --c-primary-soft: #221f4d;
-  --c-focus: #a8a3e0;
 }
 
 /* ============================================================

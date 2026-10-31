@@ -10,7 +10,13 @@
     "./format": "./src/format.ts",
     "./roles": "./src/roles.ts",
     "./contracts": "./src/contracts.ts",
-    "./journals": "./src/journals.ts"
+    "./journals": "./src/journals.ts",
+    "./projectPeriod": "./src/projectPeriod.ts",
+    "./reports": "./src/reports.ts",
+    "./research": "./src/research.ts",
+    "./views": "./src/views.ts",
+    "./names": "./src/names.ts",
+    "./sheets": "./src/sheets.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

@@ -10,7 +10,7 @@ export default function NotFound() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-canvas px-4">
       <div className="max-w-md rounded-sm border border-line bg-surface p-6 text-center">
-        <p className="font-mono text-2xs font-bold uppercase tracking-wider text-ink-faint">404</p>
+        <p className="font-mono text-xs font-semibold text-ink-muted">404</p>
         <h1 className="mt-1 text-lg font-semibold text-ink">This page cannot be opened</h1>
         <p className="mt-2 text-sm text-ink-muted">
           It does not exist, or it is not yours to open — a record entered by someone else, or a module

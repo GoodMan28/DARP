@@ -21,7 +21,7 @@ export const PATCH = withRoute(
   },
 );
 
-export const DELETE = withRoute({ rate: { limit: 30, windowSeconds: 60 } }, async ({ actor, params }) => {
-  try { return ok(await deleteRecord(actor, params.moduleKey!, params.id!)); }
+export const DELETE = withRoute({ rate: { limit: 30, windowSeconds: 60 } }, async ({ actor, params, query }) => {
+  try { return ok(await deleteRecord(actor, params.moduleKey!, params.id!, query.get('reason') ?? undefined)); }
   catch (e) { return toResponse(e); }
 });

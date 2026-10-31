@@ -36,6 +36,76 @@
       "when": 1791795207157,
       "tag": "0004_breezy_talos",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1793209211661,
+      "tag": "0005_productive_cammi",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793211010566,
+      "tag": "0006_cynical_shard",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1793226203439,
+      "tag": "0007_worried_khan",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1793226229942,
+      "tag": "0008_spooky_pyro",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1793231584387,
+      "tag": "0009_perpetual_mother_askani",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1793231590935,
+      "tag": "0010_abnormal_lilith",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1793294204639,
+      "tag": "0011_person_names",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1793310261563,
+      "tag": "0012_bulk_imports",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1793339544574,
+      "tag": "0013_researcher_metrics",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1793347663797,
+      "tag": "0014_saved_views",
+      "breakpoints": true
     }
   ]
 }

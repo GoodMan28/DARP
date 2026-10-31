@@ -57,12 +57,24 @@ function fieldSchema(f: FieldConfig, lists: Record<string, string[]>): z.ZodType
         .transform((v) => v.replace(/[,\s₹]/g, ''))
         .refine((v) => /^\d+$/.test(v), 'Enter the amount in rupees, digits only.')
         .refine((v) => Number(v) <= 10_000_000_000, 'That amount looks too large.');
-    case 'year':
-      return z.coerce.number().int().min(1950, 'Year looks too early.').max(2100, 'Year looks too far ahead.');
+    case 'decimal':
+      // A number only ("3", "1.5"), never text such as "7 years".
+      return z.string().trim()
+        .refine((v) => /^\d+(\.\d)?$/.test(v), 'Enter a number only, for example 3 or 1.5.')
+        .refine((v) => Number(v) >= (f.min ?? 0), `Must be at least ${f.min ?? 0}.`)
+        .refine((v) => Number(v) <= (f.max ?? 1000), `Must be at most ${f.max ?? 1000}.`);
+    case 'year': {
+      const latest = f.notFuture ? new Date().getUTCFullYear() : 2100;
+      return z.coerce.number().int().min(1950, 'Year looks too early.')
+        .max(latest, f.notFuture ? 'This year is in the future.' : 'Year looks too far ahead.');
+    }
     case 'date':
       return z.string().trim().refine(
         (v) => v === '' || !Number.isNaN(new Date(v).getTime()),
         'Enter a valid date.',
+      ).refine(
+        (v) => v === '' || !f.notFuture || new Date(v).getTime() <= Date.now() + 24 * 3600 * 1000,
+        'This date is in the future.',
       );
     case 'checkbox':
       return z.boolean();
@@ -88,8 +100,9 @@ function fieldSchema(f: FieldConfig, lists: Record<string, string[]>): z.ZodType
 
 function isVisible(f: FieldConfig, data: Record<string, unknown>): boolean {
   if (!f.showIf) return true;
+  // As the form compares it: a checkbox reads 'true' or 'false', a missing value ''.
   const actual = data[f.showIf.field];
-  return typeof actual === 'string' && f.showIf.in.includes(actual);
+  return ['string', 'boolean', 'undefined'].includes(typeof actual) && f.showIf.in.includes(String(actual ?? ''));
 }
 
 export interface ValidationResult {

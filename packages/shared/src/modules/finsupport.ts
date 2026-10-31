@@ -1,5 +1,6 @@
 // src/modules/finsupport.ts
 import type { ModuleConfig } from './_types';
+import { FACULTY_MEMBERS } from './_types';
 
 export const finsupport: ModuleConfig = {
   key: 'finsupport',
@@ -10,18 +11,18 @@ export const finsupport: ModuleConfig = {
   bodies: ['NAAC'],
   description:
     'Institute support for attending conferences and workshops, and for professional-body membership fees. Minimum ₹5,000 per teacher per year.',
-  ownerRoles: ['faculty'],
+  ownerRoles: FACULTY_MEMBERS,
   verifierRoles: ['dofa'],
   viewRoles: ['hod', 'dofa', 'admin'],
   scope: 'self',
-  naturalKey: ['title', 'supportYear'],
+  naturalKey: ['title', 'supportDate'],
   fields: [
     { key: 'purpose', label: 'Purpose of financial support', type: 'select', required: true,
       listKey: 'finSupportPurpose', section: 'Support',
       exportAs: { faculty: 'Purpose of financial support', dofa: 'Purpose of financial support' } },
 
-    { key: 'supportYear', label: 'Year in which support provided', type: 'year', required: true,
-      min: 1990, max: 2100, section: 'Support',
+    { key: 'supportDate', label: 'Date the support was received', type: 'date', required: true,
+      notFuture: true, periodSource: true, exportYear: true, section: 'Support',
       exportAs: {
         faculty: 'Year in which support provided (FY 2024, 2023, 2022)',
         dofa: 'Year in which support provided (FY 2024, 2023, 2022)',
@@ -64,15 +65,15 @@ export const finsupport: ModuleConfig = {
       } },
 
     { key: 'evidence', label: 'Attach documents', type: 'file',
-      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence',
+      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Evidence',
       help: 'E-copy of the approval letter indicating financial assistance.',
       exportAs: {
         faculty: 'Attach documents (e-copy of approval letter indicating financial assistance)',
         dofa: 'Attach documents (e-copy of approval letter indicating financial assistance)',
       } },
   ],
-  listColumns: ['title', 'purpose', 'type', 'amount', 'supportYear'],
-  defaultSort: { key: 'supportYear', dir: 'desc' },
+  listColumns: ['title', 'purpose', 'type', 'amount', 'supportDate'],
+  defaultSort: { key: 'supportDate', dir: 'desc' },
   exportTargets: [
     { workbook: 'faculty', sheet: 'Fin. support' },
     { workbook: 'dofa', sheet: 'Fin. support' },

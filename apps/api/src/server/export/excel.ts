@@ -1,18 +1,27 @@
 import ExcelJS from 'exceljs';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, between, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from '@/server/db';
 import { records, users, departments, evidenceFiles } from '@/server/db/schema';
-import type { WorkbookKey } from '@darp/shared/modules/types';
+import type { PeriodType, WorkbookKey } from '@darp/shared/modules/types';
+import type { ReportYearType } from '@darp/shared/reports';
+import { labelFor } from '@/server/records/periods';
 import { getModule } from '@darp/shared/modules';
 import { scopeFilter } from '@/server/records/scope';
+import type { YearRange } from '@/server/records/range';
 import type { SessionUser } from '@/server/auth/session';
 import { decryptPii, isEncrypted, maskAadhaar, maskPan } from '@/server/crypto/pii';
 import { log } from '@/server/log';
+import { derivedValues } from '@/server/journals/ranking';
 import {
-  buildPlans, plannedHeaders, norm, amountInWords, EXPORTABLE_STATUSES, type SheetPlan,
+  buildPlans, plannedHeaders, norm, amountInWords, EXPORTABLE_STATUSES, DERIVED_PREFIX, PROFILE_FORM_FIGURES, type SheetPlan,
 } from './mapping';
+import {
+  findTableHeader, addMissingHeaders, headerSpan, tableEnd, insertRows, retitleSheet, findLabelRow, textOf, withoutLetter,
+} from './template';
+import { figuresForUsers } from '@/server/rollups/completion';
+import { defaultRange } from '@/server/records/range';
 
 const TEMPLATE_DIR = process.env.EXPORT_TEMPLATE_DIR ?? 'templates';
 
@@ -25,11 +34,21 @@ const TEMPLATE_DIR = process.env.EXPORT_TEMPLATE_DIR ?? 'templates';
 export type ExportMode = 'template' | 'generated';
 
 export interface ExportOptions {
-  cycleId: string;
+  /** Only records whose reporting year falls in this range (default: every year). */
+  range?: YearRange;
   /** Plaintext Aadhaar/PAN. Admin only, audited by the caller, and never the default. */
   includePii: boolean;
   /** Restrict to one department (used by an HOD export). */
   departmentId?: string | null;
+  /** Restrict to these departments (a report's department filter). */
+  departmentIds?: string[] | null;
+  /** Only these modules' sheets (a report's module filter). */
+  moduleKeys?: string[] | null;
+  /**
+   * The year type the range is read in: 'auto' (the default) uses each module's own type, so a
+   * sheet of publications is by calendar year and one of grants by financial year.
+   */
+  yearType?: ReportYearType;
   /**
    * Whose export this is. When present, every row query is additionally constrained by
    * `scopeFilter()`, so the exporter can never widen what a role may see — even if the
@@ -60,28 +79,8 @@ export function hasTemplate(workbookKey: WorkbookKey): boolean {
 
 /* ─────────────────────────────── cell helpers ─────────────────────────────── */
 
-/** `cell.text` already flattens rich text and formula results; `value` is the fallback. */
-function cellText(cell: ExcelJS.Cell): string {
-  const t: unknown = cell.text;
-  if (typeof t === 'string') return t;
-  const v: unknown = cell.value;
-  if (v === null || v === undefined) return '';
-  if (typeof v === 'object') return '';
-  return String(v);
-}
-
-/** Finds the row that holds the column headings, tolerating title and instruction rows above it. */
-function findHeaderRow(sheet: ExcelJS.Worksheet, headers: string[]): number | null {
-  const wanted = headers.map(norm).filter((h) => h.length > 0);
-  if (wanted.length === 0) return null;
-  for (let r = 1; r <= Math.min(sheet.rowCount, 15); r++) {
-    const values = new Set<string>();
-    sheet.getRow(r).eachCell({ includeEmpty: false }, (cell) => values.add(norm(cellText(cell))));
-    const hits = wanted.filter((w) => values.has(w)).length;
-    if (hits >= Math.max(1, Math.ceil(wanted.length * 0.5))) return r;
-  }
-  return null;
-}
+/** `cell.text` flattens rich text and formula results; an empty part of a merged range reads ''. */
+const cellText = textOf;
 
 function headerIndex(sheet: ExcelJS.Worksheet, headerRow: number): Map<string, number> {
   const map = new Map<string, number>();
@@ -153,6 +152,12 @@ export interface ExportRow {
   ownerName: string;
   department: string;
   profile: Record<string, string>;
+  /** The record's reporting year, written where a template asks for a year but the record holds a date. */
+  periodYear?: number;
+  /** That year as a label in the report's year type: "2023", "FY 2023-24", "AY 2023-24". */
+  periodLabel?: string;
+  /** The Faculty Profile form only: the owner's counted and declared figures, by counter key. */
+  figures?: Record<string, number>;
 }
 
 interface PiiContext { includePii: boolean; revealed: number }
@@ -181,21 +186,33 @@ async function fetchExportRows(
 ): Promise<ExportRow[]> {
   const where = [
     eq(records.moduleKey, plan.moduleKey),
-    eq(records.cycleId, opts.cycleId),
     isNull(records.deletedAt),
     inArray(records.status, EXPORTABLE_STATUSES),
   ];
+  const own = getModule(plan.moduleKey)?.periodType ?? 'CY';
+  const type = yearTypeFor(own, opts.yearType);
+  // The module's own year type is its reporting year. Another type needs a full date: a record
+  // dated by year alone has no FY or AY of its own, and is left out rather than guessed.
+  const yearColumn = type === own ? records.periodYear
+    : type === 'CY' ? records.cyYear : type === 'FY' ? records.fyYear : records.ayYear;
+  // The Faculty Profile is not dated: it is one record per person, whatever the range.
+  if (opts.range && getModule(plan.moduleKey)?.periodic !== false) {
+    where.push(between(yearColumn, opts.range.from, opts.range.to));
+  }
   if (opts.departmentId) where.push(eq(records.departmentId, opts.departmentId));
+  if (opts.departmentIds?.length) where.push(inArray(records.departmentId, opts.departmentIds));
   // Deny-by-default: the exporter sees no more than the caller's own scope.
   if (opts.actor) {
     const m = getModule(plan.moduleKey);
     if (!m) return [];
-    where.push(scopeFilter(opts.actor, m, opts.cycleId));
+    where.push(scopeFilter(opts.actor, m));
   }
 
   const rows = await db
     .select({
       data: records.data,
+      periodYear: records.periodYear,
+      year: yearColumn,
       ownerUserId: records.ownerUserId,
       ownerName: users.name,
       department: departments.name,
@@ -204,7 +221,7 @@ async function fetchExportRows(
     .innerJoin(users, eq(users.id, records.ownerUserId))
     .leftJoin(departments, eq(departments.id, records.departmentId))
     .where(and(...where))
-    .orderBy(records.periodYear, records.createdAt);
+    .orderBy(yearColumn, records.createdAt);
 
   const filtered = rows.filter((r) => {
     if (!plan.rowFilter) return true;
@@ -222,7 +239,6 @@ async function fetchExportRows(
         .from(records)
         .where(and(
           eq(records.moduleKey, 'profile'),
-          eq(records.cycleId, opts.cycleId),
           isNull(records.deletedAt),
           inArray(records.ownerUserId, owners),
         ));
@@ -236,12 +252,29 @@ async function fetchExportRows(
     }
   }
 
-  return filtered.map((r) => ({
-    data: r.data as Record<string, unknown>,
-    ownerName: r.ownerName,
-    department: r.department ?? '',
-    profile: profiles.get(r.ownerUserId) ?? {},
-  }));
+  // The Faculty Profile form carries each person's figures for the report's years. Only people
+  // whose profile this export already reads (the rows above, scoped by scopeFilter) are counted.
+  const figures = plan.layout === 'profileForm'
+    ? await figuresForUsers([...new Set(filtered.map((r) => r.ownerUserId))], opts.range ?? await defaultRange())
+    : null;
+
+  return filtered.map((r) => {
+    const year = r.year ?? r.periodYear;
+    return {
+      data: r.data as Record<string, unknown>,
+      ownerName: r.ownerName,
+      department: r.department ?? '',
+      periodYear: year,
+      periodLabel: labelFor(year, type),
+      profile: profiles.get(r.ownerUserId) ?? {},
+      figures: figures?.get(r.ownerUserId),
+    };
+  });
+}
+
+/** The year type a sheet is read in: its module's own, unless the report asks for one type throughout. */
+export function yearTypeFor(own: PeriodType, asked: ReportYearType | undefined): PeriodType {
+  return !asked || asked === 'auto' ? own : asked;
 }
 
 function digits(raw: unknown): number {
@@ -257,7 +290,7 @@ async function renderValue(
   const m = getModule(plan.moduleKey);
   const field = m?.fields.find((f) => f.key === fieldKey);
   const raw = row.data[fieldKey];
-  if (raw === undefined || raw === null || raw === '') return '';
+  if (raw === undefined || raw === null || raw === '') return field?.naWhenEmpty ? 'NA' : '';
 
   if (field?.pii === 'encrypted') {
     return presentPii(raw, field.type === 'pan' ? 'pan' : 'aadhaar', ctx);
@@ -269,6 +302,9 @@ async function renderValue(
     return divisor === 1 ? n : n / divisor;
   }
 
+  if (field?.exportYear && row.periodYear && !plan.rawDates) return row.periodYear;
+  // "1 year", "1.5 years", "3 years".
+  if (field?.type === 'decimal') return field.unit ? `${raw} ${Number(raw) === 1 ? field.unit.replace(/s$/, '') : field.unit}` : String(raw);
   if (field?.type === 'integer') return digits(raw);
 
   if (field?.type === 'file') {
@@ -282,6 +318,7 @@ async function renderValue(
     return ev ? `${ev.name} (evidence id ${ev.id})` : '';
   }
 
+  if (typeof raw === 'boolean') return raw ? 'Yes' : 'No';
   if (Array.isArray(raw)) return raw.map((v) => String(v)).join(', ');
   return String(raw);
 }
@@ -296,58 +333,94 @@ type RowLoader = (plan: SheetPlan) => Promise<ExportRow[]>;
  * only `loadWorkbook`/`ensureGeneratedSheet`, not the row logic.
  */
 export async function writeWorkbook(
-  workbookKey: WorkbookKey, opts: ExportOptions, loadRows: RowLoader, ctx: PiiContext,
+  workbookKey: WorkbookKey | 'full', opts: ExportOptions, loadRows: RowLoader, ctx: PiiContext,
+  /** The sheets to write; by default the workbook's own (a Full data report passes its own). */
+  givenPlans?: SheetPlan[],
 ): Promise<ExportResult> {
-  const mode: ExportMode = hasTemplate(workbookKey) ? 'template' : 'generated';
+  const mode: ExportMode = workbookKey !== 'full' && hasTemplate(workbookKey) ? 'template' : 'generated';
   const wb = new ExcelJS.Workbook();
   wb.creator = 'DARP — BIT Mesra';
   wb.created = new Date();
 
-  if (mode === 'template') {
+  if (mode === 'template' && workbookKey !== 'full') {
     // Read-only: the file on disk is never written back.
     await wb.xlsx.readFile(templatePath(workbookKey));
   }
 
-  const plans = buildPlans().filter((p) => p.workbook === workbookKey);
+  const plans = (givenPlans ?? buildPlans().filter((p) => p.workbook === workbookKey))
+    .filter((p) => !opts.moduleKeys?.length || opts.moduleKeys.includes(p.moduleKey));
   const problems: string[] = [];
   let sheetsWritten = 0;
   let rowsWritten = 0;
+  /** In each sheet, the last row a table used: a second table is looked for below it. */
+  const usedTo = new Map<string, number>();
+  const filled = new Set<string>();
 
   for (const plan of plans) {
     const allHeaders = plannedHeaders(plan);
-    const sheet = mode === 'generated'
-      ? ensureGeneratedSheet(wb, plan)
-      : wb.getWorksheet(plan.sheet);
-    if (!sheet) {
-      problems.push(`sheet "${plan.sheet}" not found in ${workbookKey}.xlsx`);
+    // A module IQAC's format has no sheet for yet (Outreach Activities) gets one built like a generated
+    // sheet, after the format's own sheets and before "About this report".
+    const own = mode === 'template' ? wb.getWorksheet(plan.sheet) : undefined;
+    const sheet = mode === 'generated' || !own ? ensureGeneratedSheet(wb, plan) : own;
+    if (mode === 'template' && !own) log.info('export: sheet added to the format', { workbookKey, sheet: plan.sheet });
+    const builtHere = mode === 'generated' || !own;
+    filled.add(sheet.name);
+
+    // A format file that is not laid out as a table (the Faculty Profile form and two HOD sheets).
+    if (!builtHere && plan.layout && plan.layout !== 'table') {
+      const rows = await loadRows(plan);
+      rowsWritten += await writeLaidOut(sheet, plan, rows, ctx, problems);
+      if (opts.range) retitleSheet(sheet, opts.range);
+      sheetsWritten += 1;
       continue;
     }
 
-    const headerRow = mode === 'generated' ? 1 : findHeaderRow(sheet, allHeaders);
+    const headerRow = builtHere ? 1 : findTableHeader(sheet, allHeaders, usedTo.get(sheet.name) ?? 0);
     if (!headerRow) {
       problems.push(`header row not found for ${plan.moduleKey} in ${plan.sheet}`);
       continue;
     }
 
     const index = headerIndex(sheet, headerRow);
-    for (const header of allHeaders) {
-      if (!index.has(norm(header))) {
-        // Loud by design: a mismapped column must never be discovered by the accreditation cell.
-        problems.push(`column "${header}" missing from ${workbookKey}/${plan.sheet}`);
-      }
+    if (!builtHere) {
+      // Columns DARP keeps that the format file has not got yet (an award's validity, a patent's
+      // grant date, the journal's quartile) go to the right of its table rather than being dropped.
+      const added = addMissingHeaders(sheet, headerRow, allHeaders, index);
+      if (added.length) log.info('export: columns added to the format', { workbookKey, sheet: plan.sheet, added });
     }
 
     const rows = await loadRows(plan);
-    let writeAt = firstEmptyRowAfter(sheet, headerRow);
+    // The journal's indexing, quartile and Impact Factor: worked out for the whole sheet at once.
+    const m = getModule(plan.moduleKey);
+    const derived = m && plan.columns.some((c) => c.fieldKey.startsWith(DERIVED_PREFIX))
+      ? await derivedValues(m, rows.map((r, i) => ({ key: String(i), data: r.data })))
+      : new Map<string, Record<string, string>>();
+
+    let writeAt: number;
+    if (!builtHere) {
+      // The rows go straight under the headings. When something follows the table (a second
+      // table, notes), rows are inserted so the records never run into it, leaving one blank row.
+      writeAt = headerRow + 1;
+      // Only the table's own columns: Student Workshops has a second table (B) beside it, whose first
+      // question shares the heading row; it must not be pushed down when table A grows.
+      const cols = allHeaders.map((h) => index.get(norm(h))).filter((c): c is number => !!c);
+      const end = tableEnd(sheet, headerRow, cols.length ? { first: Math.min(...cols), last: Math.max(...cols) } : headerSpan(sheet, headerRow));
+      const needed = writeAt + rows.length + 1;
+      if (end !== null && rows.length > 0 && end < needed) insertRows(sheet, end, needed - end);
+    } else {
+      writeAt = firstEmptyRowAfter(sheet, headerRow);
+    }
     let serial = 1;
 
-    for (const r of rows) {
+    for (const [i, r] of rows.entries()) {
       const row = sheet.getRow(writeAt++);
 
       for (const col of plan.columns) {
         const at = index.get(norm(col.header));
         if (!at) continue;
-        row.getCell(at).value = await renderValue(plan, col.fieldKey, r, ctx);
+        row.getCell(at).value = col.fieldKey.startsWith(DERIVED_PREFIX)
+          ? derived.get(String(i))?.[col.fieldKey.slice(DERIVED_PREFIX.length)] ?? ''
+          : await renderValue(plan, col.fieldKey, r, ctx);
       }
 
       for (const col of plan.fromProfile ?? []) {
@@ -363,6 +436,7 @@ export async function writeWorkbook(
         if (col.kind === 'serial') row.getCell(at).value = serial;
         else if (col.kind === 'ownerName') row.getCell(at).value = r.ownerName;
         else if (col.kind === 'department') row.getCell(at).value = r.department;
+        else if (col.kind === 'period') row.getCell(at).value = r.periodLabel ?? r.periodYear ?? '';
         else if (col.kind === 'amountInWords') {
           row.getCell(at).value = amountInWords(digits(r.data.earnings));
         }
@@ -372,6 +446,7 @@ export async function writeWorkbook(
       serial += 1;
       rowsWritten += 1;
     }
+    usedTo.set(sheet.name, Math.max(headerRow, writeAt - 1));
 
     // Summary cells: the value goes in the cell immediately right of its label.
     for (const cell of plan.summaryCells ?? []) {
@@ -379,7 +454,7 @@ export async function writeWorkbook(
       const found = findLabelCell(sheet, cell.label);
       if (found) {
         sheet.getRow(found.row).getCell(found.col + 1).value = total;
-      } else if (mode === 'generated') {
+      } else if (builtHere) {
         // No template to carry the label, so the generated sheet writes it below the data.
         const at = firstEmptyRowAfter(sheet, headerRow) + 1;
         const summary = sheet.getRow(at);
@@ -392,7 +467,18 @@ export async function writeWorkbook(
       }
     }
 
+    // The format's own years ("data for 2024, 2023, 2022") become the report's.
+    if (opts.range) retitleSheet(sheet, opts.range, headerRow);
     sheetsWritten += 1;
+  }
+
+  // A format file's sheets that this export does not fill (a module outside the caller's office)
+  // are taken out, so the file holds only what was asked for and may be shown.
+  if (mode === 'template' && givenPlans && workbookKey !== 'full') {
+    const own = new Set(buildPlans().filter((p) => p.workbook === workbookKey).map((p) => p.sheet));
+    for (const ws of [...wb.worksheets]) {
+      if (own.has(ws.name) && !filled.has(ws.name)) wb.removeWorksheet(ws.id);
+    }
   }
 
   if (problems.length) {
@@ -403,12 +489,116 @@ export async function writeWorkbook(
   return { workbook: wb, mode, piiRevealed: ctx.revealed, sheetsWritten, rowsWritten };
 }
 
+/**
+ * Fills a format sheet that is not a table. Returns the number of records written.
+ *  - profileForm: column A holds the questions; each person gets the next free column (B, C, …).
+ *  - columnsPerRecord: the questions run down one column; each record gets a column to its right.
+ *  - feedbackGrid: Yes under the classification chosen and No under the others, the links below.
+ */
+async function writeLaidOut(
+  sheet: ExcelJS.Worksheet, plan: SheetPlan, rows: ExportRow[], ctx: PiiContext, problems: string[],
+): Promise<number> {
+  if (plan.layout === 'profileForm') {
+    const fieldRows = plan.columns.map((c) => ({ c, row: findLabelRow(sheet, 1, c.header) }));
+    const figureRows = PROFILE_FORM_FIGURES.map((f) => ({ f, row: findLabelRow(sheet, 1, f.starts) }));
+    for (const x of [...fieldRows.filter((y) => !y.row).map((y) => y.c.header), ...figureRows.filter((y) => !y.row).map((y) => y.f.starts)]) {
+      problems.push(`row "${x.slice(0, 60)}" not found in the ${plan.sheet} form`);
+    }
+    const width = sheet.getColumn(2).width ?? 30;
+    for (const [i, r] of rows.entries()) {
+      const col = 2 + i;
+      sheet.getColumn(col).width = width;
+      for (const { c, row } of fieldRows) if (row) sheet.getRow(row).getCell(col).value = await renderValue(plan, c.fieldKey, r, ctx);
+      for (const { f, row } of figureRows) {
+        if (!row) continue;
+        const v = r.figures?.[f.key];
+        sheet.getRow(row).getCell(col).value = v === undefined ? '' : f.yesNo ? (v > 0 ? 'Yes' : 'No') : v;
+      }
+    }
+    return rows.length;
+  }
+
+  if (plan.layout === 'columnsPerRecord') {
+    const first = plan.columns[0];
+    let labelCol = 0;
+    sheet.eachRow((row) => row.eachCell((c, col) => {
+      if (!labelCol && first && norm(textOf(c)) === norm(first.header)) labelCol = col;
+    }));
+    if (!labelCol) { problems.push(`labels not found in ${plan.sheet}`); return 0; }
+    const at = (header: string) => findLabelRow(sheet, labelCol, header);
+    const yearRow = plan.columns.find((c) => {
+      const f = getModule(plan.moduleKey)?.fields.find((x) => x.key === c.fieldKey);
+      return f?.exportYear || f?.type === 'year';
+    });
+    if (rows.length === 0 && yearRow) {
+      // No record: the format's sample year must not be read as data.
+      const r = at(yearRow.header);
+      if (r) sheet.getRow(r).getCell(labelCol + 1).value = '';
+    }
+    for (const [i, r] of rows.entries()) {
+      const col = labelCol + 1 + i;
+      for (const c of plan.columns) {
+        const row = at(c.header);
+        if (!row) continue;
+        const f = getModule(plan.moduleKey)?.fields.find((x) => x.key === c.fieldKey);
+        // A financial year is written as the format writes it: "2024-25".
+        const fyYear = (f?.exportYear || f?.type === 'year') && getModule(plan.moduleKey)?.periodType !== 'CY';
+        sheet.getRow(row).getCell(col).value = fyYear && r.periodYear
+          ? `${r.periodYear}-${String(r.periodYear + 1).slice(-2)}`
+          : await renderValue(plan, c.fieldKey, r, ctx);
+      }
+      for (const s of plan.systemColumns ?? []) {
+        if (s.kind !== 'amountInWords') continue;
+        const row = at(s.header);
+        if (row) sheet.getRow(row).getCell(col).value = amountInWords(digits(r.data.earnings));
+      }
+    }
+    // The department goes under its heading (one department per HOD return; several are listed).
+    const dept = (plan.systemColumns ?? []).find((s) => s.kind === 'department');
+    if (dept && rows.length) {
+      sheet.eachRow((row, n) => row.eachCell((c, col) => {
+        if (norm(textOf(c)) === norm(dept.header)) sheet.getRow(n + 1).getCell(col).value = [...new Set(rows.map((r) => r.department))].join(', ');
+      }));
+    }
+    return rows.length;
+  }
+
+  // feedbackGrid: the headings row is the one naming the last classification.
+  let headerRow = 0;
+  const options = new Map<string, number>();
+  sheet.eachRow((row, n) => {
+    if (headerRow) return;
+    row.eachCell((c) => { if (norm(textOf(c)) === 'feedback not collected') headerRow = n; });
+  });
+  if (!headerRow) { problems.push(`classifications not found in ${plan.sheet}`); return 0; }
+  sheet.getRow(headerRow).eachCell((c, col) => { if (col > 1) options.set(withoutLetter(textOf(c)), col); });
+  for (const [i, r] of rows.entries()) {
+    const answerRow = sheet.getRow(headerRow + 1 + i * 2);
+    const linkRow = sheet.getRow(headerRow + 2 + i * 2);
+    const chosen = options.get(withoutLetter(String(r.data.classification ?? '')));
+    answerRow.getCell(1).value = r.department;
+    for (const col of options.values()) {
+      answerRow.getCell(col).value = col === chosen ? 'Yes' : 'No';
+      linkRow.getCell(col).value = col === chosen ? String(r.data.documentLinks ?? '') : '';
+    }
+  }
+  return rows.length;
+}
+
 /** The real export: exportable records only, straight from the database. */
 export async function generateWorkbook(
-  workbookKey: WorkbookKey, opts: ExportOptions,
+  workbookKey: WorkbookKey | 'full', opts: ExportOptions, plans?: SheetPlan[],
 ): Promise<ExportResult> {
   const ctx: PiiContext = { includePii: opts.includePii, revealed: 0 };
-  return writeWorkbook(workbookKey, opts, (plan) => fetchExportRows(plan, opts, ctx), ctx);
+  return writeWorkbook(workbookKey, opts, (plan) => fetchExportRows(plan, opts, ctx), ctx, plans);
+}
+
+/** How many rows each sheet would hold, without building the workbook (a report's preview). */
+export async function countExportRows(plans: SheetPlan[], opts: ExportOptions): Promise<number[]> {
+  const ctx: PiiContext = { includePii: false, revealed: 0 };
+  const out: number[] = [];
+  for (const plan of plans) out.push((await fetchExportRows(plan, opts, ctx)).length);
+  return out;
 }
 
 /** Used by the tests: the same writer, fed rows that never touch the database. */

@@ -5,8 +5,9 @@ import {
   Card, CardHeader, Eyebrow, LinkButton, Notice, EmptyState,
   Table, Th, Td, StatePill,
 } from '@/components/ui';
-import { IconPlus, IconChevronLeft, IconChevronRight, IconAlert } from '@/components/shell/Icon';
+import { IconPlus, IconUpload, IconChevronLeft, IconChevronRight, IconAlert } from '@/components/shell/Icon';
 import { ListControls } from '@/components/records/ListControls';
+import { ViewToolbar } from '@/components/views/ViewToolbar';
 import { NilDeclaration } from '@/components/records/NilDeclaration';
 import { requireMe, loadPageData } from '@/lib/api.server';
 import type { ModuleSchemaPayload, RecordListPayload } from '@darp/shared/contracts';
@@ -14,6 +15,8 @@ import { getModule } from '@darp/shared/modules';
 import { displayValue, formatDateTime, truncate, STATUS_LABEL } from '@darp/shared/format';
 import type { RecordStatus } from '@darp/shared/modules/types';
 import { cx } from '@/lib/cx';
+import { decodeView, conditionCount } from '@darp/shared/views';
+import { ROLE_LABEL } from '@darp/shared/roles';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,7 +33,7 @@ const PERIOD_WORD: Record<string, string> = {
   AY: 'academic year (July–June)',
 };
 
-const STATUS_ORDER: RecordStatus[] = ['draft', 'submitted', 'verified', 'approved', 'returned'];
+const STATUS_ORDER: RecordStatus[] = ['draft', 'approved', 'returned'];
 
 const CHIP_TONE: Record<RecordStatus, string> = {
   draft: 'border-line-strong bg-surface-inset text-ink-muted',
@@ -49,10 +52,12 @@ function isStatus(v: string): v is RecordStatus {
   return (STATUS_ORDER as string[]).includes(v);
 }
 
+const NOT_FILLED = 'border-line-strong bg-surface-inset text-ink-muted';
+
 /** A query string that keeps the current filters and changes only what is passed. */
 function buildQuery(
-  base: { q: string; status: string; year: string; page: number; check: boolean },
-  next: Partial<{ q: string; status: string; year: string; page: number; check: boolean }>,
+  base: { q: string; status: string; year: string; page: number; check: boolean; view: string },
+  next: Partial<{ q: string; status: string; year: string; page: number; check: boolean; view: string }>,
 ): string {
   const merged = { ...base, ...next };
   const p = new URLSearchParams();
@@ -60,6 +65,7 @@ function buildQuery(
   if (merged.status) p.set('status', merged.status);
   if (merged.year) p.set('year', merged.year);
   if (merged.check) p.set('check', '1');
+  if (merged.view) p.set('view', merged.view);
   if (merged.page > 1) p.set('page', String(merged.page));
   const s = p.toString();
   return s ? `?${s}` : '';
@@ -90,7 +96,9 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
 
   const q = one(sp.q);
   const statusParam = one(sp.status);
-  const status = isStatus(statusParam) ? statusParam : '';
+  // The Faculty Profile lists every person in reach, so "not filled yet" is a status there.
+  const isRoster = m.key === 'profile' && user.role !== 'faculty';
+  const status = isStatus(statusParam) || (isRoster && statusParam === 'none') ? statusParam : '';
   const year = one(sp.year);
   const yearNum = /^\d{4}$/.test(year) ? Number(year) : 0;
   const pageParam = Number(one(sp.page));
@@ -99,12 +107,15 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
   const deleted = one(sp.deleted) === '1';
   // Only records with points to check: a module whose records are checked against the publisher.
   const check = !!m.lookup && one(sp.check) === '1';
+  // The open view (conditions, sort, grouping, chosen fields): kept as written in the address, read by the server.
+  const viewParam = one(sp.view).slice(0, 20_000);
 
   const listQuery = new URLSearchParams({ page: String(page), pageSize: '20' });
   if (q) listQuery.set('q', q);
   if (status) listQuery.set('status', status);
   if (yearNum) listQuery.set('year', String(yearNum));
   if (check) listQuery.set('check', '1');
+  if (viewParam) listQuery.set('view', viewParam);
 
   // A role that may not open this module gets the 404 page from either request.
   const [schema, listed] = await Promise.all([
@@ -114,7 +125,7 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
 
   if (!cycle.id) {
     return (
-      <AppShell user={user} groups={groups} crumbs={crumbs} title={m.name} subtitle={subtitle} cycleName={cycle.name}>
+      <AppShell user={user} groups={groups} crumbs={crumbs} title={m.name} subtitle={subtitle}>
         <Notice tone="warning" title="No active reporting cycle">
           IQAC has not opened a reporting cycle yet, so records cannot be listed or added.
         </Notice>
@@ -125,7 +136,7 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
   if (!schema.ok || !listed?.ok) {
     const refusal = !schema.ok ? schema.message : listed && !listed.ok ? listed.message : null;
     return (
-      <AppShell user={user} groups={groups} crumbs={crumbs} title={m.name} subtitle={subtitle} cycleName={cycle.name}>
+      <AppShell user={user} groups={groups} crumbs={crumbs} title={m.name} subtitle={subtitle}>
         <Notice tone="warning" title="These records cannot be listed yet">{refusal}</Notice>
       </AppShell>
     );
@@ -133,22 +144,29 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
 
   const list = listed.data;
   const { counts, recordPeriods, canCreate } = schema.data;
+  const view = decodeView(viewParam, schema.data.viewColumns);
   // A module kept on its own page (the Faculty Profile) is never added to from the list.
   const mayCreate = canCreate && !m.managedAt;
-  const declaredNil = mayCreate && schema.data.declaredNil;
   const managedLink = m.managedAt && m.ownerRoles.includes(user.role) ? m.managedAt : null;
 
-  const base = { q, status, year, page, check };
+  const base = { q, status, year, page, check, view: viewParam };
   const pageCount = Math.max(1, Math.ceil(list.total / list.pageSize));
   const from = list.total === 0 ? 0 : (list.page - 1) * list.pageSize + 1;
   const to = Math.min(list.page * list.pageSize, list.total);
-  const filtered = !!(q || status || year || check);
+  const filtered = !!(q || status || year || check || conditionCount(view) > 0);
   const showOwner = list.rows.some((r) => !r.isMine);
 
-  const columns = m.listColumns.map((key) => {
+  const columns = (view.cols ?? m.listColumns).map((key) => {
     const field = m.fields.find((f) => f.key === key);
-    return { key, label: field?.label ?? key, type: field?.type ?? 'text' };
+    const derived = (m.derived ?? []).find((d) => d.key === key);
+    return { key, label: field?.label ?? derived?.label ?? key, type: field?.type ?? 'text', derived: !!derived };
   });
+  /** A cell's text: a stored field, or a value worked out by the server (the journal's ranking). */
+  const cellText = (row: (typeof list.rows)[number], c: (typeof columns)[number]) => (
+    c.derived ? row.derived[c.key] ?? ''
+      : (row.data[c.key] === undefined || row.data[c.key] === '') && m.fields.find((f) => f.key === c.key)?.naWhenEmpty ? 'NA'
+      : displayValue(row.data[c.key], c.type)
+  );
 
   return (
     <AppShell
@@ -157,12 +175,20 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
       crumbs={crumbs}
       title={m.name}
       subtitle={subtitle}
-      cycleName={cycle.name}
       actions={mayCreate ? (
-        <LinkButton href={`/m/${m.key}/new`}>
-          <IconPlus width={14} height={14} />
-          Add record
-        </LinkButton>
+        <div className="flex flex-wrap gap-2">
+          {/* A file of DOIs or patent numbers: modules that fetch their records from a register. */}
+          {m.lookup ? (
+            <LinkButton href={`/m/${m.key}/bulk`} variant="secondary">
+              <IconUpload width={14} height={14} />
+              Add many at once
+            </LinkButton>
+          ) : null}
+          <LinkButton href={`/m/${m.key}/new`}>
+            <IconPlus width={14} height={14} />
+            Add record
+          </LinkButton>
+        </div>
       ) : managedLink ? (
         <LinkButton href={managedLink.href} variant="secondary">{managedLink.label}</LinkButton>
       ) : null}
@@ -198,6 +224,21 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
               </li>
             );
           })}
+          {isRoster ? (
+            <li>
+              <a
+                href={`/m/${m.key}${buildQuery(base, { status: status === 'none' ? '' : 'none', page: 1 })}`}
+                aria-current={status === 'none' ? 'true' : undefined}
+                className={cx(
+                  'inline-flex min-h-9 items-center gap-1.5 rounded-sm border px-2.5 py-1 text-xs font-semibold no-underline',
+                  NOT_FILLED,
+                  status === 'none' && 'ring-1 ring-primary',
+                )}
+              >
+                Not filled yet
+              </a>
+            </li>
+          ) : null}
           {m.lookup ? (
             <li>
               <a
@@ -234,13 +275,28 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
           }
         />
 
+        {/* The profile roster (everyone in reach, filled in or not) is a different list: a view cannot filter it. */}
+        {isRoster ? null : (
+          <ViewToolbar
+            moduleKey={m.key}
+            columns={schema.data.viewColumns}
+            usualCols={m.listColumns}
+            view={view}
+            total={list.total}
+            base={{ q, status, year, check }}
+            isAdmin={user.role === 'admin'}
+          />
+        )}
+
         <ListControls
+          view={viewParam}
           moduleKey={m.key}
           moduleName={m.name}
           q={q}
           status={status}
           year={year}
           periods={recordPeriods}
+          roster={isRoster}
         />
 
         {list.rows.length === 0 ? (
@@ -249,12 +305,11 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
               title="No record matches these filters"
               action={<LinkButton href={`/m/${m.key}`} variant="secondary">Clear filters</LinkButton>}
             >
-              Widen the search, choose a different status, or clear the filters to see everything in
-              this cycle.
+              Widen the search, choose a different status, or clear the filters to see every record.
             </EmptyState>
           ) : (
             <EmptyState
-              title={`No ${m.name.toLowerCase()} recorded in this cycle`}
+              title={`No ${m.name.toLowerCase()} recorded yet`}
               action={mayCreate ? (
                 <LinkButton href={`/m/${m.key}/new`}>
                   <IconPlus width={14} height={14} />
@@ -272,7 +327,7 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
         ) : (
           <Table>
             <caption className="sr-only">
-              {m.name} records in {cycle.name}
+              {m.name} records
             </caption>
             <thead>
               <tr>
@@ -284,21 +339,38 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
               </tr>
             </thead>
             <tbody>
-              {list.rows.map((row) => {
+              {list.rows.map((row, idx) => {
                 const span = columns.length + 3 + (showOwner ? 1 : 0);
+                // A heading row where the group changes, with the group's size across every page.
+                const heading = view.groupBy && (idx === 0 || list.rows[idx - 1]!.group !== row.group) ? (
+                  <tr key={`${row.id}-group`}>
+                    <td colSpan={span} className="border-b border-line bg-surface-2 px-3 py-1.5 text-xs font-semibold text-ink">
+                      {row.group ?? '(none)'}
+                      <span className="ml-2 font-mono font-normal text-ink-muted">
+                        {list.groups?.find((g) => g.label === row.group)?.count ?? ''}
+                      </span>
+                    </td>
+                  </tr>
+                ) : null;
                 return [
+                  heading,
                   <tr key={row.id} className="hover:bg-surface-2">
                     {columns.map((c, i) => (
                       <Td key={c.key}>
-                        {i === 0 ? (
+                        {i === 0 && row.noRecord ? (
+                          <span className="font-semibold">{displayValue(row.ownerName)}</span>
+                        ) : i === 0 ? (
                           <a
                             href={`/m/${m.key}/${row.id}`}
                             className="font-semibold text-primary underline-offset-2 hover:underline"
                           >
-                            {truncate(displayValue(row.data[c.key], c.type), 80)}
+                            {truncate(cellText(row, c), 80)}
                           </a>
+                        ) : c.key === 'validUntil' && /expired|not given/.test(cellText(row, c)) ? (
+                          // An expired award or MoU, or one saved before its date or validity was asked for.
+                          <span className="text-ink-muted">{cellText(row, c)}</span>
                         ) : (
-                          truncate(displayValue(row.data[c.key], c.type), 60)
+                          truncate(cellText(row, c), 60)
                         )}
                       </Td>
                     ))}
@@ -306,7 +378,9 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
                       {row.periodLabel}
                     </Td>
                     <Td>
-                      <StatePill status={row.status} />
+                      {row.noRecord ? (
+                        <span className={cx('inline-flex rounded-sm border px-1.5 py-0.5 text-xs font-semibold', NOT_FILLED)}>Not filled yet</span>
+                      ) : <StatePill status={row.status} />}
                       {row.needsCheck ? (
                         <span
                           className="ml-1.5 inline-flex rounded-sm border border-warning-100 bg-warning-50 px-1.5 py-0.5 text-2xs font-semibold text-warning-700"
@@ -326,16 +400,18 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
                     </Td>
                   </tr>,
                   row.status === 'returned' && row.returnedRemark ? (
-                    <tr key={`${row.id}-remark`} className="bg-danger-50">
+                    <tr key={`${row.id}-remark`} className={row.isMine ? 'bg-danger-50' : 'bg-surface-2'}>
                       <td colSpan={span} className="border-b border-line px-3 py-2">
-                        <p className="flex items-start gap-1.5 text-xs text-danger-700">
+                        <p className={cx('flex items-start gap-1.5 text-xs', row.isMine ? 'text-danger-700' : 'text-ink-muted')}>
                           <IconAlert width={13} height={13} className="mt-0.5 shrink-0" />
                           <span>
-                            <span className="font-semibold">Returned for correction: </span>
-                            {row.returnedRemark}
-                            {' '}
-                            <a href={`/m/${m.key}/${row.id}`} className="font-semibold underline">
-                              Open and fix
+                            <span className="font-semibold">
+                              {row.isMine
+                                ? 'Returned for correction. '
+                                : `Returned to ${displayValue(row.ownerName)}${row.returnedByRole ? ` by ${ROLE_LABEL[row.returnedByRole]}` : ''}${row.returnedAt ? ` on ${formatDateTime(row.returnedAt)}` : ''}, waiting for them. `}
+                            </span>
+                            <a href={`/m/${m.key}/${row.id}#remark`} className="font-semibold underline">
+                              Click to see the remark
                             </a>
                           </span>
                         </p>
@@ -381,7 +457,7 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
         ) : null}
 
         {mayCreate ? (
-          <NilDeclaration moduleKey={m.key} moduleName={m.name} declared={declaredNil} />
+          <NilDeclaration moduleKey={m.key} moduleName={m.name} periodType={m.periodType} declaredYears={schema.data.declaredYears} years={schema.data.declarableYears} />
         ) : null}
       </Card>
     </AppShell>

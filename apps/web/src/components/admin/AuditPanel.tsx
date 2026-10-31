@@ -79,7 +79,7 @@ export function AuditPanel() {
 
       <Card padded={false}>
         <CardHeader
-          title="Audit log"
+          title="Activity log"
           subtitle="Append-only at the database level. Nothing here can be edited or removed, by anyone."
           actions={
             <Button variant="secondary" disabled={busy} onClick={() => { setFilters(EMPTY); setPage(1); }}>

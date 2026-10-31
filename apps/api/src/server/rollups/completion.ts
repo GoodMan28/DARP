@@ -1,21 +1,22 @@
-import { and, count, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
+import { and, between, count, eq, inArray, isNull, or, sql, type SQL } from 'drizzle-orm';
 import { db } from '@/server/db';
 import { records, profileBaselines, moduleDeclarations, users, departments } from '@/server/db/schema';
 import { getModule, modulesOwnedBy, modulesVerifiedBy } from '@darp/shared/modules';
 import type { PeriodType, RecordStatus, Role } from '@darp/shared/modules/types';
 import type { SessionUser } from '@/server/auth/session';
 import { scopeFilter } from '@/server/records/scope';
-import { activeCycle, mustGetModule, ServiceError } from '@/server/records/service';
-import { yearOfPeriod, type CycleWindows } from '@/server/records/periods';
+import { mustGetModule, ServiceError } from '@/server/records/service';
+import { defaultRange, boundsOfRange, type YearRange } from '@/server/records/range';
 import {
   COUNTERS, DECLARED_COUNTERS, COUNTER_MODULE_KEYS, COUNTED_STATUSES,
-  computeCounters,
-  type CountableRecord, type CycleBounds, withCycleYears,
+  computeCounters, declaredStorageKey, declaredYearType,
+  type CountableRecord, withCycleYears,
 } from './counters';
 import type {
   ComputedCounter, DeclaredCounter, CounterValues,
   ModuleProgress, ModuleStatusRow, DepartmentCompletionRow, VerificationQueueRow,
 } from '@darp/shared/contracts';
+import { rankingsFor, rankingItemOf } from '@/server/journals/ranking';
 
 // The result shapes live in the shared API contract; re-exported so callers keep one import.
 export type {
@@ -33,11 +34,11 @@ const MATCHES_NOTHING = '00000000-0000-0000-0000-000000000000';
  * `scopeFilter()`. It never widens what that function allows for a single module,
  * and an unreadable set of modules matches nothing rather than everything.
  */
-export function scopedModulesFilter(actor: SessionUser, moduleKeys: string[], cycleId: string): SQL {
+export function scopedModulesFilter(actor: SessionUser, moduleKeys: string[]): SQL {
   const parts: SQL[] = [];
   for (const key of moduleKeys) {
     const m = getModule(key);
-    if (m) parts.push(scopeFilter(actor, m, cycleId));
+    if (m) parts.push(scopeFilter(actor, m));
   }
   if (parts.length === 0) return eq(records.id, MATCHES_NOTHING);
   return or(...parts)!;
@@ -45,13 +46,6 @@ export function scopedModulesFilter(actor: SessionUser, moduleKeys: string[], cy
 
 /* ═══════════════════════ profile counter roll-ups ══════════════════════ */
 
-export function boundsOf(cycle: CycleWindows): CycleBounds {
-  return {
-    CY: [yearOfPeriod(new Date(cycle.cyStart), 'CY'), yearOfPeriod(new Date(cycle.cyEnd), 'CY')],
-    FY: [yearOfPeriod(new Date(cycle.fyStart), 'FY'), yearOfPeriod(new Date(cycle.fyEnd), 'FY')],
-    AY: [yearOfPeriod(new Date(cycle.ayStart), 'AY'), yearOfPeriod(new Date(cycle.ayEnd), 'AY')],
-  };
-}
 
 const periodTypeOf = (moduleKey: string): PeriodType => mustGetModule(moduleKey).periodType;
 
@@ -59,13 +53,13 @@ const periodTypeOf = (moduleKey: string): PeriodType => mustGetModule(moduleKey)
  * All counters for one user: computed, declared, and where each number came from.
  * Faculty may read their own; only admin may read anyone else's.
  */
-export async function counterValuesFor(actor: SessionUser, userId: string): Promise<CounterValues> {
+export async function counterValuesFor(actor: SessionUser, userId: string, chosen?: YearRange): Promise<CounterValues> {
   if (userId !== actor.id && actor.role !== 'admin') {
     throw new ServiceError('FORBIDDEN', 'You may only view your own profile counters.');
   }
 
-  const cycle = await activeCycle();
-  const bounds = boundsOf(cycle);
+  const range = chosen ?? await defaultRange();
+  const bounds = boundsOfRange(range);
 
   const rows = await db
     .select({
@@ -76,7 +70,7 @@ export async function counterValuesFor(actor: SessionUser, userId: string): Prom
     })
     .from(records)
     .where(and(
-      scopedModulesFilter(actor, COUNTER_MODULE_KEYS, cycle.id),
+      scopedModulesFilter(actor, COUNTER_MODULE_KEYS),
       eq(records.ownerUserId, userId),
       inArray(records.status, COUNTED_STATUSES),
     ));
@@ -89,17 +83,28 @@ export async function counterValuesFor(actor: SessionUser, userId: string): Prom
   const baselines: Record<string, number> = {};
   for (const b of baselineRows) baselines[b.counterKey] = Number(b.value);
 
-  const countable: CountableRecord[] = rows.map((r) => ({
+  // Papers' journal rankings, for the indexing and quartile counters: worked out now, never stored.
+  const rankings = await rankingsFor(rows.flatMap((r, i) => (
+    r.moduleKey === 'publications' ? [rankingItemOf(String(i), (r.data ?? {}) as Record<string, unknown>)] : []
+  )));
+  const countable: CountableRecord[] = rows.map((r, i) => ({
     moduleKey: r.moduleKey,
     periodYear: r.periodYear,
     status: r.status,
     data: (r.data ?? {}) as Record<string, unknown>,
+    ranking: rankings.get(String(i)),
   }));
 
   const computed = computeCounters(countable, bounds, periodTypeOf, baselines);
 
+  const oldest = rows.reduce((m, r) => Math.min(m, r.periodYear), range.from);
+  const thisYear = new Date().getUTCFullYear();
+
   return {
     userId,
+    range: { from: range.from, to: range.to },
+    minYear: Math.max(1990, Math.min(oldest, thisYear - 10)),
+    maxYear: Math.max(thisYear, range.to),
     computed: COUNTERS.map((c) => ({
       key: c.key,
       label: withCycleYears(c.label, bounds),
@@ -110,8 +115,100 @@ export async function counterValuesFor(actor: SessionUser, userId: string): Prom
       moduleName: mustGetModule(c.moduleKey).name,
       baseline: c.window === 'sinceJoining' ? (baselines[c.key] ?? 0) : 0,
     })),
-    declared: DECLARED_COUNTERS.map((c) => ({ ...c, label: withCycleYears(c.label, bounds), value: baselines[c.key] ?? 0 })),
+    // A "last year" figure is read and saved under that year's own key, so a changed range never
+    // shows one year's figure against another year.
+    declared: DECLARED_COUNTERS.map((c) => {
+      const key = declaredStorageKey(c, bounds);
+      return { ...c, key, label: withCycleYears(c.label, bounds), value: baselines[key] ?? 0 };
+    }),
   };
+}
+
+/**
+ * Each person's Faculty Profile figures for a range, by counter key: what DARP counts from their
+ * records, and what they declared (a "last year" figure, for the range's last completed year).
+ * Used by the exporter to fill the Faculty Profile form. It reads the people's own records across
+ * every module without an actor's scope, because a profile figure counts everything its owner
+ * entered; the caller passes only people whose profile it may already read (see fetchExportRows).
+ */
+export async function figuresForUsers(userIds: string[], range: YearRange): Promise<Map<string, Record<string, number>>> {
+  const out = new Map<string, Record<string, number>>();
+  if (userIds.length === 0) return out;
+  const bounds = boundsOfRange(range);
+  const rows = await db
+    .select({
+      ownerUserId: records.ownerUserId, moduleKey: records.moduleKey, periodYear: records.periodYear,
+      status: records.status, data: records.data,
+    })
+    .from(records)
+    .where(and(
+      inArray(records.ownerUserId, userIds),
+      inArray(records.moduleKey, COUNTER_MODULE_KEYS),
+      inArray(records.status, COUNTED_STATUSES),
+      isNull(records.deletedAt),
+    ));
+  const baselineRows = await db
+    .select({ userId: profileBaselines.userId, counterKey: profileBaselines.counterKey, value: profileBaselines.value })
+    .from(profileBaselines)
+    .where(inArray(profileBaselines.userId, userIds));
+  const rankings = await rankingsFor(rows.flatMap((r, i) => (
+    r.moduleKey === 'publications' ? [rankingItemOf(String(i), (r.data ?? {}) as Record<string, unknown>)] : []
+  )));
+
+  for (const userId of userIds) {
+    const baselines: Record<string, number> = {};
+    for (const b of baselineRows) if (b.userId === userId) baselines[b.counterKey] = Number(b.value);
+    const countable: CountableRecord[] = [];
+    rows.forEach((r, i) => {
+      if (r.ownerUserId !== userId) return;
+      countable.push({
+        moduleKey: r.moduleKey, periodYear: r.periodYear, status: r.status,
+        data: (r.data ?? {}) as Record<string, unknown>, ranking: rankings.get(String(i)),
+      });
+    });
+    const figures: Record<string, number> = computeCounters(countable, bounds, periodTypeOf, baselines);
+    for (const c of DECLARED_COUNTERS) figures[c.key] = baselines[declaredStorageKey(c, bounds)] ?? 0;
+    out.set(userId, figures);
+  }
+  return out;
+}
+
+/**
+ * Each person's DARP papers in a range (by calendar year), and how many are in a Q1 or Q2 journal
+ * (the better of the SJR and JIF quartiles, worked out from the ISSN). For the research-quality
+ * signal. Like figuresForUsers, it reads the people's own publications without an actor's scope;
+ * the caller passes only people it may already see.
+ */
+export async function papersForUsers(
+  userIds: string[], range: YearRange,
+): Promise<Map<string, { papers: number; top: number }>> {
+  const out = new Map(userIds.map((id) => [id, { papers: 0, top: 0 }]));
+  if (userIds.length === 0) return out;
+  const rows = await db
+    .select({ ownerUserId: records.ownerUserId, data: records.data })
+    .from(records)
+    .where(and(
+      eq(records.moduleKey, 'publications'),
+      inArray(records.ownerUserId, userIds),
+      inArray(records.status, COUNTED_STATUSES),
+      isNull(records.deletedAt),
+      between(records.periodYear, range.from, range.to),
+    ));
+  const rankings = await rankingsFor(rows.map((r, i) => rankingItemOf(String(i), (r.data ?? {}) as Record<string, unknown>)));
+  rows.forEach((r, i) => {
+    const t = out.get(r.ownerUserId)!;
+    t.papers += 1;
+    const rk = rankings.get(String(i));
+    if (rk && (['Q1', 'Q2'].includes(rk.sjrQuartile ?? '') || ['Q1', 'Q2'].includes(rk.jifQuartile ?? ''))) t.top += 1;
+  });
+  return out;
+}
+
+/** `<key>@<year>`: a declared "last year" figure for one year. */
+function isYearlyDeclaredKey(storageKey: string): boolean {
+  const m = /^(.+)@((?:19|20)\d{2})$/.exec(storageKey);
+  const c = m ? DECLARED_COUNTERS.find((d) => d.key === m[1]) : undefined;
+  return !!c && declaredYearType(c) !== null;
 }
 
 /** Which counter keys accept a manually-entered figure. */
@@ -131,7 +228,7 @@ export async function setBaseline(
   if (userId !== actor.id && actor.role !== 'admin') {
     throw new ServiceError('FORBIDDEN', 'You may only edit your own figures.');
   }
-  if (!BASELINE_KEYS.has(counterKey)) {
+  if (!BASELINE_KEYS.has(counterKey) && !isYearlyDeclaredKey(counterKey)) {
     throw new ServiceError('VALIDATION', 'That figure is not one you can enter by hand.', {
       counterKey: 'Unknown counter.',
     });
@@ -178,7 +275,7 @@ export async function moduleStatusForUser(
     throw new ServiceError('FORBIDDEN', 'You may only view your own progress.');
   }
 
-  const cycle = await activeCycle();
+  const range = await defaultRange();
   const owned = modulesOwnedBy(role);
   if (owned.length === 0) return [];
   const keys = owned.map((m) => m.key);
@@ -187,7 +284,7 @@ export async function moduleStatusForUser(
     .select({ moduleKey: records.moduleKey, status: records.status, n: count() })
     .from(records)
     .where(and(
-      scopedModulesFilter(actor, keys, cycle.id),
+      scopedModulesFilter(actor, keys),
       eq(records.ownerUserId, userId),
     ))
     .groupBy(records.moduleKey, records.status);
@@ -197,7 +294,7 @@ export async function moduleStatusForUser(
     .from(moduleDeclarations)
     .where(and(
       eq(moduleDeclarations.userId, userId),
-      eq(moduleDeclarations.cycleId, cycle.id),
+      between(moduleDeclarations.periodYear, range.from, range.to),
       inArray(moduleDeclarations.moduleKey, keys),
     ));
   const nilSet = new Set(decls.filter((d) => d.declaredNil).map((d) => d.moduleKey));
@@ -233,7 +330,6 @@ export async function departmentCompletion(actor: SessionUser): Promise<Departme
     throw new ServiceError('FORBIDDEN', 'Department completion is for heads and offices.');
   }
 
-  const cycle = await activeCycle();
   const facultyModuleKeys = modulesOwnedBy('faculty').map((m) => m.key);
   const modulesApplicable = facultyModuleKeys.length;
 
@@ -245,7 +341,7 @@ export async function departmentCompletion(actor: SessionUser): Promise<Departme
   const facultyCounts = await db
     .select({ departmentId: users.departmentId, n: count() })
     .from(users)
-    .where(and(eq(users.role, 'faculty'), eq(users.isActive, true)))
+    .where(and(inArray(users.role, mustGetModule('profile').ownerRoles), eq(users.isActive, true)))
     .groupBy(users.departmentId);
 
   const recordCounts = await db
@@ -258,7 +354,7 @@ export async function departmentCompletion(actor: SessionUser): Promise<Departme
     })
     .from(records)
     .where(and(
-      scopedModulesFilter(actor, facultyModuleKeys, cycle.id),
+      scopedModulesFilter(actor, facultyModuleKeys),
       isNull(records.deletedAt),
     ))
     .groupBy(records.departmentId);
@@ -294,7 +390,6 @@ export async function departmentCompletion(actor: SessionUser): Promise<Departme
  * The queue is what a role verifies, not what it owns.
  */
 export async function verificationQueue(actor: SessionUser): Promise<VerificationQueueRow[]> {
-  const cycle = await activeCycle();
   const mods = modulesVerifiedBy(actor.role);
   if (mods.length === 0) return [];
   const keys = mods.map((m) => m.key);
@@ -303,7 +398,7 @@ export async function verificationQueue(actor: SessionUser): Promise<Verificatio
     .select({ moduleKey: records.moduleKey, status: records.status, n: count() })
     .from(records)
     .where(and(
-      scopedModulesFilter(actor, keys, cycle.id),
+      scopedModulesFilter(actor, keys),
       inArray(records.status, ['submitted', 'verified'] as RecordStatus[]),
     ))
     .groupBy(records.moduleKey, records.status);

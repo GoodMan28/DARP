@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { withRoute, ok, fail } from '@/server/http/handler';
 import { toResponse } from '@/server/records/toResponse';
 import { counterValuesFor, setBaseline } from '@/server/rollups/completion';
+import { parseRange } from '@/server/records/range';
 import { audit } from '@/server/audit/log';
 
 export const GET = withRoute({ rate: { limit: 60, windowSeconds: 60 } }, async ({ actor, query }) => {
@@ -9,7 +10,11 @@ export const GET = withRoute({ rate: { limit: 60, windowSeconds: 60 } }, async (
     const asUser = query.get('userId');
     // Viewing someone else's numbers is an admin action; the service enforces it too.
     if (asUser && asUser !== actor.id && actor.role !== 'admin') return fail('FORBIDDEN');
-    return ok(await counterValuesFor(actor, asUser ?? actor.id));
+    // ?from=2022&to=2024 counts the records of those years; without it, the default range.
+    const hasRange = query.get('from') !== null || query.get('to') !== null;
+    const range = parseRange(query.get('from'), query.get('to'));
+    if (hasRange && !range) return fail('VALIDATION', { message: 'Choose years between 1990 and 2100, first year before the last.' });
+    return ok(await counterValuesFor(actor, asUser ?? actor.id, range ?? undefined));
   } catch (e) {
     return toResponse(e);
   }

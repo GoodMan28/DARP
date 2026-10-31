@@ -313,7 +313,6 @@ async function doSync(link: ListLink): Promise<ScopusListStatus> {
     for (let i = 0; i < coverage.length; i += 1000) {
       await tx.insert(journalCoverage).values(coverage.slice(i, i + 1000)).onConflictDoNothing();
     }
-    await tx.delete(lookupCache).where(eq(lookupCache.kind, 'doi'));
     await saveStatus(status, tx);
   });
 

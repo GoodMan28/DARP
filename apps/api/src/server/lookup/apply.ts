@@ -1,11 +1,12 @@
 import type { ModuleConfig } from '@darp/shared/modules/types';
 import { getModule } from '@darp/shared/modules';
-import { LOOKUP_SOURCE_LABEL, type RecordVerification, type FieldProvenance } from '@darp/shared/contracts';
+import { LOOKUP_SOURCE_LABEL, type RecordVerification, type FieldProvenance, type Authorship } from '@darp/shared/contracts';
 import { resolve } from './resolve';
 import { isLookupUnavailable } from './http';
-import { namesMatch } from './names';
+import { ownerNamed } from './names';
+import { identityOfName, type OwnerIdentity } from './identity';
 import { buildCitation } from './citation';
-import type { LookupResult } from './types';
+import type { LookupResult, Person } from './types';
 
 /**
  * Anything the automatic check could not confirm, worded for the verifying office and IQAC.
@@ -14,9 +15,6 @@ import type { LookupResult } from './types';
  */
 const FLAG_REASON: Record<string, string> = {
   retracted: 'The publisher has retracted this work.',
-  'not-indexed': 'The journal was not found in the Scopus list or in any Web of Science list IQAC has loaded.',
-  'no-journal-lists': 'The journal lists (Scopus, SJR) were not available, so indexing and quartile could not be checked.',
-  'no-issn': 'The publisher has not registered an ISSN for this journal.',
   'not-a-book': 'This DOI is not a book or a book chapter.',
   'parent-book-not-found': 'The book this chapter belongs to could not be found, so its title came from the chapter record.',
   'inventors-from-applicants': 'The Patent Office Journal lists no inventors for this application; the individual applicants were taken as the inventors.',
@@ -28,19 +26,10 @@ export const sourceOf = (m: ModuleConfig) => m.lookup?.sourceName ?? "the publis
 /** Who the owner must be among: "author", "inventor". */
 export const personOf = (m: ModuleConfig) => m.lookup?.personWord ?? 'author';
 
-/** A flag as a sentence. Some flags carry a value after a colon, e.g. "scopus-dropped:2023". */
-export function reasonForFlag(flag: string, year: string): string | null {
+/** A flag as a sentence. A flag may carry a value after a colon, which is not part of its name. */
+export function reasonForFlag(flag: string): string | null {
   const at = flag.indexOf(':');
-  const name = at < 0 ? flag : flag.slice(0, at);
-  const arg = at < 0 ? '' : flag.slice(at + 1);
-  const paper = year ? `a ${year} paper` : 'this paper';
-  if (name === 'scopus-dropped') {
-    return `Scopus covered this journal only until ${arg}, so ${paper} is not Scopus-indexed.`;
-  }
-  if (name === 'scopus-not-that-year') {
-    return `Scopus covers this journal for ${arg}, so ${paper} is not Scopus-indexed.`;
-  }
-  return FLAG_REASON[name] ?? null;
+  return FLAG_REASON[at < 0 ? flag : flag.slice(0, at)] ?? null;
 }
 
 export interface Applied {
@@ -72,10 +61,29 @@ const ownerFields = (m: ModuleConfig, except: string | null) => m.fields.filter(
   f.autofill && !f.autofill.alwaysLocked && f.autofill.from !== 'citation' && f.key !== except
 ));
 
+/**
+ * A patent's date for the current stage, from its status: filed (Applied), published (Published) or
+ * granted (Granted). It dates the record, so it is always worked out, never typed.
+ */
+export function patentStatusDate(data: Record<string, unknown>): string {
+  const pick = { Applied: 'filedDate', Published: 'publishedDate', Granted: 'grantDate' }[text(data.status)];
+  return pick ? text(data[pick]) : '';
+}
+
 export async function applyLookup(
   m: ModuleConfig,
   input: Record<string, unknown>,
-  ctx: { ownerName: string },
+  ctx: { owner: OwnerIdentity },
+): Promise<Applied> {
+  const applied = await applyLookupCore(m, input, ctx);
+  if (m.lookup?.kind === 'patent') applied.data.statusDate = patentStatusDate(applied.data);
+  return applied;
+}
+
+async function applyLookupCore(
+  m: ModuleConfig,
+  input: Record<string, unknown>,
+  ctx: { owner: OwnerIdentity },
 ): Promise<Applied> {
   if (!m.lookup) return { data: input, verification: null, eligible: false, misplaced: null };
 
@@ -95,6 +103,7 @@ export async function applyLookup(
       misplaced: null,
       verification: {
         source: null, identifier: raw || null, checkedAt, autoApproved: false, reasons: [reason], fields,
+        authorship: { level: 'unmatched', detail: `Nothing was fetched, so the ${personOf(m)} list was typed by hand.` },
       },
     };
   };
@@ -153,6 +162,9 @@ export async function applyLookup(
     data[f.key] = text(data[f.key]).slice(0, f.maxLength ?? undefined);
   }
 
+  // A patent found by its grant number is saved under its application number, so one patent is one record.
+  if (m.lookup.kind === 'patent' && idKey && r.authoritative && r.values.applicationNo) data[idKey] = r.values.applicationNo;
+
   const citation = m.fields.find((f) => f.autofill?.from === 'citation');
   if (citation) data[citation.key] = buildCitation(m, data, r).slice(0, citation.maxLength ?? 1200);
 
@@ -163,16 +175,23 @@ export async function applyLookup(
   const typeNote = misplaced ? null : workTypeNote(m, r);
   if (typeNote) reasons.push(typeNote);
   for (const flag of r.flags) {
-    const reason = reasonForFlag(flag, r.values.year ?? '');
+    const reason = reasonForFlag(flag);
     if (reason) reasons.push(reason);
   }
   // Matched against the PUBLISHED author list, never the edited one (decision D3).
   // A grant found without its application has no inventor list at all: its flag's reason says so.
-  const published = r.people.filter((p) => namesMatch(ctx.ownerName, p));
-  if (published.length === 0 && !r.flags.includes('grant-only')) {
-    reasons.push(`${ctx.ownerName} is not in the ${personOf(m)} list of ${source} — the name was added by hand.`);
+  const ownerName = ctx.owner.name;
+  const authorship = authorshipOf(m, r, ctx.owner);
+  const published = r.people.filter((p) => ownerNamed(ctx.owner, p));
+  if (authorship.level === 'confirmed') {
+    // The ORCID iD settles it, whatever the name looks like on the paper.
+  } else if (published.length === 0 && !r.flags.includes('grant-only')) {
+    reasons.push(`${ownerName} is not in the ${personOf(m)} list of ${source} — the name was added by hand.`);
   } else if (published.length > 0 && published.every((p) => p.bitAffiliated === false)) {
-    reasons.push(`${ctx.ownerName} is listed on the published record with another institution, not BIT Mesra.`);
+    reasons.push(`${ownerName} is listed on the published record with another institution, not BIT Mesra.`);
+  }
+  if (ctx.owner.orcid && published.length > 0 && published.every((p) => p.orcid && p.orcid !== ctx.owner.orcid)) {
+    reasons.push(`The ${personOf(m)} named like ${ownerName} has a different ORCID iD on the published record (${published[0]!.orcid}), not ${ctx.owner.orcid}: possibly a namesake.`);
   }
   // The year is never a reason: a record keeps its own year, and IQAC chooses the years to pull.
   return {
@@ -186,8 +205,31 @@ export async function applyLookup(
       autoApproved: false,
       reasons: [...new Set(reasons)],
       fields,
+      authorship,
     },
   };
+}
+
+/**
+ * How sure the portal is that the owner is one of the published authors or inventors:
+ * their checked ORCID iD on the record; else their name at BIT Mesra; else their name alone; else nothing.
+ */
+export function authorshipOf(m: ModuleConfig, r: LookupResult, owner: OwnerIdentity): Authorship {
+  const word = personOf(m);
+  if (owner.orcid && r.people.some((p) => p.orcid === owner.orcid)) {
+    return { level: 'confirmed', detail: `${owner.name}'s ORCID iD ${owner.orcid} is on the published record.` };
+  }
+  const named: Person[] = r.people.filter((p) => ownerNamed(owner, p));
+  // A listed author with someone else's ORCID iD is not the owner, however alike the names.
+  const plausible = owner.orcid ? named.filter((p) => !p.orcid || p.orcid === owner.orcid) : named;
+  if (plausible.some((p) => p.bitAffiliated === true)) {
+    return { level: 'likely', detail: `A listed ${word} has ${owner.name}'s name and ${m.lookup?.kind === 'patent' ? 'a BIT Mesra address' : 'BIT Mesra as affiliation'}.` };
+  }
+  if (plausible.length > 0) {
+    const where = plausible.every((p) => p.bitAffiliated === false) ? 'another institution' : 'no affiliation given';
+    return { level: 'name', detail: `A listed ${word} has ${owner.name}'s name (${where}). Check the evidence.` };
+  }
+  return { level: 'unmatched', detail: `No listed ${word} has ${owner.name}'s name: it was added by hand. Check the evidence.` };
 }
 
 /** A work that belongs in another module (or in none), refused on submit: lookup.elsewhere. */
@@ -263,12 +305,14 @@ function splitAuthors(list: string): string[] {
  * Returns the field to blame and the message, or null when the rule is met or not configured.
  */
 export function ownerMissingFromAuthors(
-  m: ModuleConfig, data: Record<string, unknown>, ownerName: string,
+  m: ModuleConfig, data: Record<string, unknown>, ownerIn: OwnerIdentity | string,
 ): { field: string; message: string } | null {
   const key = m.lookup?.ownerMustBeIn;
   if (!key) return null;
+  const owner = typeof ownerIn === 'string' ? identityOfName(ownerIn) : ownerIn;
+  const ownerName = owner.name;
   const names = splitAuthors(String(data[key] ?? ''));
-  const found = names.some((full) => namesMatch(ownerName, { given: '', family: '', full }));
+  const found = names.some((full) => ownerNamed(owner, { given: '', family: '', full }));
   const word = personOf(m);
   return found ? null : {
     field: key,

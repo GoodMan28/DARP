@@ -1,8 +1,7 @@
-import { and, count, eq, inArray, sql } from 'drizzle-orm';
+import { and, count, eq, max, sql } from 'drizzle-orm';
 import { db } from '@/server/db';
-import { journalMetrics, journalIndexListings, journalCoverage, lookupCache } from '@/server/db/schema';
-import { getList } from '@/server/records/masterLists';
-import { normIssn, parseCoverage, type JournalListRow } from '@darp/shared/journals';
+import { journalMetrics, journalIndexListings, journalCoverage, journalJcr } from '@/server/db/schema';
+import { normIssn, parseCoverage, type JournalListRow, type JcrRow } from '@darp/shared/journals';
 
 export { normIssn };
 
@@ -40,67 +39,12 @@ export function scopusCovered(
   return { covered: false, flag: `scopus-not-that-year:${describeRanges(ranges)}` };
 }
 
-/** Quartile and indexing for a journal (decisions D5 and D6). */
-export async function journalFacts(
-  issns: string[], year: number | null,
-): Promise<{ quartile: string; quartileSource: string; indexing: string; flags: string[] }> {
-  const keys = [...new Set(issns.map(normIssn).filter((x): x is string => x !== null))];
-  if (keys.length === 0) return { quartile: '', quartileSource: '', indexing: '', flags: ['no-issn'] };
-
-  const [{ n: sjrRows } = { n: 0 }] = await db.select({ n: count() }).from(journalMetrics);
-  const [{ n: listRows } = { n: 0 }] = await db.select({ n: count() }).from(journalIndexListings);
-  // Nothing loaded yet: say so, rather than claim the journal is unindexed.
-  if (sjrRows === 0 && listRows === 0) return { quartile: '', quartileSource: '', indexing: '', flags: ['no-journal-lists'] };
-
-  const flags: string[] = [];
-  const metrics = await db.select().from(journalMetrics).where(inArray(journalMetrics.issn, keys));
-
-  // An empty quartile means "not found": the form then lets the owner choose it (with evidence).
-  let quartile = '';
-  let quartileSource = '';
-  if (sjrRows === 0) {
-    flags.push('no-sjr-data');
-  } else if (metrics.length > 0) {
-    const target = year ?? Math.max(...metrics.map((m) => m.year));
-    const notAfter = metrics.filter((m) => m.year <= target).sort((a, b) => b.year - a.year)[0];
-    const best = notAfter ?? [...metrics].sort((a, b) => a.year - b.year)[0]!;
-    quartile = best.quartile ?? 'Not ranked';
-    // A quartile computed from Elsevier's list is an estimate, and says so; SCImago's is official.
-    quartileSource = `SJR ${best.year}${best.source === 'scopus-list' ? ' · estimated (Scopus list)' : ' · SCImago'}`;
-  }
-
-  const coverageRows = await db.select({
-    source: journalCoverage.source, fromYear: journalCoverage.fromYear, toYear: journalCoverage.toYear,
-  }).from(journalCoverage).where(inArray(journalCoverage.issn, keys));
-  const scopus = scopusCovered(coverageRows, year);
-  if (scopus.flag) flags.push(scopus.flag);
-
-  const listings = await db.select({ listName: journalIndexListings.listName })
-    .from(journalIndexListings).where(inArray(journalIndexListings.issn, keys));
-  const inLists = new Set(listings.map((l) => l.listName));
-  // Scopus is decided by the years it covered the journal. Without coverage data, an SJR value
-  // (which SCImago computes from Scopus) is the evidence, as before.
-  if (scopus.covered === true || (scopus.covered === 'unknown' && metrics.length > 0)) inLists.add('Scopus');
-  else inLists.delete('Scopus');
-  // Not in Scopus that year: no SJR quartile for that year either.
-  if (scopus.covered === false && year !== null) {
-    quartile = 'Not ranked';
-    quartileSource = `Not in Scopus in ${year}`;
-  }
-  const order = await getList('indexingTypes');    // IQAC's order is the priority order
-  const indexing = order.find((name) => inLists.has(name)) ?? '';
-  // A coverage flag already says why it is not Scopus; 'not-indexed' would only repeat it vaguely.
-  if (!indexing && !scopus.flag) flags.push('not-indexed');
-
-  return { quartile, quartileSource, indexing, flags };
-}
+/*
+ * A paper's indexing, quartile and Impact Factor are not stored with it: server/journals/ranking.ts
+ * works them out from the ISSN whenever they are shown, so a newly loaded list counts at once.
+ */
 
 /* ───────────── loading the lists (admin screen and command-line import) ───────────── */
-
-/** Quartile and indexing are cached with each DOI; forget them so the next lookup uses the new lists. */
-async function forgetCachedDois() {
-  await db.delete(lookupCache).where(eq(lookupCache.kind, 'doi'));
-}
 
 /** One batch of an SJR edition. Re-importing a year overwrites it. */
 export async function storeSjrRows(year: number, rows: JournalListRow[]): Promise<number> {
@@ -133,7 +77,6 @@ export async function storeSjrRows(year: number, rows: JournalListRow[]): Promis
       },
     });
   }
-  await forgetCachedDois();
   return rows.length;
 }
 
@@ -143,13 +86,41 @@ export async function storeListRows(listName: string, year: number, rows: Journa
     const batch = rows.slice(i, i + 500).map((r) => ({ issn: r.issn, listName, year, title: r.title }));
     await db.insert(journalIndexListings).values(batch).onConflictDoNothing();
   }
-  await forgetCachedDois();
+  return rows.length;
+}
+
+/** One batch of a Journal Citation Reports export. A journal already loaded for the year is updated. */
+export async function storeJcrRows(jifYear: number, rows: JcrRow[]): Promise<number> {
+  for (let i = 0; i < rows.length; i += 500) {
+    // One row per ISSN in a statement: an upsert may not touch the same row twice.
+    const batch = [...new Map(rows.slice(i, i + 500).map((r) => [r.issn, r])).values()].map((r) => ({
+      issn: r.issn, jifYear, title: r.title, jif: r.jif, jifQuartile: r.jifQuartile,
+      categories: r.categories, editions: r.editions,
+    }));
+    await db.insert(journalJcr).values(batch).onConflictDoUpdate({
+      target: [journalJcr.issn, journalJcr.jifYear],
+      // Several exports (one per category) may carry the same journal: keep its best quartile.
+      set: {
+        title: sql`excluded.title`,
+        jif: sql`coalesce(excluded.jif, ${journalJcr.jif})`,
+        jifQuartile: sql`least(excluded.jif_quartile, ${journalJcr.jifQuartile})`,
+        categories: sql`case when ${journalJcr.categories} = '' then excluded.categories
+          when position(excluded.categories in ${journalJcr.categories}) > 0 then ${journalJcr.categories}
+          else left(${journalJcr.categories} || '; ' || excluded.categories, 500) end`,
+        editions: sql`case when position(excluded.editions in ${journalJcr.editions}) > 0 then ${journalJcr.editions}
+          else left(${journalJcr.editions} || '; ' || excluded.editions, 60) end`,
+        importedAt: sql`now()`,
+      },
+    });
+  }
   return rows.length;
 }
 
 /** Removes one loaded list, e.g. a file imported under the wrong year. */
-export async function clearJournalList(kind: 'sjr' | 'list', year: number, listName?: string) {
-  if (kind === 'sjr') {
+export async function clearJournalList(kind: 'sjr' | 'list' | 'jcr', year: number, listName?: string) {
+  if (kind === 'jcr') {
+    await db.delete(journalJcr).where(eq(journalJcr.jifYear, year));
+  } else if (kind === 'sjr') {
     // Only what IQAC loaded; the automatic Scopus rows are replaced by the next sync instead.
     await db.delete(journalMetrics).where(and(eq(journalMetrics.year, year), eq(journalMetrics.source, 'scimago')));
     // The coverage years came with the SCImago files: drop them once no SCImago file is left.
@@ -162,14 +133,15 @@ export async function clearJournalList(kind: 'sjr' | 'list', year: number, listN
         eq(journalIndexListings.source, 'upload'),
       ));
   }
-  await forgetCachedDois();
 }
 
 export interface JournalListSummary {
   /** source 'scimago' = loaded by IQAC; 'scopus-list' = computed automatically. */
-  sjr: Array<{ year: number; source: string; issns: number; ranked: number }>;
+  sjr: Array<{ year: number; source: string; issns: number; ranked: number; importedAt: Date | null }>;
   /** source 'upload' = loaded by IQAC; 'scopus-list' = fetched automatically. */
-  lists: Array<{ listName: string; year: number; source: string; issns: number }>;
+  lists: Array<{ listName: string; year: number; source: string; issns: number; importedAt: Date | null }>;
+  /** Journal Citation Reports exports, one entry per JIF year. */
+  jcr: Array<{ jifYear: number; issns: number; withJif: number; importedAt: Date | null }>;
 }
 
 export async function journalListSummary(): Promise<JournalListSummary> {
@@ -178,14 +150,19 @@ export async function journalListSummary(): Promise<JournalListSummary> {
     source: journalMetrics.source,
     issns: count(),
     ranked: sql<number>`count(${journalMetrics.quartile})::int`,
+    importedAt: max(journalMetrics.importedAt),
   }).from(journalMetrics)
     .groupBy(journalMetrics.year, journalMetrics.source)
     .orderBy(journalMetrics.year, journalMetrics.source);
   const lists = await db.select({
     listName: journalIndexListings.listName, year: journalIndexListings.year,
-    source: journalIndexListings.source, issns: count(),
+    source: journalIndexListings.source, issns: count(), importedAt: max(journalIndexListings.importedAt),
   }).from(journalIndexListings)
     .groupBy(journalIndexListings.listName, journalIndexListings.year, journalIndexListings.source)
     .orderBy(journalIndexListings.listName, journalIndexListings.year);
-  return { sjr, lists };
+  const jcr = await db.select({
+    jifYear: journalJcr.jifYear, issns: count(), withJif: sql<number>`count(${journalJcr.jif})::int`,
+    importedAt: max(journalJcr.importedAt),
+  }).from(journalJcr).groupBy(journalJcr.jifYear).orderBy(journalJcr.jifYear);
+  return { sjr, lists, jcr };
 }

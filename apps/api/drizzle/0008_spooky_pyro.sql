@@ -1,0 +1,1 @@
+ALTER TABLE "records" ADD COLUMN "data_notes" jsonb DEFAULT '{}'::jsonb NOT NULL;

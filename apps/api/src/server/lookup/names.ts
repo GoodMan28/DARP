@@ -1,13 +1,27 @@
+import { splitName, type NameParts } from '@darp/shared/names';
 import type { Person } from './types';
 
-const TITLES = /\b(dr|prof|professor|mr|mrs|ms|miss|shri|smt|sri|er)\b\.?/g;
+/** Titles dropped from a name before comparing (one word each, the dot already removed). */
+const TITLES = /^(dr|prof|professor|mr|mrs|ms|miss|shri|smt|sri|er)$/;
 
+/**
+ * Lower-case words without accents or titles. Initials written together in capitals ("AK Verma",
+ * "Verma AK") become separate letters, as "A. K. Verma" would.
+ */
 function tokens(s: string): string[] {
-  return s.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
-    .replace(TITLES, ' ')
-    .replace(/[^a-z\s]/g, ' ')
-    .split(/\s+/)
-    .filter(Boolean);
+  const words = s.normalize('NFKD').replace(/[̀-ͯ]/g, '')
+    .split(/[^A-Za-z]+/).filter(Boolean);
+  // In a name written all in capitals ("ANIL KUMAR RAO", as the Patent Office Journal prints them)
+  // a short word is an initial pair only when it has no vowel ("AK"), so "RAO" stays a name.
+  const allCaps = !words.some((w) => /[a-z]/.test(w));
+  const out: string[] = [];
+  for (const w of words) {
+    const initials = words.length > 1 && w.length >= 2 && w.length <= 3 && w === w.toUpperCase()
+      && (!allCaps || !/[AEIOU]/.test(w));
+    if (initials) out.push(...w.toLowerCase().split(''));
+    else out.push(w.toLowerCase());
+  }
+  return out.filter((w) => !TITLES.test(w));
 }
 
 /** Single-letter edits (insert, delete, replace) needed to turn one word into the other. */
@@ -35,47 +49,94 @@ function similarSpelling(a: string, b: string): boolean {
   return editDistance(a, b) <= (shorter >= 9 ? 2 : 1);
 }
 
+/** A name as given names and surname words; the surname may be empty (a single name). */
+interface Reading { given: string[]; surname: string[] }
+
+function ownerReading(owner: string | NameParts): Reading {
+  const parts = typeof owner === 'string' ? splitName(owner) : owner;
+  return { given: [...tokens(parts.first), ...tokens(parts.middle)], surname: tokens(parts.last) };
+}
+
 /**
- * Does an account name ("Dr A. K. Verma") name the same person as a published author
- * ({given:'Anil Kumar', family:'Verma'})?
- *  - Same surname: the first initials must agree when both sides have one.
- *  - Surname spelt slightly differently: accepted only with more proof — both sides must have a
- *    first name, and those must agree too (full names spelt alike, or initials equal).
+ * The ways a published name can be read. A structured name (given/family) is read as it is. A name in
+ * one piece is read surname-last ("A. K. Verma"), after a comma as surname-first ("Verma, Anil"),
+ * and surname-first when only initials follow ("Verma A K").
+ */
+function publishedReadings(p: Pick<Person, 'given' | 'family' | 'full'>): Reading[] {
+  const family = tokens(p.family);
+  if (family.length > 0) return [{ given: tokens(p.given), surname: family }];
+  const full = p.full ?? '';
+  if (full.includes(',')) {
+    const [before, ...after] = full.split(',');
+    return [{ given: tokens(after.join(' ')), surname: tokens(before ?? '') }];
+  }
+  const t = tokens(full);
+  if (t.length === 0) return [];
+  const out: Reading[] = [{ given: t.slice(0, -1), surname: t.slice(-1) }];
+  if (t.length > 1 && t.slice(1).every((w) => w.length === 1)) out.push({ given: t.slice(1), surname: [t[0]!] });
+  return out;
+}
+
+function givenAgree(o: string | undefined, p: string | undefined): boolean {
+  if (!o || !p) return true;
+  if (o.length > 1 && p.length > 1) return similarSpelling(o, p);
+  return o[0] === p[0];
+}
+
+function readingsMatch(o: Reading, p: Reading): boolean {
+  // A single name (no surname) must appear whole, as the surname or the first given name.
+  if (o.surname.length === 0) {
+    const only = o.given[0];
+    if (!only || only.length < 2) return false;
+    return p.surname.some((w) => w === only) || p.given[0] === only;
+  }
+  const oSur = o.surname.join('');
+  const pSur = p.surname.join('');
+  if (!pSur) return false;
+  const exact = pSur === oSur || pSur === o.surname[o.surname.length - 1];
+  if (!exact && !similarSpelling(pSur, oSur)) return false;
+  const [oFirst, oSecond] = o.given;
+  const [pFirst, pSecond] = p.given;
+  // A slightly different surname needs more proof: both sides must have a first name.
+  if (!exact && (!oFirst || !pFirst)) return false;
+  if (!givenAgree(oFirst, pFirst)) return false;
+  // "A. K. Verma" and "A. P. Verma" are two people.
+  if (oSecond && pSecond && oSecond[0] !== pSecond[0]) return false;
+  return true;
+}
+
+/**
+ * Does the owner (their name in parts, or a name in one piece such as "Dr A. K. Verma") name the same
+ * person as a published author ({given:'Anil Kumar', family:'Verma'}, or "Verma A.K." in one piece)?
+ *  - Same surname: the first names must agree (initials, or full names spelt alike) when both exist.
+ *  - Surname spelt slightly differently: accepted only when both sides have a first name that agrees.
+ *  - Second initials that both exist must agree.
+ *  - No surname at all: the single name must appear whole.
  * A wrong "no" only asks the owner to add their name and attach evidence; a wrong "yes" is worse.
  */
-export function namesMatch(accountName: string, p: Pick<Person, 'given' | 'family' | 'full'>): boolean {
-  const o = tokens(accountName);
-  if (o.length === 0) return false;
-  const oSurname = o[o.length - 1]!;
-  const oFirstName = o.length > 1 ? o[0]! : undefined;
+export function namesMatch(owner: string | NameParts, p: Pick<Person, 'given' | 'family' | 'full'>): boolean {
+  const o = ownerReading(owner);
+  if (o.given.length === 0 && o.surname.length === 0) return false;
+  return publishedReadings(p).some((r) => readingsMatch(o, r));
+}
 
-  const fam = tokens(p.family);
-  let surname: string | undefined;
-  let firstName: string | undefined;
-  if (fam.length > 0) {
-    surname = fam[fam.length - 1];
-    firstName = tokens(p.given)[0];
-  } else {
-    const all = tokens(p.full);
-    surname = all[all.length - 1];
-    firstName = all.length > 1 ? all[0] : undefined;
-  }
-  if (!surname) return false;
+/** The owner's name in parts plus any other names (e.g. the "other names" on their ORCID record). */
+export interface OwnerNames { parts: NameParts | string; otherNames?: string[] }
 
-  if (surname === oSurname) {
-    if (!oFirstName || !firstName) return true;
-    return oFirstName[0] === firstName[0];
-  }
-
-  if (!similarSpelling(surname, oSurname) || !oFirstName || !firstName) return false;
-  if (oFirstName.length > 1 && firstName.length > 1) return similarSpelling(oFirstName, firstName);
-  return oFirstName[0] === firstName[0];
+export function ownerNamed(owner: OwnerNames, p: Pick<Person, 'given' | 'family' | 'full'>): boolean {
+  return namesMatch(owner.parts, p) || (owner.otherNames ?? []).some((n) => namesMatch(n, p));
 }
 
 /** BIT Mesra (any campus), not BITS Pilani. ROR id from OpenAlex, verified 2026-10-06. */
 export const BIT_ROR = '028vtqb15';
 
+/**
+ * BITS Pilani's campuses, which the Patent Office Journal sometimes prints without "and Science"
+ * ("Birla Institute of Technology, Hyderabad Campus"). BIT Mesra has no campus in any of them.
+ */
+const BITS_CAMPUS = /\b(pilani|hyderabad|goa|dubai|k\.?\s*k\.?\s*birla)\b/i;
+
 export function isBitAffiliation(name: string, rorIds: string[] = []): boolean {
   if (rorIds.some((id) => id.endsWith(BIT_ROR))) return true;
-  return /birla institute of technology(?!\s*(and|&)\s*science)/i.test(name);
+  return /birla institute of technology(?!\s*(and|&)\s*science)/i.test(name) && !BITS_CAMPUS.test(name);
 }

@@ -1,7 +1,8 @@
 import { withRoute, ok, fail } from '@/server/http/handler';
 import {
-  mustGetModule, activeCycle, statusCounts, getNilDeclaration, periodsInUse, ServiceError,
+  mustGetModule, activeCycle, statusCounts, getNilDeclarations, declarableYears, periodsInUse,
 } from '@/server/records/service';
+import { viewColumnsFor } from '@/server/records/viewQuery';
 import { toResponse } from '@/server/records/toResponse';
 import { canViewModule, canCreateIn, canVerify } from '@/server/auth/permissions';
 import { getAllLists } from '@/server/records/masterLists';
@@ -19,14 +20,12 @@ export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async 
     if (!canViewModule(actor, m)) return fail('FORBIDDEN');
 
     const lists = await getAllLists();
-    const cycle = await activeCycle().catch((e: unknown) => {
-      if (e instanceof ServiceError) return null;
-      throw e;
-    });
+    const cycle = await activeCycle();
 
-    const periods = cycle ? periodOptions(m, cycle) : [];
-    const years = new Set([...periods.map((p) => p.year), ...(cycle ? await periodsInUse(actor, m.key) : [])]);
+    const periods = periodOptions(m, cycle);
+    const years = new Set([...periods.map((p) => p.year), ...(await periodsInUse(actor, m.key))]);
     const recordPeriods = [...years].sort((a, b) => b - a).map((year) => ({ year, label: labelFor(year, m.periodType) }));
+    const declaredYears = await getNilDeclarations(actor, m.key);
 
     return ok<ModuleSchemaPayload>({
       key: m.key,
@@ -46,12 +45,12 @@ export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async 
         }
         : null,
       listColumns: m.listColumns,
+      viewColumns: await viewColumnsFor(m),
       periods,
       recordPeriods,
-      counts: cycle
-        ? await statusCounts(actor, m.key)
-        : { draft: 0, submitted: 0, verified: 0, approved: 0, returned: 0 },
-      declaredNil: cycle ? await getNilDeclaration(actor, m.key) : false,
+      counts: await statusCounts(actor, m.key),
+      declaredYears,
+      declarableYears: declarableYears(declaredYears),
       fields: m.fields.map((f) => ({
         key: f.key,
         label: f.label,
@@ -66,12 +65,15 @@ export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async 
         maxLength: f.maxLength ?? null,
         accept: f.accept ?? null,
         maxSizeMB: f.maxSizeMB ?? null,
+        notFuture: !!f.notFuture,
+        unit: f.unit ?? null,
         // The browser is told a field is protected, but never why or how.
         protected: f.pii === 'encrypted' || !!f.sensitive,
         autofill: f.autofill
           ? { locked: f.autofill.locked, alwaysLocked: !!f.autofill.alwaysLocked, generated: f.autofill.from === 'citation' }
           : null,
       })),
+      derived: (m.derived ?? []).map((d) => ({ key: d.key, label: d.label })),
     });
   } catch (e) {
     return toResponse(e);

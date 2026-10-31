@@ -22,7 +22,7 @@ const LISTS: Record<string, string[]> = {
   ugQualifications: ['B.E./B.Tech', 'B.Sc', 'B.Arch', 'B.Pharm', 'BA', 'BBA', 'BCA', 'B.Com', 'Others'],
   pgQualifications: ['M.E./M.Tech', 'M.Sc', 'M.Arch/MUP', 'M.Pharm', 'MA', 'MBA', 'MCA', 'M.Com', 'Others', 'None'],
   indexingTypes: ['SCIE', 'Scopus', 'ESCI', 'SSCI', 'AHCI'],
-  patentStatus: ['Published', 'Awarded/Granted'],
+  patentStatus: ['Applied', 'Published', 'Granted'],
   patentCategories: ['Engineering', 'Pharmacy', 'Management', 'Others'],
   countries: ['India', 'United States', 'United Kingdom', 'Germany', 'Japan', 'Australia', 'Canada', 'Singapore', 'Other'],
   projectRoles: ['PI', 'Co-PI'],

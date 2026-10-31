@@ -5,7 +5,8 @@ import { mustGetModule, ServiceError } from '@/server/records/service';
 import {
   applyLookup, ownerMissingFromAuthors, yearNote, WHOLE_VOLUME_TYPES, sourceOf, personOf,
 } from './apply';
-import { namesMatch } from './names';
+import { ownerNamed } from './names';
+import { ownerIdentity } from './identity';
 import { resolve } from './resolve';
 import { isLookupUnavailable } from './http';
 import { normaliseDoiInput } from './doi';
@@ -15,7 +16,7 @@ import { patentIndexStatus } from './patentIndex';
 import { getModule } from '@darp/shared/modules';
 
 /** Which of the module's identifier fields this input belongs in, judged by the field's type. */
-function fieldFor(m: ReturnType<typeof mustGetModule>, identifier: string) {
+export function fieldFor(m: ReturnType<typeof mustGetModule>, identifier: string) {
   for (const key of m.lookup?.idFields ?? []) {
     const f = m.fields.find((x) => x.key === key);
     if (!f) continue;
@@ -76,7 +77,8 @@ export async function lookupForForm(
     return byHand(`No published record was found for this ${m.lookup.idLabel}. Check it, or fill in the details by hand and attach evidence — ${afterTyping}`);
   }
 
-  const applied = await applyLookup(m, typed, { ownerName: actor.name });
+  const who = await ownerIdentity(actor.id, actor.name);
+  const applied = await applyLookup(m, typed, { owner: who });
   const fill: Record<string, string> = {};
   for (const f of m.fields) {
     const v = applied.data[f.key];
@@ -98,17 +100,25 @@ export async function lookupForForm(
   const yearHint = yearNote(result);
   // "…the name was added by hand" describes a saved record; at this point nothing was added yet.
   const reasons = (applied.verification?.reasons ?? []).filter((r) => !r.includes('added by hand'));
-  const nameMissing = ownerMissingFromAuthors(m, applied.data, actor.name);
+  const nameMissing = ownerMissingFromAuthors(m, applied.data, who);
   const notes: string[] = yearHint ? [yearHint] : [];
-  if (nameMissing) {
+  const authorship = applied.verification?.authorship;
+  if (authorship?.level === 'confirmed') {
+    notes.push(`Authorship confirmed: your ORCID iD (${who.orcid}) is on the published record.`);
+  } else if (authorship?.level === 'likely') {
+    notes.push(`Your name and ${m.lookup.kind === 'patent' ? 'a BIT Mesra address are' : 'BIT Mesra as affiliation are'} on the published record.${who.orcid || m.lookup.kind === 'patent' ? '' : ' Add your ORCID iD on My profile so papers that carry it are confirmed outright.'}`);
+  }
+  if (authorship?.level === 'confirmed') {
+    // The ORCID iD settles it, however the name is printed on the paper.
+  } else if (nameMissing) {
     notes.push(nameMissing.message);
-  } else if (!result.people.some((p) => namesMatch(actor.name, p))) {
+  } else if (!result.people.some((p) => ownerNamed(who, p))) {
     // A whole book's record names its editors only: the usual mistake is a chapter author pasting the book.
     notes.push(WHOLE_VOLUME_TYPES.has(result.rawType ?? '') && m.lookup.kind === 'book'
       ? 'Your name is not among the authors or editors of this book. If you wrote a chapter in it, or a paper in these proceedings, paste the DOI of that chapter or paper instead.'
       : `Your name is not in the ${personOf(m)} list of ${sourceOf(m)}. Add it if you are ${m.lookup.kind === 'patent' ? 'an inventor' : 'an author or editor'}; the record is then checked against your evidence.`);
   }
-  // A choice the lists could not answer (the quartile of a journal with no SJR value): say so, or
+  // A choice the register could not answer (a patent's status): say so, or
   // "everything matches" would hide an empty field the owner may need to fill.
   let mustType = false;
   for (const f of m.fields) {

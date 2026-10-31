@@ -14,8 +14,8 @@ export type { SidebarGroup, SidebarItem } from '@darp/shared/contracts';
  * It does no authorization of its own — the page passes only permitted groups.
  */
 export function Sidebar({
-  groups, roleLabel,
-}: { groups: SidebarGroup[]; roleLabel: string }) {
+  groups, roleLabel, showAdmin = false, showReports = false,
+}: { groups: SidebarGroup[]; roleLabel: string; showAdmin?: boolean; showReports?: boolean }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState('');
@@ -68,7 +68,7 @@ export function Sidebar({
       >
         <div className="flex items-center gap-2 border-b border-line px-3 py-2.5">
           <span className="min-w-0">
-            <span className="block truncate text-2xs font-bold uppercase tracking-wider text-ink-faint">
+            <span className="block truncate text-xs font-semibold text-ink-muted">
               Signed in as
             </span>
             <span className="block truncate text-sm font-semibold leading-tight text-ink">{roleLabel}</span>
@@ -113,10 +113,38 @@ export function Sidebar({
           >
             Overview
           </Link>
+          {showAdmin ? (
+            <Link
+              href="/admin"
+              aria-current={pathname.startsWith('/admin') ? 'page' : undefined}
+              className={cx(
+                'mb-1 block rounded-sm px-2.5 py-1.5 text-sm font-semibold',
+                pathname.startsWith('/admin')
+                  ? 'bg-primary-soft text-primary'
+                  : 'text-ink-muted hover:bg-surface-2 hover:text-ink',
+              )}
+            >
+              Administration
+            </Link>
+          ) : null}
+          {showReports ? (
+            <Link
+              href="/reports"
+              aria-current={pathname.startsWith('/reports') ? 'page' : undefined}
+              className={cx(
+                'mb-1 block rounded-sm px-2.5 py-1.5 text-sm font-semibold',
+                pathname.startsWith('/reports')
+                  ? 'bg-primary-soft text-primary'
+                  : 'text-ink-muted hover:bg-surface-2 hover:text-ink',
+              )}
+            >
+              Reports
+            </Link>
+          ) : null}
 
           {shown.map((group) => (
             <div key={group.name} className="mb-2">
-              <h2 className="px-2.5 pb-1 pt-2 text-2xs font-bold uppercase tracking-wider text-ink-faint">
+              <h2 className="px-2.5 pb-1 pt-2 text-xs font-semibold text-ink-muted">
                 {group.name}
               </h2>
               <ul className="space-y-px">

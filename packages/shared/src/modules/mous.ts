@@ -14,7 +14,7 @@ export const mous: ModuleConfig = {
   verifierRoles: ['drie'],
   viewRoles: ['faculty', 'hod', 'drie', 'admin'],
   scope: 'department',
-  naturalKey: ['organisation', 'signingYear'],
+  naturalKey: ['organisation', 'signingDate'],
   fields: [
     { key: 'organisation', label: 'Organisation with which MoU is signed', type: 'text',
       required: true, maxLength: 240, colSpan: 2, section: 'MoU',
@@ -29,11 +29,12 @@ export const mous: ModuleConfig = {
         hod: 'Name of the institution/ industry/ corporate house',
       } },
 
-    { key: 'signingYear', label: 'Year of signing MoU', type: 'year', required: true, min: 1990,
-      max: 2100, section: 'MoU',
+    { key: 'signingDate', label: 'Date of signing the MoU', type: 'date', required: true,
+      notFuture: true, periodSource: true, exportYear: true, section: 'MoU',
       exportAs: { drie: 'Year of signing MoU', hod: 'Year of signing MoU' } },
 
-    { key: 'duration', label: 'Duration', type: 'text', required: true, maxLength: 60,
+    { key: 'durationYears', label: 'Duration (in years)', type: 'decimal', required: true, min: 0.5, max: 30,
+      unit: 'years', placeholder: '3', help: 'A number only, for example 3 or 1.5.',
       section: 'MoU',
       exportAs: { drie: 'Duration', hod: 'Duration' } },
 
@@ -60,11 +61,12 @@ export const mous: ModuleConfig = {
       } },
 
     { key: 'evidence', label: 'Attach document (Yearly MoU Activity Report)', type: 'file',
-      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence',
+      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Evidence',
       exportAs: { hod: 'Attach document (Yearly MoU Activity Report)' } },
   ],
-  listColumns: ['organisation', 'institutionName', 'signingYear', 'duration', 'participants'],
-  defaultSort: { key: 'signingYear', dir: 'desc' },
+  derived: [{ key: 'validUntil', label: 'Valid until' }],
+  listColumns: ['organisation', 'institutionName', 'signingDate', 'durationYears', 'validUntil', 'participants'],
+  defaultSort: { key: 'signingDate', dir: 'desc' },
   exportTargets: [
     { workbook: 'drie', sheet: 'MoUs' },
     { workbook: 'hod', sheet: 'MoUs' },

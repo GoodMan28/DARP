@@ -3,14 +3,14 @@ import { withRoute, ok, fail } from '@/server/http/handler';
 import { getList } from '@/server/records/masterLists';
 import { audit } from '@/server/audit/log';
 import {
-  journalListSummary, storeSjrRows, storeListRows, clearJournalList,
+  journalListSummary, storeSjrRows, storeListRows, storeJcrRows, clearJournalList,
 } from '@/server/lookup/journals';
 import { scopusListStatus, syncScopusList } from '@/server/lookup/scopusList';
 import { patentIndexStatus, updatePatentIndex } from '@/server/lookup/patentIndex';
 
 /**
- * The journal lists quartile and indexing are read from (SCImago SJR, Web of Science collections).
- * The browser parses the downloaded CSV and sends the ISSN rows here in batches, so a 10 MB file
+ * The journal lists a paper's indexing, quartile and Impact Factor are worked out from (SCImago SJR,
+ * Web of Science collections, Journal Citation Reports). The browser parses the downloaded CSV and sends the ISSN rows here in batches, so a 10 MB file
  * never has to cross the proxy in one piece.
  */
 
@@ -33,6 +33,15 @@ const rowSchema = z.object({
   coverage: z.string().max(200).optional(),
 });
 
+const jcrRowSchema = z.object({
+  issn: z.string().regex(/^\d{7}[\dX]$/),
+  title: z.string().max(500),
+  jif: z.string().regex(/^<?\d{1,4}(\.\d{1,3})?$/).nullable(),
+  jifQuartile: z.enum(['Q1', 'Q2', 'Q3', 'Q4']).nullable(),
+  categories: z.string().max(500),
+  editions: z.string().max(60),
+});
+
 const bodySchema = z.discriminatedUnion('action', [
   /** Fetch Elsevier's public Scopus list again now, instead of waiting for the nightly check. */
   z.object({ action: z.literal('syncScopus') }),
@@ -44,14 +53,25 @@ const bodySchema = z.discriminatedUnion('action', [
     year: z.number().int().min(1999).max(2100),
     listName: z.string().max(40).optional(),
     rows: z.array(rowSchema).min(1).max(5000),
+    /** The first batch of a file: the list already loaded for that year is replaced, not added to. */
+    replace: z.boolean().default(false),
     /** The last batch of a file: written to the audit log once, with the totals. */
+    last: z.boolean().default(false),
+    totalRows: z.number().int().min(0).optional(),
+    fileName: z.string().max(200).optional(),
+  }),
+  /** One batch of a Journal Citation Reports export (Impact Factor and JIF quartile). */
+  z.object({
+    action: z.literal('importJcr'),
+    jifYear: z.number().int().min(1997).max(2100),
+    rows: z.array(jcrRowSchema).min(1).max(5000),
     last: z.boolean().default(false),
     totalRows: z.number().int().min(0).optional(),
     fileName: z.string().max(200).optional(),
   }),
   z.object({
     action: z.literal('clear'),
-    kind: z.enum(['sjr', 'list']),
+    kind: z.enum(['sjr', 'list', 'jcr']),
     year: z.number().int().min(1999).max(2100),
     listName: z.string().max(40).optional(),
   }),
@@ -84,6 +104,17 @@ export const POST = withRoute(
       return ok(await patentIndexStatus());
     }
 
+    if (body.action === 'importJcr') {
+      const stored = await storeJcrRows(body.jifYear, body.rows);
+      if (body.last) {
+        await audit({
+          actor, action: 'masterlist.update', entity: 'masterlist',
+          meta: { journalList: 'JCR', year: body.jifYear, rows: body.totalRows ?? stored, file: body.fileName ?? null },
+        });
+      }
+      return ok({ stored });
+    }
+
     if (body.kind === 'list') {
       const allowed = await getList('indexingTypes');
       if (!body.listName || !allowed.includes(body.listName)) {
@@ -98,11 +129,13 @@ export const POST = withRoute(
       await clearJournalList(body.kind, body.year, body.listName);
       await audit({
         actor, action: 'masterlist.update', entity: 'masterlist',
-        meta: { journalList: body.kind === 'sjr' ? 'SJR' : body.listName, year: body.year, cleared: true },
+        meta: { journalList: body.kind === 'sjr' ? 'SJR' : body.kind === 'jcr' ? 'JCR' : body.listName, year: body.year, cleared: true },
       });
       return ok({ cleared: true });
     }
 
+    // Loading SCIE 2026 again means "this is the SCIE list now": a journal dropped from it must go.
+    if (body.replace) await clearJournalList(body.kind, body.year, body.listName);
     const stored = body.kind === 'sjr'
       ? await storeSjrRows(body.year, body.rows)
       : await storeListRows(body.listName!, body.year, body.rows);

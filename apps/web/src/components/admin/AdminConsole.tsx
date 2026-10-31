@@ -5,9 +5,10 @@ import { cx } from '@/lib/cx';
 import { AccountsPanel } from './AccountsPanel';
 import { MasterListsPanel } from './MasterListsPanel';
 import { JournalListsPanel } from './JournalListsPanel';
+import { DeletedRecordsPanel } from './DeletedRecordsPanel';
 import { CyclePanel } from './CyclePanel';
 import { AuditPanel } from './AuditPanel';
-import { ExportsPanel } from './ExportsPanel';
+import { ReportsPanel } from '@/components/reports/ReportsPanel';
 import { ADMIN_TABS, type AdminTab } from './types';
 
 /**
@@ -21,7 +22,7 @@ export function AdminConsole({
 
   return (
     <div>
-      <div className="mb-4 border-b border-line">
+      <div className="mb-3 border-b border-line">
         <div role="tablist" aria-label="Administration sections" className="-mb-px flex flex-wrap gap-0.5">
           {ADMIN_TABS.map((t) => {
             const selected = t.key === tab;
@@ -48,6 +49,8 @@ export function AdminConsole({
         </div>
       </div>
 
+      <p className="mb-4 text-sm text-ink-muted">{ADMIN_TABS.find((t) => t.key === tab)?.about}</p>
+
       <div
         role="tabpanel"
         id={`admin-panel-${tab}`}
@@ -58,8 +61,9 @@ export function AdminConsole({
         {tab === 'lists' ? <MasterListsPanel /> : null}
         {tab === 'journals' ? <JournalListsPanel /> : null}
         {tab === 'cycle' ? <CyclePanel /> : null}
+        {tab === 'deleted' ? <DeletedRecordsPanel /> : null}
         {tab === 'audit' ? <AuditPanel /> : null}
-        {tab === 'exports' ? <ExportsPanel /> : null}
+        {tab === 'exports' ? <ReportsPanel /> : null}
       </div>
     </div>
   );

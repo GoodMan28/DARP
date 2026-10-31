@@ -3,7 +3,9 @@ import type { SessionUser } from './session';
 
 /** What a role may do institute-wide, independent of any module. */
 export const ROLE_CAPABILITIES = {
-  faculty: { manageUsers: false, manageLists: false, manageCycle: false, viewAudit: false, export: false, revealPii: false },
+  // A faculty member may download their own Faculty workbook: every export query runs through
+  // scopeFilter(), which gives a faculty member their own records only.
+  faculty: { manageUsers: false, manageLists: false, manageCycle: false, viewAudit: false, export: true, revealPii: false },
   // A head of department may export the HOD workbook. It is safe because every export
   // query runs through scopeFilter(), which limits a HOD to their own department.
   hod: { manageUsers: false, manageLists: false, manageCycle: false, viewAudit: false, export: true, revealPii: false },
@@ -38,13 +40,12 @@ export function canVerify(actor: SessionUser, m: ModuleConfig): boolean {
   return actor.role === 'admin' || m.verifierRoles.includes(actor.role);
 }
 
-/** Modules approved on submission are checked afterwards, so an approved record can be returned. */
-export function returnsAfterApproval(m: ModuleConfig): boolean {
-  return m.lookup?.autoApprove === 'always';
-}
-
-export function canApprove(actor: SessionUser): boolean {
-  return actor.role === 'admin';
+/**
+ * Every module approves a record when its owner submits it; the verifying office and IQAC check
+ * afterwards and may return an approved record with a remark. Kept as a function so callers say why.
+ */
+export function returnsAfterApproval(_m: ModuleConfig): boolean {
+  return true;
 }
 
 /* ── record-level permissions ─────────────────────────────────────── */
@@ -55,32 +56,41 @@ export interface RecordOwnership {
   status: RecordStatus;
 }
 
-/** Read: owner always; department for HOD; verifier/viewer roles; admin everything. */
+/**
+ * Read: owner always; a HOD their department's records; verifier/viewer roles the module's records
+ * (a faculty viewer of a department module only their own department's); admin everything.
+ */
 export function canReadRecord(actor: SessionUser, m: ModuleConfig, r: RecordOwnership): boolean {
   if (actor.role === 'admin') return true;
   if (r.ownerUserId === actor.id) return true;
   if (actor.role === 'hod') {
     return !!actor.departmentId && r.departmentId === actor.departmentId && canViewModule(actor, m);
   }
+  if (actor.role === 'faculty' && m.scope === 'department') {
+    return !!actor.departmentId && r.departmentId === actor.departmentId && m.viewRoles.includes('faculty');
+  }
   // Office roles (dofa/drie/dugs/cdc) see their own modules across all departments.
   if (m.verifierRoles.includes(actor.role) || m.viewRoles.includes(actor.role)) return true;
   return false;
 }
 
-/** Edit: only the owner, and only while the record is open. Admin may always edit (audited). */
-export function canEditRecord(actor: SessionUser, m: ModuleConfig, r: RecordOwnership): boolean {
-  if (actor.role === 'admin') return true;
-  if (r.ownerUserId !== actor.id) return false;
-  return r.status === 'draft' || r.status === 'returned';
+/** Edit: the owner at any time, even after approval (every change is kept in the record's history). Admin too. */
+export function canEditRecord(actor: SessionUser, _m: ModuleConfig, r: RecordOwnership): boolean {
+  return actor.role === 'admin' || r.ownerUserId === actor.id;
 }
 
-/** Delete: same as edit, and soft only. */
-export function canDeleteRecord(actor: SessionUser, m: ModuleConfig, r: RecordOwnership): boolean {
-  return canEditRecord(actor, m, r);
+/** Delete: the owner at any status, IQAC any record. Soft only, and it can be restored. */
+export function canDeleteRecord(actor: SessionUser, _m: ModuleConfig, r: RecordOwnership): boolean {
+  return actor.role === 'admin' || r.ownerUserId === actor.id;
 }
 
-/** Transitions — the single source of truth for the workflow in 00 §0.8. */
-export type WorkflowAction = 'submit' | 'verify' | 'return' | 'approve' | 'unlock';
+/** A reason is written down when an approved record goes, and whenever IQAC removes someone else's. */
+export function deleteNeedsReason(actor: SessionUser, r: RecordOwnership): boolean {
+  return r.status === 'approved' || r.ownerUserId !== actor.id;
+}
+
+/** Transitions: records are approved on submission, so the only steps are submit and return. */
+export type WorkflowAction = 'submit' | 'return';
 
 export function canTransition(
   actor: SessionUser, m: ModuleConfig, r: RecordOwnership, action: WorkflowAction,
@@ -94,45 +104,24 @@ export function canTransition(
       if (!isOwner && actor.role !== 'admin') {
         return { allowed: false, next: null, reason: 'Only the owner may submit.' };
       }
-      return { allowed: true, next: 'submitted' };
-    case 'verify':
-      if (r.status !== 'submitted') {
-        return { allowed: false, next: null, reason: 'Only a submitted record can be verified.' };
-      }
-      if (!canVerify(actor, m)) {
-        return { allowed: false, next: null, reason: 'Your role cannot verify this module.' };
-      }
-      // Where submissions are approved automatically (Publications), a record only reaches the
-      // office after being returned and resubmitted; the office's check is then final, so IQAC
-      // never has to approve publications. IQAC can still return an approved one.
-      return { allowed: true, next: returnsAfterApproval(m) ? 'approved' : 'verified' };
+      // Approved on submission, in every module.
+      return { allowed: true, next: 'approved' };
     case 'return':
-      // Where submissions are approved automatically, checking happens afterwards: the verifying
-      // office and IQAC may send an approved record back to its owner.
-      if (!(r.status === 'submitted' || r.status === 'verified'
-        || (r.status === 'approved' && returnsAfterApproval(m)))) {
-        return { allowed: false, next: null, reason: 'Only a submitted or verified record can be returned.' };
+      if (!(r.status === 'submitted' || r.status === 'verified' || r.status === 'approved')) {
+        return { allowed: false, next: null, reason: 'Only an approved record can be returned.' };
+      }
+      // Nobody returns their own record, a HOD's own profile included.
+      if (isOwner) {
+        return { allowed: false, next: null, reason: 'You cannot return your own record.' };
+      }
+      // A head of department checks their own department's records afterwards, too.
+      if (actor.role === 'hod' && actor.departmentId && r.departmentId === actor.departmentId && canViewModule(actor, m)) {
+        return { allowed: true, next: 'returned' };
       }
       if (!canVerify(actor, m)) {
         return { allowed: false, next: null, reason: 'Your role cannot return this record.' };
       }
       return { allowed: true, next: 'returned' };
-    case 'approve':
-      if (r.status !== 'verified') {
-        return { allowed: false, next: null, reason: 'Only a verified record can be approved.' };
-      }
-      if (!canApprove(actor)) {
-        return { allowed: false, next: null, reason: 'Only IQAC may approve.' };
-      }
-      return { allowed: true, next: 'approved' };
-    case 'unlock':
-      if (r.status !== 'approved') {
-        return { allowed: false, next: null, reason: 'Only an approved record can be unlocked.' };
-      }
-      if (!canApprove(actor)) {
-        return { allowed: false, next: null, reason: 'Only IQAC may unlock.' };
-      }
-      return { allowed: true, next: 'verified' };
     default:
       return { allowed: false, next: null, reason: 'Unknown action.' };
   }

@@ -34,7 +34,7 @@ export const fdporganised: ModuleConfig = {
       exportAs: { hod: 'Number of external faculty who attended' } },
 
     { key: 'evidence', label: 'Attach documents', type: 'file', accept: ['pdf', 'jpg', 'jpeg', 'png'],
-      maxSizeMB: 5, colSpan: 2, section: 'Evidence',
+      maxSizeMB: 2, colSpan: 2, section: 'Evidence',
       help: 'Notice, schedule, geo-tagged photos, event reports, attendees.',
       exportAs: { hod: 'Attach documents (notice, schedule, geo-tagged photos, event reports, attendees)' } },
   ],

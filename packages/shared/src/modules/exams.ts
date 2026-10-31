@@ -42,7 +42,7 @@ export const exams: ModuleConfig = {
       exportAs: { cdc: 'Registration number/roll number for the exam' } },
 
     { key: 'evidence', label: 'Attach scorecard / result', type: 'file',
-      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence' },
+      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Evidence' },
   ],
   listColumns: ['studentName', 'registrationNo', 'examName', 'year'],
   defaultSort: { key: 'year', dir: 'desc' },

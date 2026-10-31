@@ -1,5 +1,6 @@
 // src/modules/mentorship.ts
 import type { ModuleConfig } from './_types';
+import { FACULTY_MEMBERS } from './_types';
 
 export const mentorship: ModuleConfig = {
   key: 'mentorship',
@@ -9,7 +10,7 @@ export const mentorship: ModuleConfig = {
   naacRef: '2.3',
   bodies: ['NAAC'],
   description: 'Every UG student for whom you are the Mentor in the current academic year.',
-  ownerRoles: ['faculty'],
+  ownerRoles: FACULTY_MEMBERS,
   verifierRoles: ['dugs'],
   viewRoles: ['hod', 'dugs', 'admin'],
   scope: 'self',
@@ -40,7 +41,7 @@ export const mentorship: ModuleConfig = {
       exportAs: { faculty: 'Phone Number', dugs: 'Phone Number' } },
 
     { key: 'activityReport', label: 'Attach Mentorship Activity Reports', type: 'file',
-      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence',
+      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Evidence',
       exportAs: {
         faculty: 'Attach Mentorship Activity Reports', dugs: 'Attach Mentorship Activity Reports',
       } },

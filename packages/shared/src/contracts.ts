@@ -113,7 +113,8 @@ export interface VerificationQueueRow {
 
 /** GET /api/dashboard */
 export interface DashboardPayload {
-  cycle: { name: string; deadlineAt: string | null; entryOpensAt: string | null } | null;
+  /** The default year range (a saved range, else the last three years). It never hides a record. */
+  cycle: { name: string; from: number; to: number };
   role: Role;
   /** Whether this role fills in any module itself (faculty, HOD, the offices — not every role). */
   ownsModules: boolean;
@@ -124,11 +125,27 @@ export interface DashboardPayload {
   queue: VerificationQueueRow[];
   /** Completion by department. Empty for faculty. */
   departments: DepartmentCompletionRow[];
+  /** Records this person returned that have been corrected and are waiting for a second look. */
+  corrections: CorrectionRow[];
+  /** Patents the journal moved forward in the last 30 days. */
+  autoUpdates: AutoUpdateRow[];
+}
+
+/** A patent the Patent Office Journal moved forward by itself (shown on its owner's dashboard). */
+export interface AutoUpdateRow {
+  id: string; moduleKey: string; at: string; text: string;
+}
+
+export interface CorrectionRow {
+  id: string; moduleKey: string; moduleName: string; title: string; ownerName: string; correctedAt: string;
+  /** Labels of the fields changed since the return; empty when resubmitted without changes. */
+  changed: string[];
 }
 
 /* ──────────────────────────────── profile ─────────────────────────────── */
 
-export type CounterWindow = 'cycle' | 'sinceJoining';
+/** 'today': records still valid today (an award within its validity), whatever their year. */
+export type CounterWindow = 'cycle' | 'sinceJoining' | 'today';
 
 export interface DeclaredCounterDef {
   key: string;
@@ -156,6 +173,11 @@ export interface DeclaredCounter extends DeclaredCounterDef {
 /** GET /api/profile/rollups */
 export interface CounterValues {
   userId: string;
+  /** The years counted ("cycle" figures); "since joining" figures ignore it. */
+  range: { from: number; to: number };
+  /** The first year a range can start from: the oldest record, or ten years back. */
+  minYear: number;
+  maxYear: number;
   computed: ComputedCounter[];
   declared: DeclaredCounter[];
 }
@@ -184,6 +206,10 @@ export interface FormFieldDef {
   maxLength: number | null;
   accept: string[] | null;
   maxSizeMB: number | null;
+  /** A date or year that cannot be later than today. */
+  notFuture: boolean;
+  /** Shown after a number input, e.g. 'years'. */
+  unit: string | null;
   protected: boolean;
   /**
    * Filled from an external register. `locked` fields are shown locked after a lookup, with a
@@ -195,6 +221,8 @@ export interface FormFieldDef {
 
 /** GET /api/modules/:moduleKey/schema — the module's shape plus the caller's standing in it. */
 export interface ModuleSchemaPayload {
+  /** The columns the Filter, Sort, Group and Hide fields tools offer for this module. */
+  viewColumns: import('./views').ViewColumn[];
   key: string;
   name: string;
   group: ModuleConfig['group'];
@@ -211,10 +239,15 @@ export interface ModuleSchemaPayload {
   /** Every period the records the caller can see are filed under, the cycle's or not, newest first. */
   recordPeriods: PeriodOption[];
   counts: StatusCounts;
-  declaredNil: boolean;
+  /** Years this person declared "nothing to report" for in this module. */
+  declaredYears: number[];
+  /** The years the declaration can be made for (the default range's years, newest first). */
+  declarableYears: number[];
   /** Present when the module fetches its facts from a register (DOI / ISBN / patent number). */
   lookup: { kind: LookupKind; idFields: string[]; idLabel: string; sourceName: string } | null;
   fields: FormFieldDef[];
+  /** Values worked out when read, never typed (the journal's indexing, quartile, Impact Factor). */
+  derived: Array<{ key: string; label: string }>;
 }
 
 export interface RecordListRow {
@@ -229,6 +262,15 @@ export interface RecordListRow {
   data: Record<string, unknown>;
   /** Approved automatically, but with details that could not be confirmed: worth a look. */
   needsCheck: boolean;
+  /** The module's derived values as text, by key ("Q1 SJR · IF 5.2", "NA"); {} for a module with none. */
+  derived: Record<string, string>;
+  /** A returned record: who sent it back and when (so a viewer who is not the owner sees why it waits). */
+  returnedByRole: Role | null;
+  returnedAt: string | null;
+  /** A profile roster row for someone who has not saved a profile yet: `id` is then the person's user id. */
+  noRecord?: boolean;
+  /** The group the row is under, when the view groups ("Computer Science & Engg.", "Approved"). */
+  group?: string | null;
 }
 
 /** GET /api/modules/:moduleKey/records */
@@ -237,6 +279,8 @@ export interface RecordListPayload {
   page: number;
   pageSize: number;
   rows: RecordListRow[];
+  /** When grouped: every group's size across all pages, in order. */
+  groups?: Array<{ label: string; count: number }>;
 }
 
 export interface RecordHistoryEntry {
@@ -270,6 +314,26 @@ export interface RecordDetail {
   verification: RecordVerification | null;
   /** Fields the edit form must show as locked. */
   lockedFields: string[];
+  /** The module's derived values as text, by key; {} for a module with none. */
+  derived: Record<string, string>;
+  /** Changes made after the first submission, newest first (everyone who can open the record). */
+  edits: RecordEditEntry[];
+  /** The server's answer: may this viewer delete the record, and must they say why? */
+  canDelete: boolean;
+  deleteNeedsReason: boolean;
+  /** A returned record: who sent it back and when. */
+  returnedByRole: Role | null;
+  returnedAt: string | null;
+  /** Fields whose date was estimated from a year, or that still need entering (after the October 2026 change). */
+  estimatedDates: string[];
+  needsInput: string[];
+}
+
+export interface RecordEditEntry {
+  at: string;
+  actorName: string;
+  note: string | null;
+  changes: Array<{ key: string; label: string; from: string; to: string }>;
 }
 
 /* ── automatic lookup (DOI / ISBN / patent number) ─────────────────── */
@@ -291,6 +355,56 @@ export interface RecordVerification {
    * cannot be hidden. Fields not listed came from the publisher unchanged.
    */
   fields?: Record<string, FieldProvenance>;
+  /** How sure the portal is that the owner is one of the authors or inventors. Never blocks a submission. */
+  authorship?: Authorship;
+}
+
+/**
+ * confirmed: the owner's checked ORCID iD is on the published record.
+ * likely:    the owner's name matches a listed author or inventor at BIT Mesra.
+ * name:      the name matches, but the affiliation is unknown or another institution.
+ * unmatched: nobody listed matches; the owner added their name by hand.
+ */
+export type AuthorshipLevel = 'confirmed' | 'likely' | 'name' | 'unmatched';
+
+export interface Authorship {
+  level: AuthorshipLevel;
+  /** One sentence for DRIE and IQAC, e.g. "ORCID iD 0000-0002-1825-0097 is on the paper." */
+  detail: string;
+}
+
+export const AUTHORSHIP_LABEL: Record<AuthorshipLevel, string> = {
+  confirmed: 'Confirmed by ORCID',
+  likely: 'Likely: name and BIT Mesra',
+  name: 'Name only',
+  unmatched: 'Needs checking',
+};
+
+/** What ORCID's public record said about an iD when it was saved. */
+export interface OrcidCheck {
+  checkedAt: string;
+  /** The record exists on orcid.org. */
+  found: boolean;
+  /** The name on the ORCID record (or one of its other names) is the account's name. */
+  nameMatches: boolean;
+  /** An employment at BIT Mesra is listed. */
+  bitEmployment: boolean;
+  /** The name as ORCID shows it, for the person to compare. */
+  orcidName: string;
+  /** ORCID could not be reached: saved unchecked, and not used until checked again. */
+  unchecked?: boolean;
+  /** The other IDs the ORCID record lists ("Other IDs" on orcid.org): Scopus Author IDs and ResearcherIDs. */
+  externalIds?: { scopusAuthorIds: string[]; researcherIds: string[] };
+}
+
+/** GET /api/profile/identity */
+export interface IdentityPayload {
+  namePrefix: string;
+  firstName: string;
+  middleName: string;
+  lastName: string;
+  orcid: string | null;
+  orcidCheck: OrcidCheck | null;
 }
 
 export interface FieldProvenance {
@@ -320,3 +434,62 @@ export const LOOKUP_SOURCE_LABEL: Record<LookupSource, string> = {
   openlibrary: 'Open Library',
   ipindia: 'the Patent Office Journal (IP India)',
 };
+
+/* ── Adding many records at once from a file of DOIs, ISBNs or patent numbers ── */
+
+/**
+ * What became of one identifier in the file. Every one but `exists` has a draft for the owner to
+ * complete (the faculty member is trusted); the status says what the check found:
+ *  created       filled from the register, nothing to add
+ *  exists        already recorded (by the owner, with a link, or by a colleague): no draft
+ *  not-found     not in the register: the draft holds only the number
+ *  wrong-module  it belongs in another module: the draft is made there (a preprint belongs nowhere: no draft)
+ *  not-yours     the owner's name is not in its author or inventor list: they add it on the draft
+ *  error         could not be checked (register unreachable: draft holds the number; upload cut off: none)
+ */
+export type BulkItemStatus = 'pending' | 'created' | 'exists' | 'not-found' | 'wrong-module' | 'not-yours' | 'error';
+
+export interface BulkItem {
+  id: string;
+  raw: string;
+  status: BulkItemStatus;
+  message: string | null;
+  /** The record made (or found already made), while it exists. */
+  record: {
+    id: string;
+    /** A line that belongs in another module has its draft there. */
+    moduleKey: string;
+    moduleName: string;
+    status: RecordStatus;
+    mine: boolean;
+    title: string;
+    /** The module's evidence field, for the upload box on the row. */
+    evidence: { fieldKey: string; label: string; accept: string[] | null; maxSizeMB: number } | null;
+    /** The evidence file on the draft, if any. */
+    evidenceId: string | null;
+    /** Submitting needs an evidence file: always in some modules, else when something is unconfirmed. */
+    needsEvidence: boolean;
+    /** What the automatic check could not confirm. */
+    points: string[];
+  } | null;
+}
+
+/** GET /api/modules/:moduleKey/bulk/:id */
+export interface BulkImport {
+  id: string;
+  moduleKey: string;
+  fileName: string;
+  status: 'running' | 'done' | 'failed';
+  total: number;
+  done: number;
+  createdAt: string;
+  items: BulkItem[];
+}
+
+/** POST /api/modules/:moduleKey/bulk/:id/submit: one per record. */
+export interface BulkSubmitResult {
+  recordId: string;
+  ok: boolean;
+  status: RecordStatus | null;
+  message: string | null;
+}

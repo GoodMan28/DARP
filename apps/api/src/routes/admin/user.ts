@@ -6,14 +6,14 @@ import { withRoute, ok, fail } from '@/server/http/handler';
 import { hashPassword, PasswordPolicyError } from '@/server/auth/password';
 import { revokeAllSessionsForUser } from '@/server/auth/session';
 import { audit } from '@/server/audit/log';
-import { generateTemporaryPassword, ROLE_VALUES, DEPARTMENT_REQUIRED_ROLES } from '@/server/auth/accounts';
+import { generateTemporaryPassword, ROLE_VALUES, DEPARTMENT_REQUIRED_ROLES, NAME_FIELDS, namePartsFrom } from '@/server/auth/accounts';
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use the date picker.');
 
 const schema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('update'),
-    name: z.string().trim().min(2, 'Enter the full name.').max(160),
+    ...NAME_FIELDS,
     email: z.string().trim().toLowerCase().email('Enter a valid e-mail address.').max(200),
     role: z.enum(ROLE_VALUES),
     departmentId: z.string().uuid('Choose a department.').nullish(),
@@ -41,6 +41,10 @@ export const PATCH = withRoute(
       .select({
         id: users.id,
         name: users.name,
+        namePrefix: users.namePrefix,
+        firstName: users.firstName,
+        middleName: users.middleName,
+        lastName: users.lastName,
         email: users.email,
         role: users.role,
         departmentId: users.departmentId,
@@ -95,10 +99,17 @@ export const PATCH = withRoute(
         });
       }
 
+      const named = namePartsFrom(body);
+      if (!named.ok) return fail('VALIDATION', { message: 'Check the name.', fields: named.fields });
+
       const updated = await db
         .update(users)
         .set({
-          name: body.name,
+          name: named.name,
+          namePrefix: named.parts.prefix,
+          firstName: named.parts.first,
+          middleName: named.parts.middle,
+          lastName: named.parts.last,
           email: body.email,
           role: body.role,
           departmentId,
@@ -110,6 +121,10 @@ export const PATCH = withRoute(
         .returning({
           id: users.id,
           name: users.name,
+          namePrefix: users.namePrefix,
+          firstName: users.firstName,
+          middleName: users.middleName,
+          lastName: users.lastName,
           email: users.email,
           role: users.role,
           departmentId: users.departmentId,

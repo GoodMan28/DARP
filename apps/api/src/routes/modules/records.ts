@@ -5,6 +5,12 @@ import { toResponse } from '@/server/records/toResponse';
 import { canViewModule } from '@/server/auth/permissions';
 import type { RecordStatus } from '@darp/shared/modules/types';
 
+/** The ?view= text as an object; damaged or oversized text is the plain view (the view is cleaned again by the server). */
+export function parseViewParam(text: string | null): unknown {
+  if (!text || text.length > 20_000) return undefined;
+  try { return JSON.parse(text) as unknown; } catch { return undefined; }
+}
+
 const STATUSES = new Set<RecordStatus>(['draft', 'submitted', 'verified', 'approved', 'returned']);
 
 export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async ({ actor, params, query: sp }) => {
@@ -21,11 +27,15 @@ export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async 
       dir: sp.get('dir') === 'desc' ? 'desc' : 'asc',
       page: Number(sp.get('page') ?? 1) || 1,
       pageSize: Number(sp.get('pageSize') ?? 20) || 20,
-      status: statusParam && STATUSES.has(statusParam as RecordStatus)
-        ? (statusParam as RecordStatus)
-        : undefined,
+      status: statusParam === 'none'
+        ? 'none'
+        : statusParam && STATUSES.has(statusParam as RecordStatus)
+          ? (statusParam as RecordStatus)
+          : undefined,
       periodYear: Number.isInteger(yearParam) && yearParam > 1950 ? yearParam : undefined,
       check: sp.get('check') === '1',
+      mine: sp.get('mine') === '1',
+      view: parseViewParam(sp.get('view')),
     }));
   } catch (e) {
     return toResponse(e);

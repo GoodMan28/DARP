@@ -62,8 +62,9 @@ test.describe('faculty journey', () => {
     await useSession(page, 'verma');
     await page.goto('/profile');
     await expect(page.getByRole('heading', { name: 'My profile' })).toBeVisible();
-    await expect(page.getByRole('heading', { name: 'Computed totals' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Figures you declare' })).toBeVisible();
+    // The counted totals live on the dashboard, behind "Show my numbers".
+    await expect(page.getByRole('heading', { name: 'Computed totals' })).toHaveCount(0);
   });
 
   test('never shows a full Aadhaar anywhere in the page', async ({ page }) => {

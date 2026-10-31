@@ -45,9 +45,8 @@ export default async function NewRecordPage({ params, searchParams }: PageProps)
       user={user}
       groups={groups}
       crumbs={crumbs}
-      title={`Add a ${m.name.toLowerCase()} record`}
+      title={`Add ${/^[aeiou]/i.test(m.name) ? "an" : "a"} ${m.name.toLowerCase()} record`}
       subtitle={m.description}
-      cycleName={cycle.name}
       actions={
         <LinkButton href={`/m/${m.key}`} variant="secondary">
           <IconArrowBack width={14} height={14} />
@@ -86,14 +85,14 @@ export default async function NewRecordPage({ params, searchParams }: PageProps)
   return shell(
     <>
       <Notice tone="info" className="mb-4">
-        The reporting period is taken from the dated field you fill in, inside the cycle window
-        shown below. Fields marked with an asterisk are required before the record can be submitted;
+        The year a record counts in is taken from the date you fill in. Fields marked with an asterisk are required before the record can be submitted;
         anything else can be saved as a draft and finished later.
       </Notice>
       <RecordForm
         moduleKey={m.key}
         fields={fields}
         lookup={schema.data.lookup}
+        showRanking={schema.data.derived.length > 0}
         locked={lockedStrip(m, user, periodLabel)}
         handedOver={schema.data.lookup ? handedOver : undefined}
       />

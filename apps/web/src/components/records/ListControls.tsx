@@ -15,13 +15,15 @@ interface Props {
   status: string;
   year: string;
   periods: PeriodOption[];
+  /** The Faculty Profile roster also lists people who have not saved a profile yet. */
+  roster?: boolean;
+  /** The open view (conditions, sort, grouping), kept in the address as the search and status change. */
+  view?: string;
 }
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Any status' },
   { value: 'draft', label: 'Draft' },
-  { value: 'submitted', label: 'Submitted' },
-  { value: 'verified', label: 'Verified' },
   { value: 'approved', label: 'Approved' },
   { value: 'returned', label: 'Returned' },
 ];
@@ -31,7 +33,7 @@ const STATUS_OPTIONS = [
  * URL query, and the server component re-renders the table from the new query.
  * That keeps the list shareable, bookmarkable and back-button correct.
  */
-export function ListControls({ moduleKey, moduleName, q, status, year, periods }: Props) {
+export function ListControls({ moduleKey, moduleName, q, status, year, periods, roster, view }: Props) {
   const router = useRouter();
   const [text, setText] = useState(q);
   const [pending, setPending] = useState(false);
@@ -51,6 +53,7 @@ export function ListControls({ moduleKey, moduleName, q, status, year, periods }
     if (nq.trim()) params.set('q', nq.trim());
     if (ns) params.set('status', ns);
     if (ny) params.set('year', ny);
+    if (view) params.set('view', view);
     // Any filter change returns to the first page — page 2 of the old result set is meaningless.
     const query = params.toString();
     setPending(true);
@@ -76,7 +79,7 @@ export function ListControls({ moduleKey, moduleName, q, status, year, periods }
       className="flex flex-wrap items-end gap-2 border-b border-line bg-surface-2 px-3 py-2.5"
     >
       <div className="min-w-0 flex-1 sm:max-w-xs">
-        <label htmlFor={searchId} className="mb-1 block text-2xs font-bold uppercase tracking-wider text-ink-faint">
+        <label htmlFor={searchId} className="mb-1 block text-xs font-semibold text-ink-muted">
           Search
         </label>
         <div className="relative">
@@ -97,7 +100,7 @@ export function ListControls({ moduleKey, moduleName, q, status, year, periods }
       </div>
 
       <div className="w-40">
-        <label htmlFor={statusId} className="mb-1 block text-2xs font-bold uppercase tracking-wider text-ink-faint">
+        <label htmlFor={statusId} className="mb-1 block text-xs font-semibold text-ink-muted">
           Status
         </label>
         <Select
@@ -105,12 +108,12 @@ export function ListControls({ moduleKey, moduleName, q, status, year, periods }
           value={status}
           onChange={(e) => apply({ status: e.target.value })}
         >
-          {STATUS_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          {(roster ? [...STATUS_OPTIONS, { value: 'none', label: 'Not filled yet' }] : STATUS_OPTIONS).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </Select>
       </div>
 
       <div className="w-44">
-        <label htmlFor={yearId} className="mb-1 block text-2xs font-bold uppercase tracking-wider text-ink-faint">
+        <label htmlFor={yearId} className="mb-1 block text-xs font-semibold text-ink-muted">
           Reporting period
         </label>
         <Select id={yearId} value={year} onChange={(e) => apply({ year: e.target.value })}>

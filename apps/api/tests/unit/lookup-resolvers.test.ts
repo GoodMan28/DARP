@@ -2,15 +2,6 @@ import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-// Quartile and indexing come from the database; the resolvers are tested without one.
-vi.mock('@/server/lookup/journals', async () => {
-  const actual = await vi.importActual<typeof import('@/server/lookup/journals')>('@/server/lookup/journals');
-  return {
-    ...actual,
-    journalFacts: async () => ({ quartile: 'Q1 (SJR 2023)', indexing: 'SCIE', flags: [] as string[] }),
-  };
-});
-
 import { resolveDoi } from '@/server/lookup/doi';
 import { resolveBook } from '@/server/lookup/book';
 import { fromCrossref, type CrossrefWork } from '@/server/lookup/crossref';
@@ -49,7 +40,8 @@ describe('resolveDoi', () => {
     expect(r.values.year).toBe('2023');
     expect(r.values.containerTitle).toContain('IEEE Access');
     expect(r.values.issn).toMatch(/^\d{4}-\d{3}[\dX]$/);
-    expect(r.values.quartile).toBe('Q1 (SJR 2023)');
+    // The journal's ranking is never part of the fetched record: it is worked out from the ISSN.
+    expect(Object.keys(r.values)).not.toContain('quartile');
     expect(r.people.some((p) => p.family === 'Bhattacharjee' && p.bitAffiliated === true)).toBe(true);
   });
 

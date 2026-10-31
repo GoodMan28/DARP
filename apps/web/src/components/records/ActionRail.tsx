@@ -3,62 +3,37 @@
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiJson } from '@/lib/csrf-client';
-import { Button, Field, Textarea, Notice } from '@/components/ui';
-import { IconCheck, IconUndo, IconShield, IconLock, IconSend } from '@/components/shell/Icon';
+import { Button, Field, Notice } from '@/components/ui';
+import { IconUndo, IconSend } from '@/components/shell/Icon';
+import { RemarkEditor } from './RemarkEditor';
 
-export type RailAction = 'submit' | 'verify' | 'return' | 'approve' | 'unlock';
+export type RailAction = 'submit' | 'return';
 
 const COPY: Record<RailAction, { label: string; busy: string; note: string }> = {
   submit: {
-    label: 'Submit for verification',
+    label: 'Submit',
     busy: 'Submitting…',
-    note: 'Sends the record to the verifying office. You cannot edit it again until it is returned.',
-  },
-  verify: {
-    label: 'Verify record',
-    busy: 'Verifying…',
-    note: 'Confirms the entry matches the evidence. IQAC approves it afterwards.',
+    note: 'The record is approved at once. The verifying office checks it afterwards and may return it.',
   },
   return: {
     label: 'Return to owner',
     busy: 'Returning…',
-    note: 'Sends it back for correction. A remark is required so the owner knows what to fix.',
-  },
-  approve: {
-    label: 'Approve record',
-    busy: 'Approving…',
-    note: 'Locks the record into the cycle. Approved records feed the exported workbooks.',
-  },
-  unlock: {
-    label: 'Unlock record',
-    busy: 'Unlocking…',
-    note: 'Returns an approved record to verified so it can be corrected. Audited.',
+    note: 'Sends it back for correction. A remark is required so the owner knows what to fix. When it is corrected, it comes back to you to look at.',
   },
 };
 
 function Glyph({ action }: { action: RailAction }) {
-  if (action === 'return') return <IconUndo width={13} height={13} />;
-  if (action === 'approve') return <IconShield width={13} height={13} />;
-  if (action === 'unlock') return <IconLock width={13} height={13} />;
-  if (action === 'submit') return <IconSend width={13} height={13} />;
-  return <IconCheck width={13} height={13} />;
+  return action === 'return' ? <IconUndo width={13} height={13} /> : <IconSend width={13} height={13} />;
 }
 
 /**
  * The workflow rail. It renders only the actions the page decided the viewer may take —
  * the server re-checks every one of them, so this list is convenience, never authority.
  */
-/** In modules approved on submission (Publications) the office's verification is final. */
-const VERIFY_FINAL = {
-  label: 'Verify and approve',
-  busy: 'Approving…',
-  note: 'Confirms the entry matches the evidence. This is final — no IQAC approval follows; IQAC can still return it later.',
-};
-
 export function ActionRail({
-  moduleKey, recordId, actions, verifyIsFinal = false,
-}: { moduleKey: string; recordId: string; actions: RailAction[]; verifyIsFinal?: boolean }) {
-  const copy = (a: RailAction) => (a === 'verify' && verifyIsFinal ? VERIFY_FINAL : COPY[a]);
+  moduleKey, recordId, actions,
+}: { moduleKey: string; recordId: string; actions: RailAction[] }) {
+  const copy = (a: RailAction) => COPY[a];
   const router = useRouter();
   const [busy, setBusy] = useState<RailAction | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -122,7 +97,7 @@ export function ActionRail({
             <Button
               key={action}
               type="button"
-              variant={action === 'unlock' ? 'secondary' : action === 'approve' ? 'success' : 'primary'}
+              variant="primary"
               disabled={busy !== null}
               onClick={() => void run(action)}
             >
@@ -142,13 +117,11 @@ export function ActionRail({
             error={remarkError ?? undefined}
             help="The owner sees this remark on their list and on the record."
           >
-            <Textarea
+            <RemarkEditor
               id={`${remarkId}-text`}
               value={remark}
-              maxLength={1000}
-              rows={3}
-              aria-invalid={remarkError ? true : undefined}
-              onChange={(e) => { setRemark(e.target.value); setRemarkError(null); }}
+              invalid={!!remarkError}
+              onChange={(v) => { setRemark(v); setRemarkError(null); }}
               placeholder="For example: the ISSN does not match the journal named."
             />
           </Field>

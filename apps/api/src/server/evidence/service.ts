@@ -14,15 +14,15 @@ import {
 } from './storage';
 
 /**
- * The hard ceiling. `MAX_UPLOAD_MB` may lower it but never raise it above 5 MB,
+ * The hard ceiling. `MAX_UPLOAD_MB` may lower or raise it, but never above 5 MB,
  * because the `evidence_size_rule` CHECK constraint in the database refuses more.
  */
 const DB_MAX_BYTES = 5_242_880;
 const DAILY_UPLOAD_LIMIT = 100;
 
 export function maxUploadBytes(): number {
-  const configured = Number(process.env.MAX_UPLOAD_MB ?? 5);
-  const mb = Number.isFinite(configured) && configured > 0 ? configured : 5;
+  const configured = Number(process.env.MAX_UPLOAD_MB ?? 2);
+  const mb = Number.isFinite(configured) && configured > 0 ? configured : 2;
   return Math.min(Math.floor(mb * 1024 * 1024), DB_MAX_BYTES);
 }
 
@@ -64,7 +64,6 @@ async function assertMayAttach(actor: SessionUser, moduleKey: string, recordId: 
   const [row] = await db
     .select({
       id: records.id,
-      cycleId: records.cycleId,
       ownerUserId: records.ownerUserId,
       departmentId: records.departmentId,
       status: records.status,
@@ -78,7 +77,7 @@ async function assertMayAttach(actor: SessionUser, moduleKey: string, recordId: 
   const [scoped] = await db
     .select({ id: records.id })
     .from(records)
-    .where(and(scopeFilter(actor, m, row.cycleId), eq(records.id, recordId)))
+    .where(and(scopeFilter(actor, m), eq(records.id, recordId)))
     .limit(1);
   if (!scoped) throw new ServiceError('NOT_FOUND', 'Record not found.');
 
@@ -228,7 +227,6 @@ async function assertMayAccess(actor: SessionUser, row: EvidenceRow, mode: Acces
   const [rec] = await db
     .select({
       moduleKey: records.moduleKey,
-      cycleId: records.cycleId,
       ownerUserId: records.ownerUserId,
       departmentId: records.departmentId,
       status: records.status,
@@ -244,7 +242,7 @@ async function assertMayAccess(actor: SessionUser, row: EvidenceRow, mode: Acces
   const [scoped] = await db
     .select({ id: records.id })
     .from(records)
-    .where(and(scopeFilter(actor, m, rec.cycleId), eq(records.id, row.recordId)))
+    .where(and(scopeFilter(actor, m), eq(records.id, row.recordId)))
     .limit(1);
   if (!scoped) throw new ServiceError('NOT_FOUND', 'Not found.');
 

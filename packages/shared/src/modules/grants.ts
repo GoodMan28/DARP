@@ -1,5 +1,6 @@
 // src/modules/grants.ts
 import type { ModuleConfig } from './_types';
+import { FACULTY_MEMBERS } from './_types';
 
 export const grants: ModuleConfig = {
   key: 'grants',
@@ -10,11 +11,11 @@ export const grants: ModuleConfig = {
   bodies: ['NAAC', 'NIRF'],
   description:
     'Research funding received through government and non-government sources — projects, endowments and research chairs.',
-  ownerRoles: ['faculty'],
+  ownerRoles: FACULTY_MEMBERS,
   verifierRoles: ['drie'],
   viewRoles: ['hod', 'drie', 'admin'],
   scope: 'self',
-  naturalKey: ['title', 'agency', 'sanctionYear'],
+  naturalKey: ['title', 'agency', 'sanctionDate'],
   fields: [
     { key: 'role', label: 'Role of faculty', type: 'select', required: true, listKey: 'projectRoles',
       section: 'Project',
@@ -38,12 +39,13 @@ export const grants: ModuleConfig = {
         drie: 'Category of Funding Agency  (Government / Non-Government)',
       } },
 
-    { key: 'duration', label: 'Duration', type: 'text', required: true, maxLength: 60,
-      section: 'Funding', placeholder: '3 years',
+    { key: 'durationYears', label: 'Duration (in years)', type: 'decimal', required: true, min: 0.5, max: 30,
+      unit: 'years', section: 'Funding', placeholder: '3', help: 'A number only, for example 3 or 1.5.',
       exportAs: { faculty: 'Duration', drie: 'Duration' } },
 
-    { key: 'sanctionYear', label: 'Year of award or sanction', type: 'year', required: true,
-      min: 1990, max: 2100, section: 'Funding',
+    { key: 'sanctionDate', label: 'Date of sanction', type: 'date', required: true,
+      notFuture: true, periodSource: true, exportYear: true, section: 'Funding',
+      help: 'The date on the sanction letter.',
       exportAs: {
         faculty: 'Year of award or sanction (FY 2024, 2023, 2022)',
         drie: 'Year of award or sanction',
@@ -55,14 +57,15 @@ export const grants: ModuleConfig = {
       exportAs: { faculty: 'Amount in INR.', drie: 'Amount in INR.' } },
 
     { key: 'evidence', label: 'Attach documents (Project Sanction letter)', type: 'file',
-      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 5, colSpan: 2, section: 'Evidence',
+      accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Evidence',
       exportAs: {
         faculty: 'Attach documents (Project Sanction letter)',
         drie: 'Attach documents (Project Sanction letter)',
       } },
   ],
-  listColumns: ['title', 'agency', 'role', 'agencyCategory', 'amount', 'sanctionYear'],
-  defaultSort: { key: 'sanctionYear', dir: 'desc' },
+  derived: [{ key: 'projectPeriod', label: 'Project period' }],
+  listColumns: ['title', 'agency', 'role', 'agencyCategory', 'amount', 'sanctionDate', 'projectPeriod'],
+  defaultSort: { key: 'sanctionDate', dir: 'desc' },
   exportTargets: [
     { workbook: 'faculty', sheet: 'Funds&Grants' },
     { workbook: 'drie', sheet: 'Funds&Grants' },
