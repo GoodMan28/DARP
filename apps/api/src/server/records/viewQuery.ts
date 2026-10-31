@@ -46,6 +46,7 @@ export async function viewColumnsFor(m: ModuleConfig): Promise<ViewColumn[]> {
   for (const f of m.fields) {
     // Protected fields (Aadhaar, PAN, masked contact details) are never offered.
     if (f.pii || f.sensitive || f.type === 'pan' || f.type === 'aadhaar') continue;
+    if (f.custom) continue;      // the journal ranking's corrections: its derived columns already show them
     const kind = kindOf(f.type);
     const choices = f.listKey ? (lists[f.listKey] ?? []) : (f.options ?? []);
     cols.push({

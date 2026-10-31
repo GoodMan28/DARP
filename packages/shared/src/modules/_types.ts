@@ -130,6 +130,8 @@ export interface FieldConfig {
   unit?: string;
   /** Server-side normalisation that needs other fields of the record. */
   normalise?: 'patentNumber' | 'impactFactor';
+  /** Drawn inside a card of its own, not in the field list (the journal ranking's three editable figures). */
+  custom?: 'journalRanking';
   /** The text of a dropdown's empty choice, when empty means something ("use the list value"). */
   emptyLabel?: string;
 }

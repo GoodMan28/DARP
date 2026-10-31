@@ -127,6 +127,7 @@ export function RecordForm({
   const sections = useMemo(() => {
     const map = new Map<string, FormFieldDef[]>();
     for (const f of fields) {
+      if (f.custom) continue;      // drawn inside the journal ranking card
       const s = f.section ?? 'Details';
       if (!map.has(s)) map.set(s, []);
       map.get(s)!.push(f);
@@ -430,7 +431,15 @@ export function RecordForm({
             </div>
           </Card>,
           rankingHere ? (
-            <JournalRankingCard key={`${section}-ranking`} issn={String(values.issn ?? '')} year={String(values.year ?? '')} />
+            <JournalRankingCard
+              key={`${section}-ranking`}
+              issn={String(values.issn ?? '')}
+              year={String(values.year ?? '')}
+              values={values}
+              errors={errors}
+              readOnly={readOnly}
+              onChange={set}
+            />
           ) : null,
         ];
       })}

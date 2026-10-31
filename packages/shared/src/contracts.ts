@@ -202,6 +202,8 @@ export interface FormFieldDef {
   options: string[];
   /** What a dropdown's empty choice says, when empty means something. */
   emptyLabel?: string | null;
+  /** Drawn inside a card of its own (the journal ranking), not in the field list. */
+  custom?: string | null;
   showIf: { field: string; in: string[] } | null;
   section: string | null;
   colSpan: number;
