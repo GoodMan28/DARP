@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import type { FieldConfig, ModuleConfig } from '@darp/shared/modules/types';
-import { getAllLists } from './masterLists';
+import { getAllLists, getListTree } from './masterLists';
 import { isValidAadhaar, isValidPan } from '@/server/crypto/pii';
 import { isbn13 } from '@/server/lookup/isbn';
 import { normalisePatentNumber } from './patentNumber';
@@ -131,6 +131,7 @@ export async function validateRecord(
   keep: ReadonlySet<string> = new Set(),
 ): Promise<ValidationResult> {
   const lists = await getAllLists();
+  const tree = await getListTree();
   const input = rawInput;
   // Institutes chosen from the directory: looked up once, by the codes the form sent.
   const codes = m.fields.filter((f) => f.type === 'institution').map((f) => String(input[`${f.key}Code`] ?? '').trim()).filter(Boolean);
@@ -182,6 +183,19 @@ export async function validateRecord(
       const workedOut = !!f.computed && computeValue(f.computed, merged, ctx) !== undefined;
       if (f.required && !workedOut && !keep.has(f.key) && mode === 'submit') errors[f.key] = `${f.label} is required.`;
       if (f.type === 'checkbox') out[f.key] = false;
+      continue;
+    }
+
+    // A dropdown that depends on another field, takes a typed answer, or still holds text typed before it was a dropdown.
+    if (f.type === 'select' && (f.dependsOn || f.allowOther || f.acceptOldText)) {
+      const typed = String(raw).trim();
+      if (f.allowOther) { out[f.key] = typed.slice(0, f.maxLength ?? 200); continue; }
+      const allowed = f.dependsOn
+        ? (f.listKey ? tree[f.listKey]?.[String(merged[f.dependsOn] ?? '')] ?? [] : [])
+        : (f.listKey ? lists[f.listKey] ?? [] : f.options ?? []);
+      if (allowed.includes(typed)) { out[f.key] = typed; continue; }
+      if (f.acceptOldText && mode === 'draft') { out[f.key] = typed.slice(0, 200); continue; }
+      errors[f.key] = 'Choose one of the listed values.';
       continue;
     }
 

@@ -12,6 +12,7 @@
     "./contracts": "./src/contracts.ts",
     "./journals": "./src/journals.ts",
     "./computed": "./src/computed.ts",
+    "./lists": "./src/lists.ts",
     "./institutions": "./src/institutions.ts",
     "./projectPeriod": "./src/projectPeriod.ts",
     "./reports": "./src/reports.ts",

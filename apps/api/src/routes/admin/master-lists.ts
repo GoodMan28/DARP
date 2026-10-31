@@ -6,6 +6,7 @@ import { withRoute, ok, fail } from '@/server/http/handler';
 import { invalidateListCache } from '@/server/records/masterLists';
 import { audit } from '@/server/audit/log';
 import { MODULE_LIST } from '@darp/shared/modules';
+import { LIST_PARENTS } from '@darp/shared/lists';
 
 /**
  * The catalogue of editable lists is derived from the module configs rather than
@@ -22,6 +23,8 @@ const LIST_USAGE: Map<string, string[]> = (() => {
       map.set(f.listKey, used);
     }
   }
+  // A list with a parent is editable even before a field uses it.
+  for (const key of Object.keys(LIST_PARENTS)) if (!map.has(key)) map.set(key, []);
   return map;
 })();
 
@@ -39,6 +42,7 @@ export const GET = withRoute(
       .select({
         id: masterListItems.id,
         listKey: masterListItems.listKey,
+        parent: masterListItems.parent,
         value: masterListItems.value,
         sortOrder: masterListItems.sortOrder,
         isActive: masterListItems.isActive,
@@ -61,6 +65,7 @@ export const GET = withRoute(
       lists: keys.map((key) => ({
         listKey: key,
         usedBy: LIST_USAGE.get(key) ?? [],
+        parentList: LIST_PARENTS[key] ?? null,
         items: byKey.get(key) ?? [],
       })),
     });
@@ -72,6 +77,8 @@ export const GET = withRoute(
 const addSchema = z.object({
   listKey: listKeySchema,
   value: z.string().trim().min(1, 'Enter a value.').max(300),
+  /** For a list whose items belong to another list's items: which one. */
+  parent: z.string().trim().max(300).default(''),
 });
 
 export const POST = withRoute(
@@ -80,8 +87,18 @@ export const POST = withRoute(
     const [existing] = await db
       .select({ id: masterListItems.id, isActive: masterListItems.isActive })
       .from(masterListItems)
-      .where(and(eq(masterListItems.listKey, body.listKey), eq(masterListItems.value, body.value)))
+      .where(and(eq(masterListItems.listKey, body.listKey), eq(masterListItems.parent, body.parent), eq(masterListItems.value, body.value)))
       .limit(1);
+
+    // A value of a dependent list belongs under an active value of its parent list, and a plain one under none.
+    const parentList = LIST_PARENTS[body.listKey];
+    if (parentList) {
+      const [parent] = await db.select({ id: masterListItems.id }).from(masterListItems)
+        .where(and(eq(masterListItems.listKey, parentList), eq(masterListItems.value, body.parent), eq(masterListItems.isActive, true))).limit(1);
+      if (!parent) return fail('VALIDATION', { message: 'Choose which one it belongs under.', fields: { parent: 'Choose an existing option of the list above.' } });
+    } else if (body.parent) {
+      return fail('VALIDATION', { message: 'This list has no parent.' });
+    }
 
     if (existing) {
       return fail('CONFLICT', {
@@ -99,7 +116,7 @@ export const POST = withRoute(
 
     const inserted = await db
       .insert(masterListItems)
-      .values({ listKey: body.listKey, value: body.value, sortOrder: Number(max?.next ?? 1), isActive: true })
+      .values({ listKey: body.listKey, parent: body.parent, value: body.value, sortOrder: Number(max?.next ?? 1), isActive: true })
       .returning({
         id: masterListItems.id,
         listKey: masterListItems.listKey,
@@ -176,6 +193,7 @@ export const PATCH = withRoute(
       .select({
         id: masterListItems.id,
         listKey: masterListItems.listKey,
+        parent: masterListItems.parent,
         value: masterListItems.value,
         sortOrder: masterListItems.sortOrder,
         isActive: masterListItems.isActive,

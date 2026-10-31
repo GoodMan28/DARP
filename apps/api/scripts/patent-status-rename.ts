@@ -28,7 +28,7 @@ async function main() {
       { listKey: key, value: 'Applied', sortOrder: 0 },
       { listKey: key, value: 'Published', sortOrder: 1 },
       { listKey: key, value: 'Granted', sortOrder: 2 },
-    ]).onConflictDoUpdate({ target: [masterListItems.listKey, masterListItems.value], set: { sortOrder: sql`excluded.sort_order`, isActive: true } });
+    ]).onConflictDoUpdate({ target: [masterListItems.listKey, masterListItems.parent, masterListItems.value], set: { sortOrder: sql`excluded.sort_order`, isActive: true } });
 
     const moved = await tx.update(records)
       .set({ data: sql`jsonb_set(${records.data}, '{status}', '"Granted"')` })

@@ -8,6 +8,7 @@ import { MODULES } from '@darp/shared/modules';
 // The list keys must match the `listKey` in the module configs, or the select
 // validator falls back to "no list configured" and accepts anything.
 vi.mock('@/server/records/masterLists', () => ({
+  getListTree: async () => ({}),
   getAllLists: async () => ({
     awardLevels: ['International', 'National', 'State'],
     projectRoles: ['PI', 'Co-PI'],

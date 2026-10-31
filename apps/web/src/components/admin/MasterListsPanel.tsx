@@ -22,6 +22,8 @@ export function MasterListsPanel() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [newValue, setNewValue] = useState('');
   const [busy, setBusy] = useState(false);
+  /** For a list whose items belong under another list's items: which one is open. */
+  const [parent, setParent] = useState('');
 
   const load = useCallback(async () => {
     setLoadError(null);
@@ -40,13 +42,26 @@ export function MasterListsPanel() {
     [groups, selected],
   );
 
+  /** The values of the parent list this one belongs under (the programmes, for specialisations). */
+  const parentChoices = useMemo(() => {
+    if (!group?.parentList) return [];
+    const p = groups?.find((g) => g.listKey === group.parentList);
+    return [...new Set((p?.items ?? []).filter((i) => i.isActive).map((i) => i.value))];
+  }, [groups, group]);
+  const openParent = group?.parentList ? (parentChoices.includes(parent) ? parent : parentChoices[0] ?? '') : '';
+  /** The items on screen: all of a plain list, or those under the chosen parent. */
+  const shown = useMemo(
+    () => (group ? (group.parentList ? group.items.filter((i) => i.parent === openParent) : group.items) : []),
+    [group, openParent],
+  );
+
   async function addValue() {
     if (!group || !newValue.trim()) return;
     setBusy(true);
     setActionError(null);
     const res = await apiJson('/api/admin/master-lists', {
       method: 'POST',
-      body: JSON.stringify({ listKey: group.listKey, value: newValue.trim() }),
+      body: JSON.stringify({ listKey: group.listKey, value: newValue.trim(), parent: openParent }),
     });
     setBusy(false);
     if (!res.ok) { setActionError(res.error.message); return; }
@@ -68,12 +83,13 @@ export function MasterListsPanel() {
 
   async function move(index: number, delta: -1 | 1) {
     if (!group) return;
+    // Moving within what is on screen: swap the two items' places in the whole list.
     const ids = group.items.map((i) => i.id);
     const target = index + delta;
-    if (target < 0 || target >= ids.length) return;
-    const a = ids[index]!;
-    ids[index] = ids[target]!;
-    ids[target] = a;
+    if (target < 0 || target >= shown.length) return;
+    const at = ids.indexOf(shown[index]!.id);
+    const to = ids.indexOf(shown[target]!.id);
+    [ids[at], ids[to]] = [ids[to]!, ids[at]!];
 
     setBusy(true);
     setActionError(null);
@@ -108,6 +124,14 @@ export function MasterListsPanel() {
               ))}
             </Select>
           </label>
+          {group?.parentList ? (
+            <label className="text-xs font-semibold text-ink">
+              <span className="mb-1 block">Under</span>
+              <Select className="w-64" value={openParent} onChange={(e) => setParent(e.target.value)}>
+                {parentChoices.map((p) => <option key={p} value={p}>{p}</option>)}
+              </Select>
+            </label>
+          ) : null}
           <label className="flex-1 text-xs font-semibold text-ink">
             <span className="mb-1 block">Add an option</span>
             <div className="flex gap-2">
@@ -134,7 +158,7 @@ export function MasterListsPanel() {
                 : 'No module currently references this list.'}
             </div>
 
-            {group.items.length === 0 ? (
+            {shown.length === 0 ? (
               <EmptyState title="This list is empty">
                 Add the values exactly as the accreditation workbook words them.
               </EmptyState>
@@ -150,7 +174,7 @@ export function MasterListsPanel() {
                   </tr>
                 </thead>
                 <tbody>
-                  {group.items.map((item, index) => (
+                  {shown.map((item, index) => (
                     <tr key={item.id} className={cx(!item.isActive && 'bg-surface-inset')}>
                       <Td className="font-mono text-2xs text-ink-faint">{item.sortOrder}</Td>
                       <Td className={cx('font-medium', !item.isActive && 'text-ink-muted line-through')}>
@@ -183,7 +207,7 @@ export function MasterListsPanel() {
                             variant="ghost"
                             className="min-h-7 px-2 py-1"
                             aria-label={`Move ${item.value} down`}
-                            disabled={busy || index === group.items.length - 1}
+                            disabled={busy || index === shown.length - 1}
                             onClick={() => void move(index, 1)}
                           >
                             <IconSortDesc width={12} height={12} />

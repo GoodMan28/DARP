@@ -5,19 +5,11 @@ import { eq, sql } from 'drizzle-orm';
 import { db, pool } from '../src/server/db';
 import { departments, cycles, masterListItems, users, auditLog } from '../src/server/db/schema';
 import { hashPassword } from '../src/server/auth/password';
+import { DEPARTMENTS, bitListRows } from './data/bit-lists';
 
-const DEPARTMENTS: Array<[string, string]> = [
-  ['CSE', 'Computer Science & Engg.'],
-  ['ME', 'Mechanical Engg.'],
-  ['CE', 'Civil Engg.'],
-  ['EEE', 'Electrical & Electronics Engg.'],
-  ['BIO', 'Bio-Engineering'],
-  ['CHE', 'Chemical Engg.'],
-  ['HSS', 'Humanities & Social Sciences'],
-];
+// BIT Mesra's own departments, designations and programmes: scripts/data/bit-lists.ts.
 
 const LISTS: Record<string, string[]> = {
-  designations: ['Associate Lecturer', 'Lecturer', 'Assistant Professor', 'Associate Professor', 'Professor', 'Other'],
   natureOfAssociation: ['Regular', 'Contract', 'Visiting', 'Adjunct', 'Professor of Practice', 'Distinguished Visiting Professor'],
   ugQualifications: ['B.E./B.Tech', 'B.Sc', 'B.Arch', 'B.Pharm', 'BA', 'BBA', 'BCA', 'B.Com', 'Others'],
   pgQualifications: ['M.E./M.Tech', 'M.Sc', 'M.Arch/MUP', 'M.Pharm', 'MA', 'MBA', 'MCA', 'M.Com', 'Others', 'None'],
@@ -62,6 +54,9 @@ async function main() {
         .onConflictDoNothing();
     }
   }
+
+  // 2b. BIT's designations, programmes and specialisations (a value under a parent is kept once per parent).
+  await db.insert(masterListItems).values(bitListRows()).onConflictDoNothing();
 
   // 3. The active cycle (locked decision #1)
   const existing = await db.select().from(cycles).where(eq(cycles.isActive, true));

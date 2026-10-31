@@ -133,6 +133,12 @@ export interface FieldConfig {
   unit?: string;
   /** Server-side normalisation that needs other fields of the record. */
   normalise?: 'patentNumber' | 'impactFactor';
+  /** A dropdown whose choices depend on another field's value (the specialisations of the chosen programme). */
+  dependsOn?: string;
+  /** A dropdown that also takes a typed answer ("Other"): for people and places outside BIT. */
+  allowOther?: boolean;
+  /** A value typed before this was a dropdown may stay in a draft; a submission needs a choice. */
+  acceptOldText?: boolean;
   /** Worked out, never typed: shown read-only. The value is stored and exported as usual. */
   computed?: ComputedRule;
   /** Not shown on the form at all (a computed field shown elsewhere, or a second column filled from the first). */

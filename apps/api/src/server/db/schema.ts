@@ -273,12 +273,14 @@ export const evidenceFiles = pgTable('evidence_files', {
 export const masterListItems = pgTable('master_list_items', {
   id: uuid('id').primaryKey().defaultRandom(),
   listKey: text('list_key').notNull(),
+  /** The item of the parent list this one belongs to (programme → its specialisations); '' for a plain list. */
+  parent: text('parent').notNull().default(''),
   value: text('value').notNull(),
   sortOrder: integer('sort_order').notNull().default(0),
   isActive: boolean('is_active').notNull().default(true),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
-  uniqueIndex('master_list_value_uq').on(t.listKey, t.value),
+  uniqueIndex('master_list_value_uq').on(t.listKey, t.parent, t.value),
   index('master_list_key_idx').on(t.listKey, t.sortOrder),
 ]);
 

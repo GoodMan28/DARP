@@ -5,7 +5,7 @@ import {
 import { viewColumnsFor } from '@/server/records/viewQuery';
 import { toResponse } from '@/server/records/toResponse';
 import { canViewModule, canCreateIn, canVerify } from '@/server/auth/permissions';
-import { getAllLists } from '@/server/records/masterLists';
+import { getAllLists, getListTree, getParents } from '@/server/records/masterLists';
 import { periodOptions, labelFor } from '@/server/records/periods';
 import type { ModuleSchemaPayload } from '@darp/shared/contracts';
 
@@ -20,6 +20,7 @@ export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async 
     if (!canViewModule(actor, m)) return fail('FORBIDDEN');
 
     const lists = await getAllLists();
+    const tree = await getListTree();
     const cycle = await activeCycle();
 
     const periods = periodOptions(m, cycle);
@@ -36,6 +37,8 @@ export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async 
       naacRef: m.naacRef ?? null,
       bodies: m.bodies,
       scope: m.scope,
+      // A programme's level (M.Tech. is PG), for the fields worked out from it.
+      parents: m.fields.some((f) => f.computed?.kind === 'listParent') ? await getParents('programmes') : {},
       canCreate: canCreateIn(actor, m),
       canVerify: canVerify(actor, m),
       lookup: m.lookup
@@ -59,6 +62,10 @@ export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async 
         help: f.help ?? null,
         placeholder: f.placeholder ?? null,
         options: f.listKey ? (lists[f.listKey] ?? []) : (f.options ?? []),
+        dependsOn: f.dependsOn ?? null,
+        optionsByParent: f.dependsOn && f.listKey ? tree[f.listKey] ?? {} : null,
+        allowOther: !!f.allowOther,
+        acceptOldText: !!f.acceptOldText,
         emptyLabel: f.emptyLabel ?? null,
         custom: f.custom ?? null,
         computed: f.computed ?? null,

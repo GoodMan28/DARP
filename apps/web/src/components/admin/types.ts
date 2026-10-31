@@ -50,6 +50,8 @@ export interface ResetPayload {
 export interface MasterListItem {
   id: string;
   listKey: string;
+  /** The item of the parent list it belongs to; '' for a plain list. */
+  parent: string;
   value: string;
   sortOrder: number;
   isActive: boolean;
@@ -59,6 +61,8 @@ export interface MasterListItem {
 export interface MasterListGroup {
   listKey: string;
   usedBy: string[];
+  /** The list its items belong under (specialisations under programmes), or null. */
+  parentList: string | null;
   items: MasterListItem[];
 }
 
@@ -107,7 +111,7 @@ export interface AuditPayload {
   };
 }
 
-export type AdminTab = 'accounts' | 'lists' | 'journals' | 'cycle' | 'deleted' | 'audit' | 'exports';
+export type AdminTab = 'accounts' | 'departments' | 'lists' | 'journals' | 'cycle' | 'deleted' | 'audit' | 'exports';
 
 /** In the order IQAC needs them most. Each says in one line what it is for. */
 export const ADMIN_TABS: ReadonlyArray<{ key: AdminTab; label: string; about: string }> = [
@@ -115,6 +119,7 @@ export const ADMIN_TABS: ReadonlyArray<{ key: AdminTab; label: string; about: st
   { key: 'journals', label: 'Journal & patent data', about: 'Upload the Web of Science, SCImago and Impact Factor files that papers are checked against, and see that Scopus and patents are up to date.' },
   { key: 'cycle', label: 'Year ranges', about: 'Named spans of years, such as “NAAC Cycle 4: 2022 to 2024”, that numbers and reports start with.' },
   { key: 'exports', label: 'Reports', about: 'Download records for any span of years: IQAC’s own formats filled in, or full data, by year type and department. Every level (faculty, heads of department, offices) has the same page under Reports.' },
+  { key: 'departments', label: 'Departments', about: 'BIT’s departments and centres: add one, rename one, or switch one off.' },
   { key: 'lists', label: 'Dropdown options', about: 'The choices people see in each form’s dropdowns, such as agency categories or indexing types.' },
   { key: 'deleted', label: 'Deleted records', about: 'Records people deleted, with their reasons. Restore one deleted by mistake.' },
   { key: 'audit', label: 'Activity log', about: 'Who did what, and when: every sign-in, change, upload and export.' },

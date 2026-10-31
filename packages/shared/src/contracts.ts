@@ -204,6 +204,13 @@ export interface FormFieldDef {
   emptyLabel?: string | null;
   /** Drawn inside a card of its own (the journal ranking), not in the field list. */
   custom?: string | null;
+  /** A dropdown whose choices depend on another field: the key of that field, and its choices by that field's value. */
+  dependsOn?: string | null;
+  optionsByParent?: Record<string, string[]> | null;
+  /** A dropdown that also takes a typed answer. */
+  allowOther?: boolean;
+  /** A value typed earlier may stay in a draft. */
+  acceptOldText?: boolean;
   /** An institute field that refuses BIT Mesra itself (places outside BIT). */
   excludeHome?: boolean;
   showIf: { field: string; in?: string[]; notIn?: string[] } | null;
@@ -231,6 +238,8 @@ export interface FormFieldDef {
 
 /** GET /api/modules/:moduleKey/schema — the module's shape plus the caller's standing in it. */
 export interface ModuleSchemaPayload {
+  /** A dropdown value → its parent (programme → level), for fields worked out from a choice. */
+  parents?: Record<string, string>;
   /** The columns the Filter, Sort, Group and Hide fields tools offer for this module. */
   viewColumns: import('./views').ViewColumn[];
   key: string;
