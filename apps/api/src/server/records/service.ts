@@ -15,6 +15,7 @@ import { resolvePeriod, type CycleWindows } from './periods';
 import { defaultRange, windowsOfRange } from './range';
 import { audit } from '@/server/audit/log';
 import { derivedValues } from '@/server/journals/ranking';
+import { getParents } from './masterLists';
 import { applyLookup, ownerMissingFromAuthors, evidenceMissing } from '@/server/lookup/apply';
 import { ownerIdentity, type OwnerIdentity } from '@/server/lookup/identity';
 import { unattachableFiles, linkEvidence } from './evidenceLinks';
@@ -473,7 +474,7 @@ async function validateSubmission(
   m: ModuleConfig, looked: Looked, ownerWho: OwnerIdentity, mode: 'draft' | 'submit', keep: ReadonlySet<string> = new Set(),
 ) {
   refuseOnSubmit(m, looked, mode);
-  const v = await validateRecord(m, looked.data, mode, { account: ownerWho.account }, keep);
+  const v = await validateRecord(m, looked.data, mode, { account: ownerWho.account, parents: await getParents('programmes') }, keep);
   const errors = { ...submitErrors(m, looked, ownerWho, mode), ...(v.ok ? {} : v.errors) };
   if (!v.ok || Object.keys(errors).length > 0) throw new ServiceError('VALIDATION', 'Some fields need attention.', errors);
   return v;

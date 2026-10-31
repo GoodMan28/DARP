@@ -41,7 +41,7 @@ export function computeValue(rule: ComputedRule, v: Record<string, unknown>, ctx
       if (!text(v[rule.from])) return undefined;
       return String(text(v[rule.from]).split('\n').filter((l) => l.trim()).length);
     }
-    case 'join': return rule.from.map((k) => text(v[k])).filter(Boolean).join(rule.separator);
+    case 'join': { const joined = rule.from.map((k) => text(v[k])).filter(Boolean).join(rule.separator); return joined === '' ? undefined : joined; }
     case 'listParent': return ctx.parents ? (ctx.parents[text(v[rule.from])] ?? undefined) : undefined;
     case 'instituteCountry': return ctx.institutes?.get(text(v[`${rule.from}Code`]))?.country;
     case 'account': {

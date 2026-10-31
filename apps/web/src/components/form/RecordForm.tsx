@@ -12,6 +12,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { SPAN_MODULES, spanText } from '@darp/shared/projectPeriod';
 import { JournalRankingCard } from './JournalRankingCard';
 import { InstitutionPicker } from './InstitutionPicker';
+import { SelectOrOther } from './SelectOrOther';
 import { applyComputed, computeValue } from '@darp/shared/computed';
 import { useLeaveGuard } from './useLeaveGuard';
 
@@ -44,6 +45,8 @@ interface Props {
   returnTo?: string;
   /** The Faculty Profile: one record per person, no draft and no approval. */
   singleton?: boolean;
+  /** A dropdown value → its parent (programme → level), for fields worked out from a choice. */
+  parents?: Record<string, string>;
 }
 
 /** The same text for this purpose: case and spacing aside (the server compares the same way). */
@@ -53,7 +56,7 @@ const sameText = (a: unknown, b: string) => (
 
 export function RecordForm({
   moduleKey, fields, recordId, initialValues, locked, readOnly, lookup, initialLocked, handedOver,
-  initialProvenance, showRanking, approved, estimatedDates, needsInput, returnTo, singleton,
+  initialProvenance, showRanking, approved, estimatedDates, needsInput, returnTo, singleton, parents,
 }: Props) {
   const [values, setValues] = useState<Record<string, unknown>>(initialValues ?? {});
   /** The country of each institute chosen on this form, for the fields worked out from it (the server decides on saving). */
@@ -127,6 +130,8 @@ export function RecordForm({
 
   const visible = useCallback(
     (f: FormFieldDef) => {
+      // A dropdown under another one: nothing to show until the first is chosen, or when it has no choices.
+      if (f.dependsOn && !values[f.key] && (f.optionsByParent?.[String(values[f.dependsOn] ?? '')] ?? []).length === 0) return false;
       if (!f.showIf) return true;
       const v = String(values[f.showIf.field] ?? '');
       return f.showIf.in ? f.showIf.in.includes(v) : !!f.showIf.notIn && !f.showIf.notIn.includes(v);
@@ -136,8 +141,8 @@ export function RecordForm({
 
   /** Every figure the system works out, over what is typed so far: shown live, and replaced by the server on saving. */
   const shownValues = useMemo(
-    () => applyComputed(fields, values, { institutes: new Map(Object.entries(instituteCountries).map(([c, country]) => [c, { country }])) }),
-    [fields, values, instituteCountries],
+    () => applyComputed(fields, values, { parents, institutes: new Map(Object.entries(instituteCountries).map(([c, country]) => [c, { country }])) }),
+    [fields, values, instituteCountries, parents],
   );
 
   const sections = useMemo(() => {
@@ -153,7 +158,9 @@ export function RecordForm({
   }, [fields]);
 
   function set(key: string, value: unknown) {
-    setValues((v) => ({ ...v, [key]: value }));
+    // Changing a dropdown empties the ones that depend on it (a new programme, a new specialisation).
+    const dependents = fields.filter((f) => f.dependsOn === key).map((f) => f.key);
+    setValues((v) => ({ ...v, [key]: value, ...Object.fromEntries(dependents.map((k) => [k, ''])) }));
     setErrors((e) => { const rest = { ...e }; delete rest[key]; return rest; });
     dirtyRef.current = true;
   }
@@ -527,13 +534,25 @@ function renderInput(
           onChange={(e) => onChange(e.target.value)}
         />
       );
-    case 'select':
+    case 'select': {
+      const choices = f.dependsOn ? f.optionsByParent?.[String(ctx.values[f.dependsOn] ?? '')] ?? [] : f.options;
+      if (f.allowOther) {
+        return <SelectOrOther id={common.id} value={String(value ?? '')} options={choices} disabled={readOnly} invalid={invalid} onChange={onChange} />;
+      }
+      const current = String(value ?? '');
+      // A value saved before this was a dropdown stays visible, marked, so nothing is silently lost.
+      const typedEarlier = current !== '' && !choices.includes(current);
       return (
-        <Select {...common} value={String(value ?? '')} onChange={(e) => onChange(e.target.value)}>
-          <option value="">{f.emptyLabel ?? '— Select —'}</option>
-          {f.options.map((o) => <option key={o} value={o}>{o}</option>)}
-        </Select>
+        <>
+          <Select {...common} value={current} onChange={(e) => onChange(e.target.value)}>
+            <option value="">{f.emptyLabel ?? '— Select —'}</option>
+            {typedEarlier ? <option value={current}>{current} (typed earlier)</option> : null}
+            {choices.map((o) => <option key={o} value={o}>{o}</option>)}
+          </Select>
+          {typedEarlier && !readOnly ? <p className="mt-1 text-xs text-warning-700">Typed earlier. Choose it from the list.</p> : null}
+        </>
       );
+    }
     case 'multiselect':
       return (
         <div className="space-y-1.5">

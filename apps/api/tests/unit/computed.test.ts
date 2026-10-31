@@ -31,6 +31,7 @@ describe('the other rules', () => {
   it('join skips empty parts, and copy trims', () => {
     expect(computeValue({ kind: 'join', from: ['a', 'b'], separator: ' ' }, { a: 'B.Tech.', b: '' })).toBe('B.Tech.');
     expect(computeValue({ kind: 'join', from: ['a', 'b'], separator: ' ' }, { a: 'B.Tech.', b: 'CSE' })).toBe('B.Tech. CSE');
+    expect(computeValue({ kind: 'join', from: ['a', 'b'], separator: ' ' }, { a: '', b: '' })).toBeUndefined();
     expect(computeValue({ kind: 'copy', from: 'a' }, { a: '  x ' })).toBe('x');
   });
   it('listParent and instituteCountry need what they read from, and say nothing without it', () => {

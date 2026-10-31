@@ -32,13 +32,13 @@ export const qscontacts: ModuleConfig = {
       section: 'Contact',
       exportAs: { faculty: 'Last Name', dofa: 'Last Name' } },
 
-    { key: 'designation', label: 'Designation', type: 'text', required: true, maxLength: 120,
-      section: 'Contact',
+    { key: 'designation', label: 'Designation', type: 'select', required: true, listKey: 'externalDesignations', allowOther: true,
+      maxLength: 120, section: 'Contact',
       help: 'The contact must be involved in teaching or research — academic, research or library staff.',
       exportAs: { faculty: 'Designation', dofa: 'Designation' } },
 
-    { key: 'department', label: 'Department', type: 'text', required: true, maxLength: 160,
-      section: 'Affiliation',
+    { key: 'department', label: 'Department', type: 'select', required: true, listKey: 'externalDepartments', allowOther: true,
+      maxLength: 160, section: 'Affiliation',
       exportAs: { faculty: 'Department', dofa: 'Department' } },
 
     ...institutionField({ key: 'institution', label: 'Institution', required: true, maxLength: 200,
@@ -55,7 +55,7 @@ export const qscontacts: ModuleConfig = {
       help: 'A personal institutional address. Generic addresses such as info@ are not accepted.',
       exportAs: { faculty: 'Email', dofa: 'Email' } },
 
-    { key: 'specialisation', label: 'Area of Specialisation', type: 'text', required: true,
+    { key: 'specialisation', label: 'Area of Specialisation', type: 'select', required: true, listKey: 'subjectAreas', allowOther: true,
       maxLength: 200, colSpan: 2, section: 'Affiliation',
       exportAs: { faculty: 'Area of Specialisation', dofa: 'Area of Specialisation' } },
 

@@ -26,15 +26,16 @@ export const studentsguided: ModuleConfig = {
       exportAs: { faculty: 'Roll No. of Student', dofa: 'Roll No. of Student' } },
 
     { key: 'level', label: 'Level (UG/PG/PHD)', type: 'select', required: true,
-      listKey: 'studentLevels', section: 'Student',
+      listKey: 'studentLevels', section: 'Student', computed: { kind: 'listParent', from: 'program' },
+      help: 'Worked out from the program.',
       exportAs: { faculty: 'Level (UG/PG/PHD)', dofa: 'Level (UG/PG/PHD)' } },
 
-    { key: 'program', label: 'Program', type: 'text', required: true, maxLength: 120,
+    { key: 'program', label: 'Program', type: 'select', required: true, listKey: 'programmes', acceptOldText: true,
       section: 'Student',
       exportAs: { faculty: 'Program', dofa: 'Program' } },
 
-    { key: 'specialisation', label: 'Specialisation', type: 'text', maxLength: 120,
-      section: 'Student',
+    { key: 'specialisation', label: 'Specialisation', type: 'select', listKey: 'specialisations', dependsOn: 'program',
+      acceptOldText: true, section: 'Student',
       exportAs: { faculty: 'Specialisation', dofa: 'Specialisation' } },
 
     { key: 'email', label: 'Personal Mail ID', type: 'email', pii: 'masked', sensitive: true,
@@ -100,8 +101,8 @@ export const studentsguided: ModuleConfig = {
         faculty: 'Name of institution enrolled in', dofa: 'Name of institution enrolled in',
       } }),
 
-    { key: 'programEnrolled', label: 'Program enrolled in', type: 'text', required: true,
-      maxLength: 200, section: 'Higher studies',
+    { key: 'programEnrolled', label: 'Program enrolled in', type: 'select', required: true, listKey: 'higherStudyProgrammes',
+      allowOther: true, maxLength: 200, section: 'Higher studies',
       showIf: { field: 'statusAfterPassing', in: ['Higher Studies'] },
       exportAs: {
         faculty: 'Program enrolled in  (Evidence reqd: Admission Letter/ID Card)',

@@ -16,8 +16,14 @@ export const workshops: ModuleConfig = {
   scope: 'department',
   naturalKey: ['programmeName', 'programCode'],
   fields: [
-    { key: 'programmeName', label: 'Programme name', type: 'text', required: true, maxLength: 200,
-      section: 'Programme',
+    { key: 'program', label: 'Program', type: 'select', required: true, listKey: 'programmes', acceptOldText: true, section: 'Programme' },
+
+    { key: 'specialisation', label: 'Specialisation', type: 'select', listKey: 'specialisations', dependsOn: 'program',
+      acceptOldText: true, section: 'Programme' },
+
+    // "B.Tech. Computer Science & Engineering": built from the two above, and kept for IQAC's sheet.
+    { key: 'programmeName', label: 'Programme name', type: 'text', maxLength: 200, section: 'Programme', hidden: true,
+      computed: { kind: 'join', from: ['program', 'specialisation'], separator: ' ' },
       exportAs: { hod: 'Programme name' } },
 
     { key: 'programCode', label: 'Program Code', type: 'text', required: true, maxLength: 40,

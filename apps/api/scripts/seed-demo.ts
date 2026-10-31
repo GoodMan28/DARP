@@ -22,7 +22,7 @@ import { users, departments, cycles, records } from '../src/server/db/schema';
 import { hashPassword } from '../src/server/auth/password';
 import { createRecord, transitionRecord } from '../src/server/records/service';
 import { uploadEvidence } from '../src/server/evidence/service';
-import { getAllLists } from '../src/server/records/masterLists';
+import { getAllLists, getListTree } from '../src/server/records/masterLists';
 import { MODULES } from '@darp/shared/modules';
 import type { FieldConfig, ModuleConfig, Role } from '@darp/shared/modules/types';
 import type { SessionUser } from '../src/server/auth/session';
@@ -171,6 +171,8 @@ function pick<T>(arr: T[], rng: () => number): T {
 interface GenContext {
   rng: () => number;
   lists: Record<string, string[]>;
+  /** The values of each list under each parent (specialisations of each programme). */
+  tree: Record<string, Record<string, string[]>>;
   person: DemoPerson;
   index: number;
   cycleYears: number[];
@@ -331,6 +333,12 @@ function buildRecord(m: ModuleConfig, ctx: GenContext): Record<string, unknown> 
       if (typeof decided !== 'string') continue;
       if (f.showIf.in ? !f.showIf.in.includes(decided) : !f.showIf.notIn || f.showIf.notIn.includes(decided)) continue;
     }
+    if (f.dependsOn) {
+      // A choice under the one made above it; a programme with none has none.
+      const under = f.listKey ? ctx.tree[f.listKey]?.[String(values[f.dependsOn] ?? '')] ?? [] : [];
+      if (under.length > 0 && (f.required || ctx.rng() > 0.25)) values[f.key] = pick(under, ctx.rng);
+      continue;
+    }
     if (f.type === 'file' || f.computed || f.hidden) continue;   // worked out or filled elsewhere, not seeded                     // nothing to upload in a seed
     if (!f.required && ctx.rng() < 0.25) continue;        // leave some optional fields blank
     const v = valueFor(f, ctx);
@@ -397,6 +405,7 @@ async function main() {
 
   const cycleYears = [2022, 2023, 2024];
   const lists = await getAllLists();
+  const tree = await getListTree();
   const depts = await db.select().from(departments);
   const deptByCode = new Map(depts.map((d) => [d.code, d]));
 
@@ -488,6 +497,7 @@ async function main() {
       const ctx: GenContext = {
         rng: makeRng(index * 7919),
         lists,
+        tree,
         person,
         index,
         cycleYears,

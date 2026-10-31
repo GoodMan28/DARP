@@ -95,6 +95,7 @@ export default async function NewRecordPage({ params, searchParams }: PageProps)
         fields={fields}
         lookup={schema.data.lookup}
         showRanking={schema.data.derived.length > 0}
+        parents={schema.data.parents}
         locked={lockedStrip(m, user, periodLabel)}
         handedOver={schema.data.lookup ? handedOver : undefined}
         singleton={!!m.singleton}

@@ -24,11 +24,11 @@ export const mentorship: ModuleConfig = {
       section: 'Student',
       exportAs: { faculty: 'Roll No. of Student', dugs: 'Roll No. of Student' } },
 
-    { key: 'program', label: 'Program', type: 'text', required: true, maxLength: 120,
+    { key: 'program', label: 'Program', type: 'select', required: true, listKey: 'programmes', acceptOldText: true,
       section: 'Student',
       exportAs: { faculty: 'Program', dugs: 'Program' } },
 
-    { key: 'branch', label: 'Branch', type: 'text', required: true, maxLength: 120,
+    { key: 'branch', label: 'Branch', type: 'select', listKey: 'specialisations', dependsOn: 'program', acceptOldText: true,
       section: 'Student',
       exportAs: { faculty: 'Branch', dugs: 'Branch' } },
 

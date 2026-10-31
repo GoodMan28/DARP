@@ -77,9 +77,9 @@ export const outreach: ModuleConfig = {
     { key: 'examinerRole', label: 'Examiner role', type: 'select', required: true,
       options: ['External examiner', 'Internal examiner'], section: 'Activity', showIf: when(T.thesis, T.viva),
       exportAs: { faculty: 'Examiner role', dofa: 'Examiner role' } },
-    { key: 'degreeProgramme', label: 'Degree programme of the candidate', type: 'text', maxLength: 160,
-      section: 'Activity', showIf: when(T.thesis, T.viva),
-      help: 'For example "PhD in Mechanical Engineering". The candidate’s name is not needed.',
+    { key: 'degreeProgramme', label: 'Degree programme of the candidate', type: 'select', listKey: 'higherStudyProgrammes',
+      allowOther: true, maxLength: 160, section: 'Activity', showIf: when(T.thesis, T.viva),
+      help: 'The candidate’s name is not needed.',
       exportAs: { faculty: 'Degree programme of the candidate', dofa: 'Degree programme of the candidate' } },
 
     { key: 'chairRole', label: 'Session role', type: 'select', required: true, options: ['Chair', 'Co-chair'],
