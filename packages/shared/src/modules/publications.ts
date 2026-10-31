@@ -53,6 +53,14 @@ export const publications: ModuleConfig = {
       help: 'Filled in from the publisher\'s record. Your own name must be in this list before you can submit — add it if it is hidden (for example behind "et al."), and attach evidence.',
       exportAs: { faculty: 'Name of the author/s', drie: 'Name of the author/s' } },
 
+    { key: 'affiliatedToBit', label: 'Were you affiliated to BIT when this paper was published?', type: 'select',
+      required: true, options: ['Yes', 'No'], colSpan: 2, section: 'Paper',
+      help: 'Answer for the time of publication, whatever your affiliation is now.',
+      exportAs: {
+        faculty: 'Affiliated to BIT at the time of publication (Yes/No)',
+        drie: 'Affiliated to BIT at the time of publication (Yes/No)',
+      } },
+
     { key: 'journal', label: 'Name of journal', type: 'text', required: true, maxLength: 300,
       colSpan: 2, section: 'Journal', autofill: { from: 'containerTitle', locked: true },
       exportAs: { faculty: 'Name of journal', drie: 'Name of journal' } },

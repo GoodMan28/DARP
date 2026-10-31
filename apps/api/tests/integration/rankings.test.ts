@@ -132,6 +132,21 @@ describe('where the ranking is shown', () => {
   });
 });
 
+describe('the affiliation answer in the Excel files', () => {
+  it('adds the column to the right of IQAC’s format, with the answer', async () => {
+    const { workbook } = await generateWorkbookFromRows('faculty', { includePii: false }, {
+      publications: [{ data: { issn: '9999-0001', year: '2024', doi: '10.5555/c', title: 'T', affiliatedToBit: 'No' }, ownerName: 'Dr X', department: 'CSE', profile: {} }],
+    });
+    const sheet = workbook.getWorksheet('Publications')!;
+    let head = 0;
+    sheet.eachRow((row, n) => { if (!head && (row.values as unknown[]).map(String).includes('Indexing')) head = n; });
+    const header = (sheet.getRow(head).values as unknown[]).map(String);
+    const at = header.indexOf('Affiliated to BIT at the time of publication (Yes/No)');
+    expect(at).toBeGreaterThan(0);
+    expect(String(sheet.getRow(head + 1).getCell(at).value)).toBe('No');
+  });
+});
+
 describe('a quartile or Impact Factor the owner typed', () => {
   const paper = { issn: '9999-0001', year: '2024' };
   const of = (extra: Record<string, unknown>) => derivedValues(MODULES.publications!, [{ key: 'p', data: { ...paper, ...extra } }]).then((m) => m.get('p')!);

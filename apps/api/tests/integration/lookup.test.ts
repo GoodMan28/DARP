@@ -65,6 +65,7 @@ const form = (doi: string, over: Record<string, unknown> = {}) => ({
   year: '2023',
   issn: '2168-7161',
   bibliographic: 'typed citation',
+  affiliatedToBit: 'Yes',
   ...over,
 });
 

@@ -473,6 +473,8 @@ export interface BulkItem {
     needsEvidence: boolean;
     /** What the automatic check could not confirm. */
     points: string[];
+    /** "Were you affiliated to BIT when it was published?": null when the module does not ask, '' while unanswered. */
+    affiliation: string | null;
   } | null;
 }
 

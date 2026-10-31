@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useState } from 'react';
 import { apiJson, csrfHeader } from '@/lib/csrf-client';
 import {
-  Button, Card, CardHeader, Checkbox, FileInput, Notice, StatePill, Table, Th, Td,
+  Button, Card, CardHeader, Checkbox, FileInput, Notice, Select, StatePill, Table, Th, Td,
 } from '@/components/ui';
 import { IconUpload } from '@/components/shell/Icon';
 import type { BulkImport, BulkItem, BulkItemStatus, BulkSubmitResult } from '@darp/shared/contracts';
@@ -104,6 +104,12 @@ export function BulkUpload({
     }
   }
 
+  async function affiliate(recordIds: string[], value: 'Yes' | 'No') {
+    const res = await apiJson(`${base}/${importId}/affiliation`, { method: 'POST', body: JSON.stringify({ recordIds, value }) });
+    if (!res.ok) { setError(res.error.message); return; }
+    await load(importId!);
+  }
+
   async function submit() {
     setSubmitting(true);
     const res = await apiJson<BulkSubmitResult[]>(`${base}/${importId}/submit`, {
@@ -185,6 +191,8 @@ export function BulkUpload({
   const submittable = (i: BulkItem) => !!i.record && i.record.mine && i.record.status === 'draft' && i.status !== 'exists';
   const ready = data.items.filter(submittable);
   const allChosen = ready.length > 0 && ready.every((i) => chosen.has(i.record!.id));
+  // Drafts still waiting for the answer to "affiliated to BIT when published?".
+  const unanswered = ready.filter((i) => i.record!.affiliation === '').map((i) => i.record!.id);
 
   return (
     <div className="grid gap-4">
@@ -222,6 +230,14 @@ export function BulkUpload({
             </Button>
           )}
         />
+        {unanswered.length > 0 ? (
+          <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2.5 text-sm">
+            <span className="font-semibold">Affiliated to BIT when these were published?</span>
+            <span className="text-ink-muted">{unanswered.length} not answered.</span>
+            <Button variant="secondary" onClick={() => void affiliate(unanswered, 'Yes')}>Yes, for all of them</Button>
+            <Button variant="secondary" onClick={() => void affiliate(unanswered, 'No')}>No, for all of them</Button>
+          </div>
+        ) : null}
         <Table>
           <thead>
             <tr>
@@ -235,7 +251,7 @@ export function BulkUpload({
               </Th>
               <Th className="w-56">{kind === 'patent' ? 'Number' : 'Identifier'}</Th>
               <Th>What happened</Th>
-              <Th className="w-64">Evidence</Th>
+              <Th className="w-64">Evidence and affiliation</Th>
             </tr>
           </thead>
           <tbody>
@@ -250,6 +266,7 @@ export function BulkUpload({
                 result={i.record ? results[i.record.id] : undefined}
                 onChoose={(on) => setChosen((c) => { const n = new Set(c); if (on) n.add(i.record!.id); else n.delete(i.record!.id); return n; })}
                 onAttach={(fileId) => void attach(i.record!.id, fileId)}
+                onAffiliation={(value) => void affiliate([i.record!.id], value)}
               />
             ))}
           </tbody>
@@ -260,10 +277,11 @@ export function BulkUpload({
 }
 
 function Row({
-  item, moduleKey, importId, chosen, submittable, result, onChoose, onAttach,
+  item, moduleKey, importId, chosen, submittable, result, onChoose, onAttach, onAffiliation,
 }: {
   item: BulkItem; moduleKey: string; importId: string; chosen: boolean; submittable: boolean;
   result?: BulkSubmitResult; onChoose: (on: boolean) => void; onAttach: (fileId: string) => void;
+  onAffiliation: (value: 'Yes' | 'No') => void;
 }) {
   const r = item.record;
   const outcome = OUTCOME[item.status];
@@ -314,6 +332,17 @@ function Row({
             {r.evidenceId ? <p className="mt-1 text-xs text-success-700">Evidence attached.</p>
               : r.needsEvidence ? <p className="mt-1 text-xs text-warning-700">Needed before it can be submitted.</p> : null}
           </>
+        ) : null}
+        {r && r.mine && r.status === 'draft' && r.affiliation !== null ? (
+          <div className="mt-2">
+            <label className="mb-1 block text-xs font-semibold text-ink-muted" htmlFor={`aff-${r.id}`}>Affiliated to BIT when published?</label>
+            <Select id={`aff-${r.id}`} value={r.affiliation} onChange={(e) => e.target.value && onAffiliation(e.target.value as 'Yes' | 'No')}>
+              <option value="">— Choose —</option>
+              <option value="Yes">Yes</option>
+              <option value="No">No</option>
+            </Select>
+            {!r.affiliation ? <p className="mt-1 text-xs text-warning-700">Needed before it can be submitted.</p> : null}
+          </div>
         ) : null}
       </Td>
     </tr>

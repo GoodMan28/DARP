@@ -24,6 +24,7 @@ const paper = {
   doi: '10.1016/j.future.2026.107812',
   title: 'A paper',
   authors: 'A, B',
+  affiliatedToBit: 'Yes',
   journal: 'FGCS',
   year: '2024',
   issn: '0167-739X',
@@ -67,6 +68,14 @@ describe('field validation', () => {
     const bad = await validateRecord(pubs, { ...paper, manualJif: 'five', manualSjrQuartile: 'Q9' }, 'draft');
     expect(bad.errors.manualJif).toBe('Enter a number such as 5.2, or NA.');
     expect(bad.errors.manualSjrQuartile).toBe('Choose one of the listed values.');
+  });
+
+  it('asks every paper whether the author was affiliated to BIT: not on a draft, but on a submission', async () => {
+    const { affiliatedToBit: _omit, ...without } = paper;
+    expect((await validateRecord(pubs, without, 'draft')).errors.affiliatedToBit).toBeUndefined();
+    expect((await validateRecord(pubs, without, 'submit')).errors.affiliatedToBit).toBe('Were you affiliated to BIT when this paper was published? is required.');
+    for (const answer of ['Yes', 'No']) expect((await validateRecord(pubs, { ...paper, affiliatedToBit: answer }, 'submit')).errors.affiliatedToBit).toBeUndefined();
+    expect((await validateRecord(pubs, { ...paper, affiliatedToBit: 'Maybe' }, 'submit')).errors.affiliatedToBit).toBe('Choose one of the listed values.');
   });
 
   it('rejects unknown fields (JSONB injection guard)', async () => {

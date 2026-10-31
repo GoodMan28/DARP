@@ -238,6 +238,7 @@ export async function getBulkImport(actor: SessionUser, moduleKey: string, id: s
         evidenceId: (ev && text(data[ev.fieldKey])) || null,
         needsEvidence: !!ev && (ev.required || !!evidenceMissing(rm, { ...data, [ev.fieldKey]: '' }, verification)),
         points: verification?.reasons ?? [],
+        affiliation: rm.fields.some((f) => f.key === AFFILIATION_KEY) ? text(data[AFFILIATION_KEY]) : null,
       },
     };
   });
@@ -285,6 +286,29 @@ export async function attachBulkEvidence(
   const rec = await getRecord(actor, rm.key, recordId);
   if (!rec.editValues) throw new ServiceError('FORBIDDEN', 'This record can no longer be edited.');
   return updateRecord(actor, rm.key, recordId, { ...rec.editValues, [key]: fileId }, 'draft');
+}
+
+/** The question every paper is asked: affiliated to BIT when it was published? */
+const AFFILIATION_KEY = 'affiliatedToBit';
+
+/**
+ * Answers "affiliated to BIT when published?" on some of the upload's drafts, saving them as drafts
+ * still. A draft made from a file has no answer yet, and it is needed before it can be submitted.
+ */
+export async function setBulkAffiliation(
+  actor: SessionUser, moduleKey: string, importId: string, recordIds: string[], value: 'Yes' | 'No',
+) {
+  const m = lookupModule(actor, moduleKey);
+  let done = 0;
+  for (const recordId of [...new Set(recordIds)]) {
+    const rm = await draftOf(actor, m, importId, recordId);
+    if (!rm.fields.some((f) => f.key === AFFILIATION_KEY)) continue;
+    const rec = await getRecord(actor, rm.key, recordId);
+    if (!rec.editValues) continue;                   // submitted since: no longer editable
+    await updateRecord(actor, rm.key, recordId, { ...rec.editValues, [AFFILIATION_KEY]: value }, 'draft');
+    done += 1;
+  }
+  return { updated: done };
 }
 
 /** A refusal in one line: the message, or the first field problems. */

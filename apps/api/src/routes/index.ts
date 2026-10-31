@@ -68,6 +68,7 @@ api.get('/modules/:moduleKey/bulk', moduleBulk.LIST);
 api.post('/modules/:moduleKey/bulk', moduleBulk.POST);
 api.get('/modules/:moduleKey/bulk/:id', moduleBulk.GET);
 api.post('/modules/:moduleKey/bulk/:id/evidence', moduleBulk.EVIDENCE);
+api.post('/modules/:moduleKey/bulk/:id/affiliation', moduleBulk.AFFILIATION);
 api.post('/modules/:moduleKey/bulk/:id/submit', moduleBulk.SUBMIT);
 api.post('/lookup/:moduleKey', lookup.POST);
 api.get('/journals/ranking', journals.GET);

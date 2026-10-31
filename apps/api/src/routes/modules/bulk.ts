@@ -4,7 +4,7 @@ import { readUpload } from '@/server/http/upload';
 import { toResponse } from '@/server/records/toResponse';
 import { BULK_MAX_BYTES } from '@/server/bulk/extract';
 import {
-  startBulkImport, getBulkImport, listBulkImports, attachBulkEvidence, submitBulk,
+  startBulkImport, getBulkImport, listBulkImports, attachBulkEvidence, setBulkAffiliation, submitBulk,
 } from '@/server/records/bulk';
 
 /** POST /api/modules/:moduleKey/bulk — a .txt, .csv or .xlsx file of DOIs, ISBNs or patent numbers. */
@@ -46,6 +46,17 @@ export const EVIDENCE = withRoute(
   { schema: evidenceSchema, rate: { limit: 120, windowSeconds: 60 } },
   async ({ actor, params, body }) => {
     try { return ok(await attachBulkEvidence(actor, params.moduleKey!, params.id!, body.recordId, body.fileId)); }
+    catch (e) { return toResponse(e); }
+  },
+);
+
+const affiliationSchema = z.object({ recordIds: z.array(z.string().uuid()).min(1).max(100), value: z.enum(['Yes', 'No']) });
+
+/** POST /api/modules/:moduleKey/bulk/:id/affiliation — answers "affiliated to BIT?" on some of the drafts. */
+export const AFFILIATION = withRoute(
+  { schema: affiliationSchema, rate: { limit: 60, windowSeconds: 60 } },
+  async ({ actor, params, body }) => {
+    try { return ok(await setBulkAffiliation(actor, params.moduleKey!, params.id!, body.recordIds, body.value)); }
     catch (e) { return toResponse(e); }
   },
 );

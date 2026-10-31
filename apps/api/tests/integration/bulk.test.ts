@@ -3,7 +3,7 @@ import { truncateAll, closeDb } from '../helpers/db';
 import { makeUser } from '../helpers/factories';
 import { createRecord, getRecord, listRecords } from '@/server/records/service';
 import { uploadEvidence } from '@/server/evidence/service';
-import { startBulkImport, getBulkImport, attachBulkEvidence, submitBulk } from '@/server/records/bulk';
+import { startBulkImport, getBulkImport, attachBulkEvidence, setBulkAffiliation, submitBulk } from '@/server/records/bulk';
 import { notFound, type LookupResult } from '@/server/lookup/types';
 import type { BulkImport } from '@darp/shared/contracts';
 import type { SessionUser } from '@/server/auth/session';
@@ -108,6 +108,16 @@ describe('adding many papers from a file', () => {
   it('submits the chosen drafts one by one: one without evidence is refused, the other approved', async () => {
     const [one, two] = upload.items.filter((i) => i.status === 'created').map((i) => i.record!.id);
     await attachBulkEvidence(faculty, 'publications', upload.id, two!, await evidence(two!));
+
+    // Evidence alone is not enough: "affiliated to BIT when published?" is a question of its own.
+    const before = await getBulkImport(faculty, 'publications', upload.id);
+    expect(before.items.find((i) => i.record?.id === two)!.record).toMatchObject({ affiliation: '' });
+    const [needsAnswer] = await submitBulk(faculty, 'publications', upload.id, [two!]);
+    expect(needsAnswer).toMatchObject({ ok: false, message: expect.stringMatching(/affiliated to BIT/i) });
+    expect(await setBulkAffiliation(faculty, 'publications', upload.id, [two!], 'Yes')).toEqual({ updated: 1 });
+    expect((await getBulkImport(faculty, 'publications', upload.id)).items.find((i) => i.record?.id === two)!.record)
+      .toMatchObject({ affiliation: 'Yes' });
+
     const results = await submitBulk(faculty, 'publications', upload.id, [one!, two!]);
     expect(results.find((r) => r.recordId === one)).toMatchObject({ ok: false, message: expect.stringMatching(/evidence/i) });
     expect(results.find((r) => r.recordId === two)).toMatchObject({ ok: true, status: 'approved' });
@@ -117,11 +127,23 @@ describe('adding many papers from a file', () => {
     expect(again.items.find((i) => i.record?.id === one)!.record!.status).toBe('draft');
   });
 
+  it('answers the affiliation question for several drafts at once, and only for the owner’s own drafts', async () => {
+    const own = upload.items.filter((i) => i.status === 'created' && i.record?.status === 'draft' && i.record.moduleKey === 'publications').map((i) => i.record!.id);
+    expect(own.length).toBeGreaterThan(0);
+    expect(await setBulkAffiliation(faculty, 'publications', upload.id, own, 'No')).toEqual({ updated: own.length });
+    const read = await getRecord(faculty, 'publications', own[0]!);
+    expect(read.data.affiliatedToBit).toBe('No');
+    const stranger = await createRecord(faculty, 'publications', { doi: '10.5555/unrelated-aff' }, 'draft');
+    await expect(setBulkAffiliation(faculty, 'publications', upload.id, [stranger.id], 'Yes')).rejects.toMatchObject({ code: expect.any(String) });
+    await expect(setBulkAffiliation(other, 'publications', upload.id, own, 'Yes')).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+
   it('submits a draft made in the other module, and asks for the name on one without it', async () => {
     const byRaw = Object.fromEntries(upload.items.map((i) => [i.raw, i]));
     const talk = byRaw['10.5555/conference']!.record!.id;
     const theirs = byRaw['10.5555/theirs']!.record!.id;
     await attachBulkEvidence(faculty, 'publications', upload.id, theirs, await evidence(theirs));
+    await setBulkAffiliation(faculty, 'publications', upload.id, [theirs], 'Yes');
     const results = await submitBulk(faculty, 'publications', upload.id, [talk, theirs]);
     // Books needs more than a DOI (here, the type of work): it says so on its own row.
     expect(results.find((r) => r.recordId === talk)).toMatchObject({ ok: false, message: expect.any(String) });
