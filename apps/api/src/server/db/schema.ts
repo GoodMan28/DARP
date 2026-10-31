@@ -544,3 +544,39 @@ export const recordsRelations = relations(records, ({ one, many }) => ({
 export const evidenceRelations = relations(evidenceFiles, ({ one }) => ({
   record: one(records, { fields: [evidenceFiles.recordId], references: [records.id] }),
 }));
+
+/**
+ * Institutes, for the places that used to ask for a college or university by typing its name: AISHE
+ * (India's government directory), ROR (the world's research organisations), and entries added by users
+ * that IQAC reviews. A record keeps the institute's name as text beside its `code`.
+ */
+export const institutions = pgTable('institutions', {
+  /** U-0202 (AISHE), ROR-028vtqb15 (ROR) or DARP-000012 (added here). */
+  code: text('code').primaryKey(),
+  /** 'aishe' | 'ror' | 'local' */
+  scheme: text('scheme').notNull(),
+  name: text('name').notNull(),
+  aliases: text('aliases').array().notNull().default(sql`'{}'`),
+  /** The city; for an AISHE entry, its district. */
+  city: text('city'),
+  state: text('state'),
+  country: text('country').notNull(),
+  countryCode: text('country_code'),
+  /** AISHE: university, college, standalone or research. ROR: its types (education, company…). */
+  kind: text('kind'),
+  /** The ROR id (028vtqb15), also on an AISHE entry when it is known. */
+  rorId: text('ror_id'),
+  website: text('website'),
+  /** normInstitution(name, code and aliases): what a search looks through. */
+  searchText: text('search_text').notNull(),
+  /** 'active' | 'pending' (added by a user, not yet reviewed) | 'merged' (see mergedInto) */
+  status: text('status').notNull().default('active'),
+  mergedInto: text('merged_into'),
+  addedBy: uuid('added_by').references(() => users.id),
+  sourceVersion: text('source_version'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  index('institutions_status_idx').on(t.status),
+  index('institutions_country_idx').on(t.country),
+]);

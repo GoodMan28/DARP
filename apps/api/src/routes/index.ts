@@ -19,6 +19,7 @@ import * as reports from './reports';
 import * as research from './research';
 import * as lookup from './lookup';
 import * as journals from './journals';
+import * as institutions from './institutions';
 import * as evidenceUpload from './evidence/upload';
 import * as evidenceFile from './evidence/file';
 import * as exportWorkbook from './export';
@@ -72,6 +73,7 @@ api.post('/modules/:moduleKey/bulk/:id/affiliation', moduleBulk.AFFILIATION);
 api.post('/modules/:moduleKey/bulk/:id/submit', moduleBulk.SUBMIT);
 api.post('/lookup/:moduleKey', lookup.POST);
 api.get('/journals/ranking', journals.GET);
+api.get('/institutions/search', institutions.SEARCH);
 
 api.post('/evidence', evidenceUpload.POST);
 api.get('/evidence/:id', evidenceFile.GET);

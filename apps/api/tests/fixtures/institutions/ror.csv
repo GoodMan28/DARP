@@ -1,0 +1,7 @@
+id,status,types,names.types.ror_display,names.types.label,names.types.alias,names.types.acronym,locations.geonames_details.name,locations.geonames_details.country_subdivision_name,locations.geonames_details.country_name,locations.geonames_details.country_code,links.type.website
+https://ror.org/028vtqb15,active,education,"Birla Institute of Technology, Mesra","en: Birla Institute of Technology, Mesra",,no_lang_code: BIT MESRA,Ranchi,Jharkhand,India,IN,https://www.bitmesra.ac.in
+https://ror.org/03kgp0001,active,education; funder,Indian Institute of Technology Kharagpur,en: Indian Institute of Technology Kharagpur,,"no_lang_code: IIT KGP, IITKGP",Kharagpur,West Bengal,India,IN,http://www.iitkgp.ac.in
+https://ror.org/04paris01,active,education,Université de Paris,fr: Université de Paris,"en: University of Paris, Paris University",,Paris,Île-de-France,France,FR,https://u-paris.fr
+https://ror.org/05acme001,active,company,"Acme Robotics, Inc.","en: Acme Robotics, Inc.","en: ""Acme"" Group, Acme
+Corp",,Austin,Texas,United States,US,https://acme.example
+https://ror.org/06gone001,inactive,education,Closed Institute,,,,Nowhere,,India,IN,

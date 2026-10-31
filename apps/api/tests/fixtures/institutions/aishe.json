@@ -1,0 +1,9 @@
+[
+  { "aishe_code": "U-0202", "name": "Birla Institute of Technology, Ranchi", "state": "Jharkhand", "district": "Ranchi" },
+  { "aishe_code": "U-0391", "name": "Birla Institute of Technology & Sciences, Pilani", "state": "Rajasthan", "district": "Jhunjhunu" },
+  { "aishe_code": "U-0391", "name": "Birla Institute of Technology and Science, Pilani", "state": "Rajasthan" },
+  { "aishe_code": "U-0050", "name": "Indian Institute of Technology, Kharagpur", "state": "West Bengal", "district": "Paschim Medinipur" },
+  { "aishe_code": "C-1111", "name": "Ranchi Women's College", "state": "Jharkhand", "district": "Ranchi" },
+  { "aishe_code": "C-2222", "name": "100% Scholar College_A", "state": "Bihar", "district": "Patna" },
+  { "aishe_code": "not-a-code", "name": "Ignored", "state": "Bihar", "district": "Patna" }
+]

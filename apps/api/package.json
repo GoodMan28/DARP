@@ -28,6 +28,7 @@
     "db:reset": "tsx --env-file=.env.local scripts/reset.ts",
     "templates:install": "tsx scripts/install-template.ts",
     "db:setup": "npm run db:migrate && npm run db:harden && npm run db:seed",
+    "institutions:import": "tsx --env-file=.env.local scripts/import-institutions.ts",
     "journals:import": "tsx --env-file=.env.local scripts/import-journals.ts"
   },
   "dependencies": {
