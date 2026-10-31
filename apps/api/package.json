@@ -24,6 +24,7 @@
     "db:backfill-years": "tsx --env-file=.env.local scripts/backfill-years.ts",
     "db:patent-status": "tsx --env-file=.env.local scripts/patent-status-rename.ts",
     "db:split-names": "tsx --env-file=.env.local scripts/split-names.ts",
+    "db:profile-sync": "tsx --env-file=.env.local scripts/profile-sync.ts",
     "db:year-to-date": "tsx --env-file=.env.local scripts/year-to-date.ts",
     "db:reset": "tsx --env-file=.env.local scripts/reset.ts",
     "templates:install": "tsx scripts/install-template.ts",

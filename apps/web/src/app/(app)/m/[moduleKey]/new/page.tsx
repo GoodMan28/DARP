@@ -45,7 +45,7 @@ export default async function NewRecordPage({ params, searchParams }: PageProps)
       user={user}
       groups={groups}
       crumbs={crumbs}
-      title={`Add ${/^[aeiou]/i.test(m.name) ? "an" : "a"} ${m.name.toLowerCase()} record`}
+      title={m.singleton ? 'My details' : `Add ${/^[aeiou]/i.test(m.name) ? "an" : "a"} ${m.name.toLowerCase()} record`}
       subtitle={m.description}
       actions={
         <LinkButton href={`/m/${m.key}`} variant="secondary">
@@ -84,10 +84,12 @@ export default async function NewRecordPage({ params, searchParams }: PageProps)
 
   return shell(
     <>
-      <Notice tone="info" className="mb-4">
-        The year a record counts in is taken from the date you fill in. Fields marked with an asterisk are required before the record can be submitted;
-        anything else can be saved as a draft and finished later.
-      </Notice>
+      {m.singleton ? null : (
+        <Notice tone="info" className="mb-4">
+          The year a record counts in is taken from the date you fill in. Fields marked with an asterisk are required before the record can be submitted;
+          anything else can be saved as a draft and finished later.
+        </Notice>
+      )}
       <RecordForm
         moduleKey={m.key}
         fields={fields}
@@ -95,6 +97,8 @@ export default async function NewRecordPage({ params, searchParams }: PageProps)
         showRanking={schema.data.derived.length > 0}
         locked={lockedStrip(m, user, periodLabel)}
         handedOver={schema.data.lookup ? handedOver : undefined}
+        singleton={!!m.singleton}
+        returnTo={m.singleton ? '/profile' : undefined}
       />
     </>,
   );

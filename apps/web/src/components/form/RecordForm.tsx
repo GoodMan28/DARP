@@ -42,6 +42,8 @@ interface Props {
   needsInput?: string[];
   /** Opened from an upload of many records: saving goes back there instead of to the module list. */
   returnTo?: string;
+  /** The Faculty Profile: one record per person, no draft and no approval. */
+  singleton?: boolean;
 }
 
 /** The same text for this purpose: case and spacing aside (the server compares the same way). */
@@ -51,7 +53,7 @@ const sameText = (a: unknown, b: string) => (
 
 export function RecordForm({
   moduleKey, fields, recordId, initialValues, locked, readOnly, lookup, initialLocked, handedOver,
-  initialProvenance, showRanking, approved, estimatedDates, needsInput, returnTo,
+  initialProvenance, showRanking, approved, estimatedDates, needsInput, returnTo, singleton,
 }: Props) {
   const [values, setValues] = useState<Record<string, unknown>>(initialValues ?? {});
   /** The country of each institute chosen on this form, for the fields worked out from it (the server decides on saving). */
@@ -254,6 +256,7 @@ export function RecordForm({
         </div>
       ) : null}
 
+      {singleton ? null : (
       <Card className="mb-4 bg-surface-2">
         <div className="grid gap-3 text-sm sm:grid-cols-3">
           <div>
@@ -274,6 +277,7 @@ export function RecordForm({
           re-typing them.
         </p>
       </Card>
+      )}
 
       {lookup && !readOnly ? (
         <Card className="mb-4">
@@ -465,16 +469,16 @@ export function RecordForm({
       {!readOnly ? (
         <div className="sticky bottom-0 flex flex-wrap items-center gap-2 border-t border-line bg-canvas py-3">
           <LinkButton href={returnTo ?? `/m/${moduleKey}`} variant="ghost">Cancel</LinkButton>
-          {approved ? null : (
+          {approved || singleton ? null : (
             <Button type="button" variant={returnTo ? 'primary' : 'secondary'} disabled={busy} onClick={() => void save('draft')}>
               {returnTo ? 'Save and return to the upload' : 'Save as draft'}
             </Button>
           )}
           <Button type="submit" variant={returnTo && !approved ? 'secondary' : 'primary'} disabled={busy}>
-            {busy ? 'Saving…' : approved ? 'Save changes' : 'Save and submit'}
+            {busy ? 'Saving…' : singleton ? 'Save my details' : approved ? 'Save changes' : 'Save and submit'}
           </Button>
           <p className="ml-auto text-xs text-ink-muted">
-            {approved ? 'Every change is kept in the edit history.' : 'Submitting approves the record; the verifying office checks it afterwards.'}
+            {approved || singleton ? 'Every change is kept in the edit history.' : 'Submitting approves the record; the verifying office checks it afterwards.'}
           </p>
         </div>
       ) : null}

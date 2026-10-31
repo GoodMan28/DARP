@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { truncateAll, closeDb } from '../helpers/db';
 import { makeUser } from '../helpers/factories';
+import { loadTestInstitutes } from '../helpers/institutes';
+import { fullProfile } from '../helpers/profile';
 import {
   createRecord, updateRecord, getRecord, listRecords, transitionRecord, deleteRecord,
   setNilDeclaration, getNilDeclarations, statusCounts, correctionsFor, acknowledgeCorrection,
@@ -40,6 +42,7 @@ const engagement = (tag: string) => ({
 
 beforeAll(async () => {
   await truncateAll();
+  await loadTestInstitutes();
   faculty = await makeUser({ role: 'faculty', dept: 'CSE' });
   otherFaculty = await makeUser({ role: 'faculty', dept: 'CSE' });
   hod = await makeUser({ role: 'hod', dept: 'CSE' });
@@ -231,10 +234,7 @@ describe('nil returns', () => {
 
 describe('personal data', () => {
   it('stores Aadhaar encrypted and never returns it in plaintext', async () => {
-    const { id } = await createRecord(faculty, 'profile', {
-      name: faculty.name,
-      aadhaar: '234123412346',
-    }, 'draft');
+    const { id } = await createRecord(faculty, 'profile', fullProfile(), 'submit');
     const read = await getRecord(faculty, 'profile', id);
     expect(String(read.data.aadhaar)).toMatch(/^XXXX-XXXX-/);
     expect(String(read.data.aadhaar)).not.toContain('234123412346');
@@ -243,8 +243,11 @@ describe('personal data', () => {
   it('keeps the stored Aadhaar when the form sends it back blank', async () => {
     const list = await listRecords(faculty, 'profile', {});
     const id = list.rows[0]!.id;
-    await updateRecord(faculty, 'profile', id, { name: faculty.name, aadhaar: '' }, 'draft');
+    // The form shows PAN and Aadhaar blank: saving other changes must not ask for them again.
+    await updateRecord(faculty, 'profile', id, fullProfile({ aadhaar: '', pan: '', teachingHours: '310' }), 'submit');
     const read = await getRecord(faculty, 'profile', id);
     expect(String(read.data.aadhaar)).toMatch(/2346$/);
+    expect(String(read.data.pan)).toMatch(/^XXXXX1234/);
+    expect(read.data.teachingHours).toBe(310);
   });
 });

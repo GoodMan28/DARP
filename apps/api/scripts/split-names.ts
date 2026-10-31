@@ -6,16 +6,17 @@
  *   npm run db:split-names -w @darp/api             lists what would change; changes nothing
  *   npm run db:split-names -w @darp/api -- --apply  writes it
  */
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, ne, sql } from 'drizzle-orm';
 import { db, pool } from '../src/server/db';
 import { users } from '../src/server/db/schema';
 import { splitName } from '@darp/shared/names';
+import { SYSTEM_EMAIL } from '../src/server/lookup/system';
 
 const apply = process.argv.includes('--apply');
 
 const rows = await db.select({
   id: users.id, name: users.name, prefix: users.namePrefix, first: users.firstName, middle: users.middleName, last: users.lastName,
-}).from(users).where(and(eq(users.lastName, ''), eq(users.middleName, ''), sql`${users.firstName} ~ '[[:space:]]'`));
+}).from(users).where(and(ne(users.email, SYSTEM_EMAIL), eq(users.lastName, ''), eq(users.middleName, ''), sql`${users.firstName} ~ '[[:space:]]'`));
 
 let changed = 0;
 for (const r of rows) {

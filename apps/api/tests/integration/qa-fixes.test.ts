@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { truncateAll, closeDb } from '../helpers/db';
 import { makeUser } from '../helpers/factories';
+import { loadTestInstitutes } from '../helpers/institutes';
+import { fullProfile } from '../helpers/profile';
 import {
   createRecord, updateRecord, getRecord, listRecords, transitionRecord, deleteRecord,
   correctionsFor, listDeletedRecords, restoreRecord, setNilDeclaration, getNilDeclarations,
@@ -34,6 +36,7 @@ const grant = (tag: string, extra: Record<string, unknown> = {}) => ({
 
 beforeAll(async () => {
   await truncateAll();
+  await loadTestInstitutes();
   faculty = await makeUser({ role: 'faculty', dept: 'CSE' });
   quiet = await makeUser({ role: 'faculty', dept: 'CSE' });
   meTech = await makeUser({ role: 'faculty', dept: 'ME' });
@@ -110,7 +113,7 @@ describe('delete rules', () => {
 
 describe('the Faculty Profile roster', () => {
   it('lists every faculty member in the HOD’s department, including those with no profile', async () => {
-    await createRecord(faculty, 'profile', { name: faculty.name }, 'draft');
+    await createRecord(faculty, 'profile', fullProfile(), 'submit');
     const rows = (await listRecords(hod, 'profile', {})).rows;
     const quietRow = rows.find((r) => r.ownerName === quiet.name)!;
     expect(quietRow.noRecord).toBe(true);
@@ -132,11 +135,11 @@ describe('the Faculty Profile roster', () => {
   });
 
   it('lets a HOD keep a profile of their own, which they can never return', async () => {
-    const made = await createRecord(hod, 'profile', { name: hod.name }, 'draft');
+    const made = await createRecord(hod, 'profile', fullProfile(), 'submit');
     const mine = await listRecords(hod, 'profile', { mine: true });
     expect(mine.rows.map((r) => r.id)).toContain(made.id);
     expect(mine.rows.every((r) => r.isMine)).toBe(true);
-    await expect(transitionRecord(hod, 'profile', made.id, 'return', 'no')).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(transitionRecord(hod, 'profile', made.id, 'return', 'no')).rejects.toMatchObject({ code: 'VALIDATION' });
   });
 
   it('shows a faculty member only their own profile', async () => {

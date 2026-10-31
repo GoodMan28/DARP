@@ -6,6 +6,7 @@ import { withRoute, ok, fail } from '@/server/http/handler';
 import { hashPassword, PasswordPolicyError } from '@/server/auth/password';
 import { revokeAllSessionsForUser } from '@/server/auth/session';
 import { audit } from '@/server/audit/log';
+import { syncProfileFromAccount } from '@/server/records/profileSync';
 import { generateTemporaryPassword, ROLE_VALUES, DEPARTMENT_REQUIRED_ROLES, NAME_FIELDS, namePartsFrom } from '@/server/auth/accounts';
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use the date picker.');
@@ -141,6 +142,8 @@ export const PATCH = withRoute(
         actor, action: 'user.update', entity: 'user', entityId: targetId,
         ip, userAgent, before, after,
       });
+      // The profile keeps the account's name and joining date for IQAC's exports.
+      await syncProfileFromAccount(targetId, after.name, after.dateOfJoining ?? null);
       return ok({ user: after });
     }
 

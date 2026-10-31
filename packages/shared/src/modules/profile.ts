@@ -15,10 +15,12 @@ export const profile: ModuleConfig = {
   viewRoles: ['hod', 'dofa', 'admin'],
   scope: 'self',
   managedAt: { href: '/profile', label: 'Open my profile' },
+  singleton: true,
   periodic: false,
   fields: [
-    { key: 'name', label: 'Name', type: 'text', required: true, maxLength: 160, colSpan: 2,
-      section: 'Identity',
+    // The account's own name: kept on the record for the exports, never typed a second time.
+    { key: 'name', label: 'Name', type: 'text', maxLength: 160, colSpan: 2, section: 'Identity',
+      hidden: true, computed: { kind: 'account', key: 'name' },
       exportAs: { faculty: 'Name' } },
 
     { key: 'pan', label: 'PAN No.', type: 'pan', required: true,
@@ -51,6 +53,7 @@ export const profile: ModuleConfig = {
       exportAs: { faculty: 'PG Qualification' } },
 
     ...institutionField({ key: 'pgInstitution', label: 'Name of College/University, State and Country of PG Degree', maxLength: 240, colSpan: 2, section: 'Qualifications',
+      showIf: { field: 'pgQualification', notIn: ['None', ''] },
       exportAs: { faculty: 'Name of College/University, State and Country of PG Degree' } }, { exportId: false }),
 
     { key: 'hasPhd', label: 'PhD Qualification? (Yes/No)', type: 'select', required: true,
@@ -80,10 +83,10 @@ export const profile: ModuleConfig = {
       type: 'date', required: true, section: 'Appointment',
       exportAs: { faculty: 'Date of Receiving Highest Degree (Either PhD or PG)' } },
 
+    // The account's joining date, set by IQAC: kept on the record for the exports.
     { key: 'joiningDate',
       label: 'Date of Joining BIT (as UGC complied post like Lecturer/Asst. Prof/Assoc Prof/Prof)',
-      type: 'date', required: true, section: 'Appointment',
-      help: 'This date decides every "since joining BIT" count on your profile.',
+      type: 'date', section: 'Appointment', hidden: true, computed: { kind: 'account', key: 'dateOfJoining' },
       exportAs: { faculty: 'Date of Joining BIT (as UGC complied post like Lecturer/Asst. Prof/Assoc Prof/Prof) (DD/MM/YYYY)' } },
 
     { key: 'lastPromotionDate', label: 'Date of last promotion', type: 'date',

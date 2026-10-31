@@ -470,10 +470,10 @@ function submitErrors(
 
 /** Field rules and submit rules together, so the owner sees every problem at once. */
 async function validateSubmission(
-  m: ModuleConfig, looked: Looked, ownerWho: OwnerIdentity, mode: 'draft' | 'submit',
+  m: ModuleConfig, looked: Looked, ownerWho: OwnerIdentity, mode: 'draft' | 'submit', keep: ReadonlySet<string> = new Set(),
 ) {
   refuseOnSubmit(m, looked, mode);
-  const v = await validateRecord(m, looked.data, mode, { account: ownerWho.account });
+  const v = await validateRecord(m, looked.data, mode, { account: ownerWho.account }, keep);
   const errors = { ...submitErrors(m, looked, ownerWho, mode), ...(v.ok ? {} : v.errors) };
   if (!v.ok || Object.keys(errors).length > 0) throw new ServiceError('VALIDATION', 'Some fields need attention.', errors);
   return v;
@@ -494,6 +494,8 @@ export async function createRecord(
 ) {
   const m = mustGetModule(moduleKey);
   if (!canCreateIn(actor, m)) throw new ServiceError('FORBIDDEN', 'You cannot add records to this module.');
+  // The Faculty Profile has no draft: saving it is the whole of it.
+  if (m.singleton) mode = 'submit';
 
   const cycle = await activeCycle();
   const who = await ownerIdentity(actor.id, actor.name);
@@ -602,7 +604,7 @@ export async function updateRecord(
   }
   // An approved record stays approved: saving it again is a change, not a new submission.
   const wasApproved = existing.status === 'approved';
-  const mode = wasApproved ? 'submit' : requestedMode;
+  const mode = wasApproved || m.singleton ? 'submit' : requestedMode;
 
   const stored = existing.data as Record<string, unknown>;
   // What was fetched by a number (DOI, patent number) cannot be swapped for another record once the
@@ -621,7 +623,9 @@ export async function updateRecord(
   const who = await ownerIdentity(existing.ownerUserId, actor.name);
   const looked = await applyLookup(m, input, { owner: who });
 
-  const v = await validateSubmission(m, looked, who, mode);
+  // PAN and Aadhaar are shown to the form blank: left blank, the stored value stays and is not asked for again.
+  const keep = new Set(m.fields.filter((f) => f.pii === 'encrypted' && stored[f.key]).map((f) => f.key));
+  const v = await validateSubmission(m, looked, who, mode, keep);
 
   const badFiles = await unattachableFiles(actor.id, m, id, v.data);
   if (Object.keys(badFiles).length > 0) throw new ServiceError('VALIDATION', 'Some fields need attention.', badFiles);
@@ -700,6 +704,7 @@ export async function updateRecord(
 
 export async function deleteRecord(actor: SessionUser, moduleKey: string, id: string, reason?: string) {
   const m = mustGetModule(moduleKey);
+  if (m.singleton) throw new ServiceError('VALIDATION', 'The Faculty Profile cannot be deleted.');
 
   const [existing] = await db.select().from(records)
     .where(and(scopeFilter(actor, m), eq(records.id, id)))
@@ -778,6 +783,7 @@ export async function transitionRecord(
   actor: SessionUser, moduleKey: string, id: string, action: WorkflowAction, remark?: string,
 ) {
   const m = mustGetModule(moduleKey);
+  if (m.singleton) throw new ServiceError('VALIDATION', 'The Faculty Profile has no approval.');
 
   const [existing] = await db.select().from(records)
     .where(and(scopeFilter(actor, m), eq(records.id, id)))

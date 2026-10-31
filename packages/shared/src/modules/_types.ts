@@ -181,6 +181,13 @@ export interface ModuleConfig {
   naturalKey?: string[];
 
   /**
+   * One record per person, saved as a whole, with no approval: no status, no delete, no return and no
+   * year on screen. It is stored as a record only so that exports, the roster and permissions stay one
+   * mechanism; every save is approved at once.
+   */
+  singleton?: boolean;
+
+  /**
    * One record per owner per cycle, kept on its own page rather than added from the module list
    * (the Faculty Profile lives on /profile). The list then shows no "Add record" button and no nil
    * return; owners get a link to this page instead.

@@ -127,6 +127,8 @@ export async function validateRecord(
   rawInput: Record<string, unknown>,
   mode: 'draft' | 'submit',
   ctx: ComputeContext = {},
+  /** Fields left blank on purpose because a stored value is kept (PAN, Aadhaar): not asked for again. */
+  keep: ReadonlySet<string> = new Set(),
 ): Promise<ValidationResult> {
   const lists = await getAllLists();
   const input = rawInput;
@@ -178,7 +180,7 @@ export async function validateRecord(
     if (empty) {
       // A figure the system works out is never asked for: it is blank only when nothing can give it.
       const workedOut = !!f.computed && computeValue(f.computed, merged, ctx) !== undefined;
-      if (f.required && !workedOut && mode === 'submit') errors[f.key] = `${f.label} is required.`;
+      if (f.required && !workedOut && !keep.has(f.key) && mode === 'submit') errors[f.key] = `${f.label} is required.`;
       if (f.type === 'checkbox') out[f.key] = false;
       continue;
     }

@@ -1,11 +1,11 @@
 import { AppShell } from '@/components/shell/AppShell';
-import { Card, CardHeader, Notice, LinkButton, StatePill } from '@/components/ui';
+import { Card, CardHeader, Notice, LinkButton } from '@/components/ui';
 import { requireMe, apiGet, loadPageData } from '@/lib/api.server';
 import type { CounterValues, IdentityPayload, RecordListPayload } from '@darp/shared/contracts';
 import { getModule } from '@darp/shared/modules';
 import { displayValue, formatDate } from '@darp/shared/format';
 import { ROLE_LABEL } from '@darp/shared/roles';
-import { splitName } from '@darp/shared/names';
+import { accountNameParts } from '@darp/shared/names';
 import { DeclaredCounters } from './DeclaredCounters';
 import { OrcidBox } from './OrcidBox';
 import { ResearchCard } from '@/components/research/ResearchCard';
@@ -48,8 +48,7 @@ export default async function ProfilePage() {
   if (!identity.ok) throw new Error(identity.message);
   const who = identity.data;
   // An account made before names had parts keeps the whole name in "first name": show it in parts.
-  const oneBox = !who.middleName && !who.lastName && /\s/.test(who.firstName.trim());
-  const shown = oneBox ? { ...splitName(who.firstName), prefix: who.namePrefix || splitName(who.firstName).prefix } : null;
+  const shown = accountNameParts(who);
   // Scopus and Web of Science figures: for everyone who fills in the faculty annexure.
   const research = hasAnnexure ? await loadPageData<ResearchProfile>('/api/profile/research') : null;
 
@@ -73,10 +72,10 @@ export default async function ProfilePage() {
         <CardHeader title="Account" subtitle="Your name is set by IQAC; ask IQAC to correct it. Your name is matched against author and inventor lists, so keep it as you publish." />
         <dl className="grid gap-x-8 gap-y-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
           {[
-            ['Prefix', (shown?.prefix ?? who.namePrefix) || '—'],
-            ['First name', shown?.first ?? who.firstName],
-            ['Middle name', (shown?.middle ?? who.middleName) || '—'],
-            ['Last name', (shown?.last ?? who.lastName) || '—'],
+            ['Prefix', shown.prefix || '—'],
+            ['First name', shown.first],
+            ['Middle name', shown.middle || '—'],
+            ['Last name', shown.last || '—'],
             ['Institute e-mail', user.email],
             ['Role', ROLE_LABEL[user.role]],
             ['Department', user.departmentName ?? '—'],
@@ -104,7 +103,6 @@ export default async function ProfilePage() {
           <CardHeader
             title="My details"
             subtitle="Typed by you. Aadhaar and PAN are stored encrypted and always shown masked."
-            actions={<StatePill status={profileRecord.status} />}
           />
           <div className="grid gap-x-8 gap-y-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
             {profileModule.fields

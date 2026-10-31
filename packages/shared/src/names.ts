@@ -44,3 +44,14 @@ export function splitName(full: string): NameParts {
   if (words.length <= 1) return { prefix, first: words[0] ?? '', middle: '', last: '' };
   return { prefix, first: words[0]!, middle: words.slice(1, -1).join(' '), last: words[words.length - 1]! };
 }
+
+/**
+ * An account's name in four parts. An account made before names had parts keeps its whole name in
+ * "first name" ("Dr Vandana Bhattacharjee"): that is read into its parts for display.
+ */
+export function accountNameParts(u: { namePrefix: string; firstName: string; middleName: string; lastName: string }): NameParts {
+  const oneBox = !u.middleName && !u.lastName && /\s/.test(u.firstName.trim());
+  if (!oneBox) return { prefix: u.namePrefix, first: u.firstName, middle: u.middleName, last: u.lastName };
+  const p = splitName(u.firstName);
+  return { ...p, prefix: u.namePrefix || p.prefix };
+}

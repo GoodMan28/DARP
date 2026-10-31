@@ -11,7 +11,9 @@ import { DeleteRecord } from '@/components/records/DeleteRecord';
 import { Remark } from '@/components/records/Remark';
 import { lockedStrip } from '@/components/records/form-fields';
 import { requireMe, loadPageData } from '@/lib/api.server';
-import { AUTHORSHIP_LABEL, LOOKUP_SOURCE_LABEL, type AuthorshipLevel, type ModuleSchemaPayload, type RecordDetail } from '@darp/shared/contracts';
+import { AUTHORSHIP_LABEL, LOOKUP_SOURCE_LABEL, type AuthorshipLevel, type IdentityPayload, type ModuleSchemaPayload, type RecordDetail } from '@darp/shared/contracts';
+import { accountNameParts } from '@darp/shared/names';
+import { AccountNameCard } from '@/components/form/AccountNameCard';
 import { getModule } from '@darp/shared/modules';
 import { formatDateTime, STATUS_LABEL } from '@darp/shared/format';
 import { ROLE_LABEL } from '@darp/shared/roles';
@@ -82,10 +84,13 @@ export default async function RecordPage({ params, searchParams }: PageProps) {
    * every one in canTransition(), so this list is courtesy rather than security: it exists
    * so nobody is shown a button that will refuse them.
    */
+  const single = !!m.singleton;
+  // The owner's own name in four parts, shown above their profile; someone else's shows only the title.
+  const identity = single && record.isMine ? await loadPageData<IdentityPayload>('/api/profile/identity') : null;
   const rail: RailAction[] = [];
   // Records are approved on submission and checked afterwards: the office, IQAC and the department's
   // HOD may send an approved record back with a remark. Nobody returns their own.
-  if (['submitted', 'verified', 'approved'].includes(record.status) && (mayVerify || user.role === 'hod') && !record.isMine) rail.push('return');
+  if (!single && ['submitted', 'verified', 'approved'].includes(record.status) && (mayVerify || user.role === 'hod') && !record.isMine) rail.push('return');
 
   const { fields } = schema.data;
   // "the publisher's record", "the Patent Office Journal" — and as a column head, "Publisher's record".
@@ -113,12 +118,12 @@ export default async function RecordPage({ params, searchParams }: PageProps) {
       user={user}
       groups={groups}
       crumbs={crumbs}
-      title={heading}
-      subtitle={`${m.name} · ${record.periodLabel} · ${STATUS_LABEL[record.status] ?? record.status}`}
+      title={single ? (record.isMine ? 'My details' : record.ownerName) : heading}
+      subtitle={single ? m.description : `${m.name} · ${record.periodLabel} · ${STATUS_LABEL[record.status] ?? record.status}`}
       actions={
-        <LinkButton href={upload ?? `/m/${m.key}`} variant="secondary">
+        <LinkButton href={upload ?? (single && record.isMine ? '/profile' : `/m/${m.key}`)} variant="secondary">
           <IconArrowBack width={14} height={14} />
-          {upload ? 'Back to the upload' : 'Back to list'}
+          {upload ? 'Back to the upload' : single && record.isMine ? 'Back to my profile' : 'Back to list'}
         </LinkButton>
       }
     >
@@ -154,7 +159,7 @@ export default async function RecordPage({ params, searchParams }: PageProps) {
         </Notice>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
+      <div className={single ? '' : 'grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]'}>
         <div className="min-w-0">
           {changes.length > 0 ? (
             <Card padded={false} className="mb-4">
@@ -183,6 +188,9 @@ export default async function RecordPage({ params, searchParams }: PageProps) {
               </Table>
             </Card>
           ) : null}
+          {identity?.ok ? (
+            <AccountNameCard parts={accountNameParts(identity.data)} email={user.email} department={user.departmentName} dateOfJoining={user.dateOfJoining} />
+          ) : null}
           <RecordForm
             moduleKey={m.key}
             fields={fields}
@@ -197,7 +205,8 @@ export default async function RecordPage({ params, searchParams }: PageProps) {
             approved={record.status === 'approved'}
             estimatedDates={record.estimatedDates}
             needsInput={record.needsInput}
-            returnTo={upload}
+            returnTo={upload ?? (single && record.isMine ? '/profile' : undefined)}
+            singleton={single}
           />
           {record.edits.length > 0 && record.status !== 'draft' ? (
             <details id="edit-history" open={!record.isMine} className="mt-4 rounded-sm border border-line bg-surface">
@@ -230,6 +239,7 @@ export default async function RecordPage({ params, searchParams }: PageProps) {
           ) : null}
         </div>
 
+        {single ? null : (
         <aside className="space-y-4">
           {/* The automatic check's verdict describes an approval; once returned or resubmitted it no longer applies. */}
           {record.verification && !(record.verification.autoApproved && record.status !== 'approved') ? (
@@ -340,6 +350,7 @@ export default async function RecordPage({ params, searchParams }: PageProps) {
             )}
           </Card>
         </aside>
+        )}
       </div>
     </AppShell>
   );

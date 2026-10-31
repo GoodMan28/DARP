@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { AppShell } from '@/components/shell/AppShell';
 import {
@@ -85,6 +85,8 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
   if (!m) notFound();
 
   const { user, cycle, groups } = await requireMe();
+  // Faculty have nothing to list for a record kept on its own page: their profile is the page.
+  if (m.singleton && user.role === 'faculty') redirect('/profile');
 
   const crumbs = [
     { label: 'Overview', href: '/dashboard' },
@@ -205,7 +207,7 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
           </p>
         </div>
         <ul className="ml-auto flex flex-wrap gap-1.5">
-          {STATUS_ORDER.map((s) => {
+          {(m.singleton ? [] : STATUS_ORDER).map((s) => {
             const active = status === s;
             return (
               <li key={s}>
@@ -380,8 +382,12 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
                     <Td>
                       {row.noRecord ? (
                         <span className={cx('inline-flex rounded-sm border px-1.5 py-0.5 text-xs font-semibold', NOT_FILLED)}>Not filled yet</span>
+                      ) : m.singleton ? (
+                        <span className={cx('inline-flex rounded-sm border px-1.5 py-0.5 text-xs font-semibold', row.status === 'approved' ? 'border-success-100 bg-success-50 text-success-700' : NOT_FILLED)}>
+                          {row.status === 'approved' ? 'Filled in' : 'Not complete'}
+                        </span>
                       ) : <StatePill status={row.status} />}
-                      {row.needsCheck ? (
+                      {row.needsCheck && !m.singleton ? (
                         <span
                           className="ml-1.5 inline-flex rounded-sm border border-warning-100 bg-warning-50 px-1.5 py-0.5 text-2xs font-semibold text-warning-700"
                           title="Approved automatically; some details could not be confirmed. Open it to see what to check."
