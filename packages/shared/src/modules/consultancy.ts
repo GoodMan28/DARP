@@ -21,7 +21,7 @@ export const consultancy: ModuleConfig = {
       help: 'Consultancy and corporate training are counted and exported separately.' },
 
     { key: 'consultants', label: 'Name of the consultant / trainers', type: 'text', required: true,
-      maxLength: 300, colSpan: 2, section: 'Engagement',
+      maxLength: 300, colSpan: 2, section: 'Engagement', prefill: 'ownerName',
       help: 'List every teacher-consultant or trainer involved.',
       exportAs: { faculty: 'Name of the consultant', drie: 'Name of the consultant' } },
 

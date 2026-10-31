@@ -56,7 +56,8 @@ export const workshops: ModuleConfig = {
 
     { key: 'studentsInResearchCount',
       label: 'No. of students involved in research and consultancy undertaken by the college',
-      type: 'integer', required: true, min: 0, section: 'Department counts',
+      type: 'integer', required: true, min: 0, section: 'Department counts', computed: { kind: 'lineCount', from: 'studentsInResearch' },
+      help: 'Counted from the list above, one student per line. Type it only when there is no list.',
       exportAs: { hod: 'No. of students involved in research and consultancy undertaken by the college:' } },
 
     { key: 'evidence', label: 'Attach evidence', type: 'file', accept: ['pdf', 'jpg', 'jpeg', 'png'],

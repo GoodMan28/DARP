@@ -23,11 +23,13 @@ export const mous: ModuleConfig = {
         drie: 'Organisation with which MoU is signed', hod: 'Organisation with which MoU is signed',
       } }),
 
-    ...institutionField({ key: 'institutionName', label: 'Name of the institution/ industry/ corporate house', required: true, maxLength: 240, colSpan: 2, section: 'MoU',
+    // IQAC's sheet asks the same thing twice ("Organisation with which MoU is signed" and "Name of the
+    // institution/ industry/ corporate house"): the second column is filled from the first.
+    ...institutionField({ key: 'institutionName', label: 'Name of the institution/ industry/ corporate house', colSpan: 2, section: 'MoU',
       exportAs: {
         drie: 'Name of the institution/ industry/ corporate house',
         hod: 'Name of the institution/ industry/ corporate house',
-      } }),
+      } }, { copyOf: 'organisation' }),
 
     { key: 'signingDate', label: 'Date of signing the MoU', type: 'date', required: true,
       notFuture: true, periodSource: true, exportYear: true, section: 'MoU',
@@ -65,7 +67,7 @@ export const mous: ModuleConfig = {
       exportAs: { hod: 'Attach document (Yearly MoU Activity Report)' } },
   ],
   derived: [{ key: 'validUntil', label: 'Valid until' }],
-  listColumns: ['organisation', 'institutionName', 'signingDate', 'durationYears', 'validUntil', 'participants'],
+  listColumns: ['organisation', 'signingDate', 'durationYears', 'validUntil', 'participants'],
   defaultSort: { key: 'signingDate', dir: 'desc' },
   exportTargets: [
     { workbook: 'drie', sheet: 'MoUs' },

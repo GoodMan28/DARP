@@ -21,7 +21,8 @@ export const mentorship: ModuleConfig = {
       exportAs: { faculty: 'Name of Student', dugs: 'Name of Student' } },
 
     { key: 'rollNo', label: 'Roll No. of Student', type: 'text', required: true, maxLength: 40,
-      section: 'Student',
+      section: 'Student', fillsFromEarlier: true,
+      help: 'If you entered this student before, the other details are filled in for you.',
       exportAs: { faculty: 'Roll No. of Student', dugs: 'Roll No. of Student' } },
 
     { key: 'program', label: 'Program', type: 'select', required: true, listKey: 'programmes', acceptOldText: true,

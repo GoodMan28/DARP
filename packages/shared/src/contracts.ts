@@ -209,6 +209,10 @@ export interface FormFieldDef {
   optionsByParent?: Record<string, string[]> | null;
   /** A dropdown that also takes a typed answer. */
   allowOther?: boolean;
+  /** Suggested on a new record: the owner's name, or another field's value. */
+  prefill?: 'ownerName' | { from: string } | null;
+  /** Offers the person's earlier entry for the same roll number. */
+  fillsFromEarlier?: boolean;
   /** A value typed earlier may stay in a draft. */
   acceptOldText?: boolean;
   /** An institute field that refuses BIT Mesra itself (places outside BIT). */

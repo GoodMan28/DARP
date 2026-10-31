@@ -85,7 +85,7 @@ export const patents: ModuleConfig = {
       } },
 
     { key: 'assignee', label: 'Assignee/s Name (Institute Affiliation/s at time of Appication)',
-      type: 'text', maxLength: 240, colSpan: 2, section: 'Status',
+      type: 'text', maxLength: 240, colSpan: 2, section: 'Status', prefill: { from: 'applicant' },
       exportAs: { drie: 'Assignee/s Name (Institute Affiliation/s at time of Appication)' } },
 
     { key: 'category', label: 'Category of Patent', type: 'select', listKey: 'patentCategories',

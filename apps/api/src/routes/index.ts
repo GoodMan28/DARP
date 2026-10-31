@@ -20,6 +20,7 @@ import * as research from './research';
 import * as lookup from './lookup';
 import * as journals from './journals';
 import * as institutions from './institutions';
+import * as students from './students';
 import * as evidenceUpload from './evidence/upload';
 import * as evidenceFile from './evidence/file';
 import * as exportWorkbook from './export';
@@ -75,6 +76,7 @@ api.post('/modules/:moduleKey/bulk/:id/submit', moduleBulk.SUBMIT);
 api.post('/lookup/:moduleKey', lookup.POST);
 api.get('/journals/ranking', journals.GET);
 api.get('/institutions/search', institutions.SEARCH);
+api.get('/students/earlier', students.EARLIER);
 
 api.post('/evidence', evidenceUpload.POST);
 api.get('/evidence/:id', evidenceFile.GET);

@@ -139,6 +139,10 @@ export interface FieldConfig {
   allowOther?: boolean;
   /** A value typed before this was a dropdown may stay in a draft; a submission needs a choice. */
   acceptOldText?: boolean;
+  /** Suggested on a new record, editable: the owner's name, or another field's value while this one is untouched. */
+  prefill?: 'ownerName' | { from: string };
+  /** On a new record, leaving this box offers the person's earlier entry for the same roll number. */
+  fillsFromEarlier?: boolean;
   /** Worked out, never typed: shown read-only. The value is stored and exported as usual. */
   computed?: ComputedRule;
   /** Not shown on the form at all (a computed field shown elsewhere, or a second column filled from the first). */
@@ -232,15 +236,22 @@ export interface ModuleConfig {
  * "Name, State, Country", and its ID in a second field beside it (U-0202, ROR-028vtqb15, DARP-000012).
  * The server writes the name from the directory, so the same institute is always spelled the same way.
  * `exportId: false` keeps the ID out of the Excel files (the Profile sheet has a fixed row for each question).
+ * `copyOf` makes it a copy of another institute field on the same record, hidden from the form.
  */
-export function institutionField(f: Omit<FieldConfig, 'type'>, opts: { exportId?: boolean } = {}): FieldConfig[] {
+export function institutionField(f: Omit<FieldConfig, 'type'>, opts: { exportId?: boolean; copyOf?: string } = {}): FieldConfig[] {
   const exportAs = f.exportAs && opts.exportId !== false
     ? Object.fromEntries(Object.entries(f.exportAs).map(([k, v]) => [k, `${v} - Institute ID`])) as FieldConfig['exportAs']
     : undefined;
+  // A second box that asks the same thing as another (NAAC words it twice): filled from it, not asked.
+  const copy = opts.copyOf;
   return [
-    { ...f, type: 'institution', maxLength: 300 },
     {
-      key: `${f.key}Code`, label: `${f.label} - Institute ID`, type: 'institutionCode',
+      ...f, type: 'institution', maxLength: 300,
+      ...(copy ? { required: false, hidden: true, computed: { kind: 'copy' as const, from: copy } } : {}),
+    },
+    {
+      key: `${f.key}Code`,
+      ...(copy ? { hidden: true, computed: { kind: 'copy' as const, from: `${copy}Code` } } : {}), label: `${f.label} - Institute ID`, type: 'institutionCode',
       ...(f.section ? { section: f.section } : {}), ...(f.showIf ? { showIf: f.showIf } : {}), ...(exportAs ? { exportAs } : {}),
     },
   ];

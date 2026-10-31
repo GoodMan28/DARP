@@ -58,7 +58,23 @@ export function RecordForm({
   moduleKey, fields, recordId, initialValues, locked, readOnly, lookup, initialLocked, handedOver,
   initialProvenance, showRanking, approved, estimatedDates, needsInput, returnTo, singleton, parents,
 }: Props) {
-  const [values, setValues] = useState<Record<string, unknown>>(initialValues ?? {});
+  /**
+   * Suggestions on a new record: the owner's name where a field says so, and a field that follows another
+   * (a patent's assignee follows its applicant) while it is empty or still equal to it. Always editable.
+   */
+  const withPrefills = (v: Record<string, unknown>): Record<string, unknown> => {
+    if (recordId) return v;
+    const out = { ...v };
+    for (const f of fields) {
+      if (out[f.key]) continue;                                   // never over what is already there
+      if (f.prefill === 'ownerName') out[f.key] = locked.enteredBy;
+      else if (typeof f.prefill === 'object' && f.prefill && out[f.prefill.from]) out[f.key] = out[f.prefill.from];
+    }
+    return out;
+  };
+  const [values, setValues] = useState<Record<string, unknown>>(() => withPrefills(initialValues ?? {}));
+  /** Said when a roll number brought the student's earlier details. */
+  const [earlierNote, setEarlierNote] = useState<string | null>(null);
   /** The country of each institute chosen on this form, for the fields worked out from it (the server decides on saving). */
   const [instituteCountries, setInstituteCountries] = useState<Record<string, string>>({});
   const [lockedKeys, setLockedKeys] = useState<Set<string>>(() => new Set(initialLocked ?? []));
@@ -160,7 +176,14 @@ export function RecordForm({
   function set(key: string, value: unknown) {
     // Changing a dropdown empties the ones that depend on it (a new programme, a new specialisation).
     const dependents = fields.filter((f) => f.dependsOn === key).map((f) => f.key);
-    setValues((v) => ({ ...v, [key]: value, ...Object.fromEntries(dependents.map((k) => [k, ''])) }));
+    setValues((v) => {
+      const next = { ...v, [key]: value, ...Object.fromEntries(dependents.map((k) => [k, ''])) };
+      // A field that follows this one (an assignee, from the applicant) follows while it has not been changed.
+      for (const f of fields) {
+        if (typeof f.prefill === 'object' && f.prefill?.from === key && !recordId && (!v[f.key] || v[f.key] === v[key])) next[f.key] = value;
+      }
+      return next;
+    });
     setErrors((e) => { const rest = { ...e }; delete rest[key]; return rest; });
     dirtyRef.current = true;
   }
@@ -179,7 +202,7 @@ export function RecordForm({
       return;
     }
     const p = res.data;
-    setValues((v) => ({ ...v, ...p.fill }));
+    setValues((v) => withPrefills({ ...v, ...p.fill }));
     setLockedKeys(new Set(p.locked));
     // Only the publisher's own record counts as "fetched": suggestions are not something to change from.
     const fetchedNow: Record<string, string> = {};
@@ -208,6 +231,24 @@ export function RecordForm({
           ? { tone: 'success', title: `Details fetched from ${from}`, notes: p.notes }
           : { tone: 'info', title: `Suggested details from ${from} — check every field`, notes: p.notes },
     );
+  }
+
+  /** A student entered before (by roll number): fills only what is still empty, on a new record. */
+  async function fillFromEarlier(rollNo: string) {
+    if (recordId || rollNo.trim().length < 3) return;
+    const res = await apiJson<Record<string, string> | null>(`/api/students/earlier?rollNo=${encodeURIComponent(rollNo.trim())}`);
+    if (!res.ok || !res.data) return;
+    let any = false;
+    setValues((v) => {
+      const next = { ...v };
+      for (const [k, val] of Object.entries(res.data!)) {
+        // Mentorship calls the specialisation a branch.
+        const key = fields.some((f) => f.key === k) ? k : k === 'specialisation' && fields.some((f) => f.key === 'branch') ? 'branch' : null;
+        if (key && val && !String(next[key] ?? '').trim()) { next[key] = val; any = true; }
+      }
+      return next;
+    });
+    setEarlierNote(any ? 'Filled in from your earlier entry for this roll number. Check it, and change anything that is different now.' : null);
   }
 
   async function save(mode: 'draft' | 'submit') {
@@ -241,6 +282,7 @@ export function RecordForm({
 
   return (
     <form onSubmit={(e) => { e.preventDefault(); void save('submit'); }} noValidate>
+      {earlierNote ? <Notice tone="info" className="mb-4">{earlierNote}</Notice> : null}
       {banner ? (
         <div ref={errorSummary} tabIndex={-1} className="mb-4">
           <Notice tone="danger" title={banner}>
@@ -378,7 +420,7 @@ export function RecordForm({
                     >
                       {renderInput(
                         f, workedOut ? shownValues[f.key] : mirror && !readOnly ? identifier : values[f.key], (v) => set(f.key, v),
-                        !!readOnly || workedOut || mirror || isLocked || !!f.autofill?.alwaysLocked, !!errors[f.key], { moduleKey, recordId, values, setField: set, rememberInstitute: (code, country) => setInstituteCountries((c) => ({ ...c, [code]: country })) },
+                        !!readOnly || workedOut || mirror || isLocked || !!f.autofill?.alwaysLocked, !!errors[f.key], { moduleKey, recordId, values, setField: set, fillFromEarlier, rememberInstitute: (code, country) => setInstituteCountries((c) => ({ ...c, [code]: country })) },
                       )}
                       {mayChange && confirming !== f.key ? (
                         <button
@@ -507,6 +549,7 @@ function renderInput(
   ctx: {
     moduleKey: string; recordId?: string; values: Record<string, unknown>; setField: (key: string, value: unknown) => void;
     rememberInstitute: (code: string, country: string) => void;
+    fillFromEarlier: (rollNo: string) => void;
   },
 ) {
   const common = { id: `i-${f.key}`, disabled: readOnly, 'aria-invalid': invalid || undefined };
@@ -653,6 +696,7 @@ function renderInput(
           maxLength={f.maxLength ?? undefined}
           placeholder={f.placeholder ?? ''}
           onChange={(e) => onChange(e.target.value)}
+          onBlur={f.fillsFromEarlier ? () => ctx.fillFromEarlier(String(value ?? '')) : undefined}
         />
       );
   }

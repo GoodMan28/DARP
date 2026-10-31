@@ -65,6 +65,8 @@ export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async 
         dependsOn: f.dependsOn ?? null,
         optionsByParent: f.dependsOn && f.listKey ? tree[f.listKey] ?? {} : null,
         allowOther: !!f.allowOther,
+        prefill: f.prefill ?? null,
+        fillsFromEarlier: !!f.fillsFromEarlier,
         acceptOldText: !!f.acceptOldText,
         emptyLabel: f.emptyLabel ?? null,
         custom: f.custom ?? null,

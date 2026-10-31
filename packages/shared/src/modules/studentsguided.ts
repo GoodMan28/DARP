@@ -22,7 +22,8 @@ export const studentsguided: ModuleConfig = {
       exportAs: { faculty: 'Name of Student', dofa: 'Name of Student' } },
 
     { key: 'rollNo', label: 'Roll No. of Student', type: 'text', required: true, maxLength: 40,
-      section: 'Student',
+      section: 'Student', fillsFromEarlier: true,
+      help: 'If you entered this student before, the other details are filled in for you.',
       exportAs: { faculty: 'Roll No. of Student', dofa: 'Roll No. of Student' } },
 
     { key: 'level', label: 'Level (UG/PG/PHD)', type: 'select', required: true,

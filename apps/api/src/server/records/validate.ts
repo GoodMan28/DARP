@@ -173,7 +173,8 @@ export async function validateRecord(
         continue;
       }
       // A name typed before the directory existed: a draft may keep it, a submission needs a choice from the list.
-      if (mode === 'submit') { errors[f.key] = 'Choose this institute from the list, or add it.'; continue; }
+      // A hidden copy of another institute box follows that box: it has nothing of its own to correct.
+      if (mode === 'submit' && !(f.hidden && f.computed)) { errors[f.key] = 'Choose this institute from the list, or add it.'; continue; }
       out[f.key] = String(raw).trim().slice(0, 300);
       continue;
     }

@@ -18,7 +18,7 @@ export const riawards: ModuleConfig = {
   naturalKey: ['awardName', 'awardDate', 'awardeeName'],
   fields: [
     { key: 'awardeeName', label: 'Name of the awardee', type: 'text', required: true,
-      maxLength: 240, section: 'Award',
+      maxLength: 240, section: 'Award', prefill: 'ownerName',
       exportAs: {
         faculty: 'Name of the awardee', drie: 'Name of the awardee', hod: 'Name of the awardee',
       } },
