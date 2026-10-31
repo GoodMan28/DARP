@@ -148,3 +148,38 @@ describe('worked-out fields and date order', () => {
     expect(cells).toContain('03-03-2025 – 07-03-2025');
   });
 });
+
+describe('QS contacts', () => {
+  const contact = (over: Record<string, unknown> = {}) => ({
+    title: 'Dr.', firstName: 'Claire', middleName: 'Marie', lastName: 'Dupont', designation: 'Professor', department: 'Physics',
+    institution: 'x', institutionCode: 'ROR-04paris01', country: 'India', email: `claire${Math.random().toString(36).slice(2, 8)}@u-paris.fr`,
+    specialisation: 'Optics', consentStatus: 'Not yet contacted', ...over,
+  });
+
+  it('keeps a middle name, and takes the country from the institution whatever the browser sent', async () => {
+    const rec = await createRecord(faculty, 'qscontacts', contact(), 'submit');
+    const read = await getRecord(faculty, 'qscontacts', rec.id);
+    expect(read.data).toMatchObject({ middleName: 'Marie', country: 'France', institutionCode: 'ROR-04paris01' });
+  });
+
+  it('is not asked for a country at all', async () => {
+    const { country: _drop, ...without } = contact();
+    const rec = await createRecord(faculty, 'qscontacts', without, 'submit');
+    expect((await getRecord(faculty, 'qscontacts', rec.id)).data.country).toBe('France');
+  });
+
+  it('keeps a typed country for an institution typed before the directory, in a draft', async () => {
+    const rec = await createRecord(faculty, 'qscontacts', contact({ institutionCode: '', institution: 'Old University', country: 'Japan' }), 'draft');
+    expect((await getRecord(faculty, 'qscontacts', rec.id)).data.country).toBe('Japan');
+  });
+
+  it('puts the middle name to the right of IQAC’s columns in Excel', async () => {
+    const { workbook } = await generateWorkbookFromRows('faculty', { includePii: false }, {
+      qscontacts: [{ data: contact(), ownerName: 'Dr X', department: 'CSE', profile: {} }],
+    });
+    const sheet = workbook.getWorksheet('QS Contacts')!;
+    const heads: string[] = [];
+    sheet.eachRow((row) => row.eachCell((c) => heads.push(c.text)));
+    expect(heads).toEqual(expect.arrayContaining(['Middle Name', 'First Name', 'Last Name']));
+  });
+});

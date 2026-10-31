@@ -54,6 +54,8 @@ export function RecordForm({
   initialProvenance, showRanking, approved, estimatedDates, needsInput, returnTo,
 }: Props) {
   const [values, setValues] = useState<Record<string, unknown>>(initialValues ?? {});
+  /** The country of each institute chosen on this form, for the fields worked out from it (the server decides on saving). */
+  const [instituteCountries, setInstituteCountries] = useState<Record<string, string>>({});
   const [lockedKeys, setLockedKeys] = useState<Set<string>>(() => new Set(initialLocked ?? []));
   /*
    * The publisher's value of each fetched field, so a change can be shown beside it and undone.
@@ -131,7 +133,10 @@ export function RecordForm({
   );
 
   /** Every figure the system works out, over what is typed so far: shown live, and replaced by the server on saving. */
-  const shownValues = useMemo(() => applyComputed(fields, values), [fields, values]);
+  const shownValues = useMemo(
+    () => applyComputed(fields, values, { institutes: new Map(Object.entries(instituteCountries).map(([c, country]) => [c, { country }])) }),
+    [fields, values, instituteCountries],
+  );
 
   const sections = useMemo(() => {
     const map = new Map<string, FormFieldDef[]>();
@@ -362,7 +367,7 @@ export function RecordForm({
                     >
                       {renderInput(
                         f, workedOut ? shownValues[f.key] : mirror && !readOnly ? identifier : values[f.key], (v) => set(f.key, v),
-                        !!readOnly || workedOut || mirror || isLocked || !!f.autofill?.alwaysLocked, !!errors[f.key], { moduleKey, recordId, values, setField: set },
+                        !!readOnly || workedOut || mirror || isLocked || !!f.autofill?.alwaysLocked, !!errors[f.key], { moduleKey, recordId, values, setField: set, rememberInstitute: (code, country) => setInstituteCountries((c) => ({ ...c, [code]: country })) },
                       )}
                       {mayChange && confirming !== f.key ? (
                         <button
@@ -488,7 +493,10 @@ export function RecordForm({
 
 function renderInput(
   f: FormFieldDef, value: unknown, onChange: (v: unknown) => void, readOnly: boolean, invalid: boolean,
-  ctx: { moduleKey: string; recordId?: string; values: Record<string, unknown>; setField: (key: string, value: unknown) => void },
+  ctx: {
+    moduleKey: string; recordId?: string; values: Record<string, unknown>; setField: (key: string, value: unknown) => void;
+    rememberInstitute: (code: string, country: string) => void;
+  },
 ) {
   const common = { id: `i-${f.key}`, disabled: readOnly, 'aria-invalid': invalid || undefined };
   switch (f.type) {
@@ -501,7 +509,7 @@ function renderInput(
           disabled={readOnly}
           invalid={invalid}
           excludeHome={!!f.excludeHome}
-          onPick={(hit) => { ctx.setField(f.key, hit.name); ctx.setField(`${f.key}Code`, hit.code); }}
+          onPick={(hit) => { ctx.rememberInstitute(hit.code, hit.country); ctx.setField(f.key, hit.name); ctx.setField(`${f.key}Code`, hit.code); }}
           onClear={() => { ctx.setField(f.key, ''); ctx.setField(`${f.key}Code`, ''); }}
         />
       );

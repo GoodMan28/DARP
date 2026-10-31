@@ -24,6 +24,10 @@ export const qscontacts: ModuleConfig = {
       section: 'Contact',
       exportAs: { faculty: 'First Name', dofa: 'First Name' } },
 
+    { key: 'middleName', label: 'Middle Name', type: 'text', maxLength: 80,
+      section: 'Contact',
+      exportAs: { faculty: 'Middle Name', dofa: 'Middle Name' } },
+
     { key: 'lastName', label: 'Last Name', type: 'text', required: true, maxLength: 80,
       section: 'Contact',
       exportAs: { faculty: 'Last Name', dofa: 'Last Name' } },
@@ -41,8 +45,9 @@ export const qscontacts: ModuleConfig = {
       section: 'Affiliation',
       exportAs: { faculty: 'Institution', dofa: 'Institution' } }),
 
-    { key: 'country', label: 'Country or Territory', type: 'select', required: true,
-      listKey: 'countries', section: 'Affiliation',
+    { key: 'country', label: 'Country or Territory', type: 'text', maxLength: 120, section: 'Affiliation',
+      computed: { kind: 'instituteCountry', from: 'institution' },
+      help: 'Taken from the institution you choose.',
       exportAs: { faculty: 'Country or Territory', dofa: 'Country or Territory' } },
 
     { key: 'email', label: 'Email', type: 'email', required: true, pii: 'masked', sensitive: true,
