@@ -3,20 +3,27 @@ import type ExcelJS from 'exceljs';
 /*
  * CDC's report of students who qualified in competitive exams (NAAC 5.2.1), in DARP's own layout. IQAC's
  * original sheet repeated each student's name under every exam column and had one registration number per
- * row, so a student who qualified twice could not be counted once. This one has two tabs:
+ * row, so a student who qualified twice could not be counted once. This one has three tabs:
  *  - "5.2.1 Students": a row for each STUDENT, with the exams they qualified in, how many, and the totals;
- *  - "By year": the same data year by year, with each year's totals.
+ *  - "By year": the same data year by year, with each year's totals;
+ *  - "NAAC format": IQAC's own grid, filled so that each row is one qualification (one registration number,
+ *    one name under its exam), for the NAAC upload.
  * Lists inside a cell are separated by "; " everywhere, and each registration number stands in the same
  * place as the exam it belongs to.
  */
 
-export interface ExamEntry { name: string; rollNo: string; regNo: string; exam: string; year: number }
+export interface ExamEntry {
+  name: string; rollNo: string; regNo: string; exam: string; year: number;
+  /** For "Other examinations": the exam the person named. */
+  specify?: string;
+}
 
 export interface StudentExam {
   exam: string;
   year: number;
   /** The exam's own registration number(s); more than one only if the same exam and year was entered twice. */
   regNos: string[];
+  specify?: string;
 }
 
 export interface ExamStudent {
@@ -52,7 +59,7 @@ export function studentsOf(entries: ExamEntry[]): ExamStudent[] {
     if (!s.name) s.name = e.name;
     if (!s.rollNo) s.rollNo = e.rollNo;
     let x = s.exams.find((t) => t.exam === e.exam && t.year === e.year);
-    if (!x) { x = { exam: e.exam, year: e.year, regNos: [] }; s.exams.push(x); }
+    if (!x) { x = { exam: e.exam, year: e.year, regNos: [], ...(e.specify ? { specify: e.specify } : {}) }; s.exams.push(x); }
     if (e.regNo && !x.regNos.some((r) => compact(r) === compact(e.regNo))) x.regNos.push(e.regNo);
     byKey.set(key, s);
   });
@@ -134,6 +141,7 @@ export function writeExamStudents(wb: ExcelJS.Workbook, entries: ExamEntry[], ra
   sheet.views = [{ state: 'frozen', ySplit: 4 }];
 
   writeByYear(wb, students, totals, range);
+  writeNaacGrid(wb, students, range);
   return { sheet, students: students.length };
 }
 
@@ -166,4 +174,73 @@ function writeByYear(wb: ExcelJS.Workbook, students: ExamStudent[], totals: Exam
   [10, 34, 22, 40, 52, 14].forEach((w, i) => { sheet.getColumn(i + 1).width = w; });
   for (let c = 7; c <= 3 + exams.length; c += 1) sheet.getColumn(c).width = 12;
   sheet.views = [{ state: 'frozen', ySplit: 4 }];
+}
+
+/* ───────────────────────── IQAC's own grid, for the NAAC upload ───────────────────────── */
+
+/** The twelve exam columns of IQAC's sheet, left to right; any exam not named goes in the last. */
+const NAAC_EXAMS = [...EXAM_ORDER.slice(0, 11), 'Other examinations conducted by the State / Central Government Agencies (Specify)'];
+const NAAC_TITLE = '5.2.1 Total number of students qualifying in state/ national/ international level examinations during the year (eg: NET/SLET/GATE/GMAT/CAT/GRE/TOEFL/Civil Services/State government examinations)';
+const naacColumn = (exam: string) => { const i = EXAM_ORDER.slice(0, 11).indexOf(exam); return 3 + (i < 0 ? 11 : i); };
+
+/**
+ * IQAC's grid as it was given: Year, the exam's registration number, then the student's name under the
+ * exam they qualified in, with a Total for each exam and a Grand Total. Each ROW is one qualification, so
+ * its registration number and its name belong together; a student who qualified in two exams has two rows
+ * (the first tab counts the student once). Use this one for the NAAC upload.
+ */
+function writeNaacGrid(wb: ExcelJS.Workbook, students: ExamStudent[], range?: { from: number; to: number }) {
+  const sheet = wb.addWorksheet('NAAC format');
+  const qualifications = students
+    .flatMap((s) => s.exams.map((x) => ({ s, x })))
+    .sort((a, b) => a.x.year - b.x.year || byExam(a.x.exam, b.x.exam) || a.s.name.localeCompare(b.s.name));
+
+  sheet.mergeCells('A1:N1');
+  sheet.getCell('A1').value = NAAC_TITLE + rangeText(range);
+  sheet.getCell('A1').font = { bold: true };
+  sheet.getCell('A1').alignment = { wrapText: true, vertical: 'top' };
+  sheet.getRow(1).height = 32;
+
+  sheet.getCell('A2').value = 'Year';
+  sheet.getCell('B2').value = 'Registration number/roll number for the exam';
+  sheet.mergeCells('A2:A3');
+  sheet.mergeCells('B2:B3');
+  sheet.getCell('C2').value = 'Names of students selected/ qualified';
+  sheet.mergeCells('C2:N2');
+  NAAC_EXAMS.forEach((e, i) => { sheet.getCell(3, 3 + i).value = e; });
+  for (const r of [2, 3]) {
+    const row = sheet.getRow(r);
+    row.font = { bold: true };
+    row.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  }
+  sheet.getRow(3).height = 48;
+
+  const counts = new Array<number>(NAAC_EXAMS.length).fill(0);
+  qualifications.forEach(({ s, x }, i) => {
+    const r = 4 + i;
+    sheet.getCell(r, 1).value = x.year;
+    sheet.getCell(r, 2).value = x.regNos.join(' / ');
+    const col = naacColumn(x.exam);
+    sheet.getCell(r, col).value = x.specify ? `${s.name} (${x.specify})` : s.name;
+    counts[col - 3]! += 1;
+  });
+
+  const total = 4 + qualifications.length;
+  sheet.getCell(total, 2).value = 'Total';
+  counts.forEach((n, i) => { sheet.getCell(total, 3 + i).value = n; });
+  sheet.getCell(total, 15).value = 'Grand Total';
+  sheet.getCell(total, 16).value = counts.reduce((a, b) => a + b, 0);
+  const totalRow = sheet.getRow(total);
+  totalRow.font = { bold: true };
+  totalRow.eachCell((c) => { c.border = { top: { style: 'thin' } }; });
+
+  sheet.addRow([]);
+  sheet.mergeCells(total + 2, 2, total + 2, 16);
+  sheet.getCell(total + 2, 2).value = 'Instruction: Please do not include individual university\u2019s entrance examination.';
+  sheet.mergeCells(total + 3, 2, total + 3, 16);
+  sheet.getCell(total + 3, 2).value = 'One row for each qualification: a student who qualified in two exams has two rows, one for each. The first tab counts each student once.';
+  sheet.getCell(total + 3, 2).font = { italic: true };
+
+  [8, 26, ...new Array<number>(12).fill(17), 13, 11].forEach((w, i) => { sheet.getColumn(i + 1).width = w; });
+  sheet.views = [{ state: 'frozen', ySplit: 3 }];
 }

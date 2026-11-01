@@ -123,7 +123,7 @@ describe('what the faculty entered', () => {
       report.workbook.getWorksheet(name)!.eachRow((row) => row.eachCell((c) => cells.push(c.text)));
       return cells;
     };
-    expect(report.workbook.worksheets.map((w) => w.name)).toEqual(['5.2.1 Students', 'By year', 'About this report']);
+    expect(report.workbook.worksheets.map((w) => w.name)).toEqual(['5.2.1 Students', 'By year', 'NAAC format', 'About this report']);
     const students = textOf('5.2.1 Students');
     expect(students).toContain('Asha Rao');
     expect(students.filter((c) => c === 'Ravi Kumar')).toHaveLength(1);              // one student, even with two exams

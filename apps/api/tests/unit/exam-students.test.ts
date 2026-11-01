@@ -85,7 +85,7 @@ describe('the same students, year by year', () => {
   it('is a second tab: totals for each year and for all years, then each year’s students', () => {
     const wb = new ExcelJS.Workbook();
     writeExamStudents(wb, entries, { from: 2023, to: 2024 });
-    expect(wb.worksheets.map((w) => w.name)).toEqual(['5.2.1 Students', 'By year']);
+    expect(wb.worksheets.map((w) => w.name)).toEqual(['5.2.1 Students', 'By year', 'NAAC format']);
     const rows: string[][] = [];
     wb.getWorksheet('By year')!.eachRow((row) => { const r: string[] = []; row.eachCell({ includeEmpty: true }, (c, col) => { r[col] = c.text; }); rows.push(r); });
     const flat = rows.map((r) => r.slice(1).join('|'));
@@ -106,6 +106,56 @@ describe('the same students, year by year', () => {
     const cells: string[] = [];
     wb.getWorksheet('5.2.1 Students')!.eachRow((row) => row.eachCell((c) => cells.push(c.text)));
     expect(cells).toContain('\u2014; C-1');
+  });
+});
+
+describe('IQAC’s own grid, for the NAAC upload', () => {
+  const OTHER = 'Other examinations conducted by the State / Central Government Agencies';
+  const grid = (entries: ExamEntry[], range?: { from: number; to: number }) => {
+    const wb = new ExcelJS.Workbook();
+    writeExamStudents(wb, entries, range);
+    return wb.getWorksheet('NAAC format')!;
+  };
+  const text = (ws: ExcelJS.Worksheet, r: number, c: number) => ws.getCell(r, c).text;
+
+  it('keeps IQAC’s headings: the title, Year, the registration number, the names over the twelve exams', () => {
+    const ws = grid([e('Asha Rao', 'MTECH/7/20', 'NET', 2023, 'N-1')]);
+    expect(text(ws, 1, 1)).toMatch(/^5\.2\.1 Total number of students qualifying in state\/ national\/ international level examinations/);
+    expect(text(ws, 2, 1)).toBe('Year');
+    expect(text(ws, 2, 2)).toBe('Registration number/roll number for the exam');
+    expect(text(ws, 2, 3)).toBe('Names of students selected/ qualified');
+    expect([3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13].map((c) => text(ws, 3, c))).toEqual(
+      ['NET', 'SLET', 'GATE', 'GMAT', 'CAT', 'GRE', 'JAM', 'IELET', 'TOEFL', 'Civil Services', 'State government examinations']);
+    expect(text(ws, 3, 14)).toMatch(/^Other examinations.*\(Specify\)$/);
+  });
+
+  it('has a row for each qualification: its year, its own registration number, and the name under its exam', () => {
+    const ws = grid([
+      e('Ravi Kumar', 'BTECH/1/19', 'GATE', 2023, 'G-1'), e('Ravi Kumar', 'BTECH/1/19', 'CAT', 2023, 'C-1'), e('Asha Rao', 'MTECH/7/20', 'NET', 2023, 'N-1'),
+    ]);
+    expect([text(ws, 4, 1), text(ws, 4, 2), text(ws, 4, 3), text(ws, 4, 5)]).toEqual(['2023', 'N-1', 'Asha Rao', '']);          // NET
+    expect([text(ws, 5, 2), text(ws, 5, 5), text(ws, 5, 7)]).toEqual(['G-1', 'Ravi Kumar', '']);                                  // GATE
+    expect([text(ws, 6, 2), text(ws, 6, 5), text(ws, 6, 7)]).toEqual(['C-1', '', 'Ravi Kumar']);                                  // CAT: his other exam, its own number
+  });
+
+  it('totals each exam column, and the grand total counts qualifications', () => {
+    const ws = grid([e('Ravi Kumar', 'R/1', 'GATE', 2023, 'G-1'), e('Ravi Kumar', 'R/1', 'CAT', 2023, 'C-1'), e('Asha Rao', 'A/1', 'GATE', 2024, 'G-2')]);
+    expect(text(ws, 7, 2)).toBe('Total');
+    expect([text(ws, 7, 5), text(ws, 7, 7), text(ws, 7, 3)]).toEqual(['2', '1', '0']);
+    expect([text(ws, 7, 15), text(ws, 7, 16)]).toEqual(['Grand Total', '3']);
+  });
+
+  it('puts an exam IQAC’s sheet has no column for in the last column, with what it was called', () => {
+    const ws = grid([e('Sam Lakra', 'S/1', OTHER, 2023, 'O-1'), e('Dev Rai', 'D/1', 'SomethingNew', 2023, 'N-9')].map((x, i) => (i === 0 ? { ...x, specify: 'RRB NTPC' } : x)));
+    expect([text(ws, 4, 14), text(ws, 5, 14)].sort()).toEqual(['Dev Rai', 'Sam Lakra (RRB NTPC)']);
+  });
+
+  it('says it counts qualifications, and keeps IQAC’s instruction', () => {
+    const ws = grid([e('Asha Rao', 'A/1', 'NET', 2023, 'N-1')]);
+    const all: string[] = [];
+    ws.eachRow((row) => row.eachCell((c) => all.push(c.text)));
+    expect(all.some((t) => /^Instruction: Please do not include individual university/.test(t))).toBe(true);
+    expect(all.some((t) => /a student who qualified in two exams has two rows/.test(t))).toBe(true);
   });
 });
 

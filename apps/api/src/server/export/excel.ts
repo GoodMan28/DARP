@@ -430,6 +430,7 @@ export async function writeWorkbook(
       const written = writeExamStudents(wb, rows.map((r) => ({
         name: String(r.data.studentName ?? ''), rollNo: String(r.data.rollNo ?? ''), regNo: String(r.data.registrationNo ?? ''),
         exam: String(r.data.examName ?? ''), year: Number(r.data.year),
+        ...(r.data.otherExamName ? { specify: String(r.data.otherExamName) } : {}),
       })), opts.range);
       filled.add(written.sheet.name);
       rowsWritten += written.students;
