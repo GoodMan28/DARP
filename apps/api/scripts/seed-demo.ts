@@ -181,7 +181,7 @@ interface GenContext {
 }
 
 /** AISHE codes of BIT Mesra, IIT Kharagpur, NIT Rourkela, IISc Bangalore and Anna University, for institute fields. */
-const DEMO_INSTITUTES = ['U-0202', 'U-0573', 'U-0357', 'U-0220', 'U-0439'];
+const DEMO_INSTITUTES = ['U-0573', 'U-0357', 'U-0220', 'U-0439'];
 
 /** One plausible, valid value for a field, decided entirely by its config. */
 function valueFor(f: FieldConfig, ctx: GenContext): unknown {

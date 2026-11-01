@@ -1,6 +1,6 @@
 // src/modules/outreach.ts
 import type { ModuleConfig } from './_types';
-import { FACULTY_MEMBERS, affiliationField } from './_types';
+import { FACULTY_MEMBERS, affiliationField, institutionField } from './_types';
 
 /** The kinds of academic service, a fixed list: each kind's own fields depend on its exact wording. */
 export const OUTREACH_TYPES = {
@@ -26,7 +26,7 @@ export const outreach: ModuleConfig = {
   periodType: 'CY',
   bodies: ['NAAC'],
   description:
-    'Academic service at BIT or outside it: thesis reviews and vivas, invited talks, boards of studies, question papers, journal reviews, industry visits and session chairs. Choose the kind first; the form then asks only what that kind needs.',
+    'Academic service outside BIT: thesis reviews and vivas, invited talks, boards of studies, question papers, journal reviews, industry visits and session chairs. Activities at BIT are not counted here. Choose the kind first; the form then asks only what that kind needs.',
   ownerRoles: FACULTY_MEMBERS,
   verifierRoles: ['dofa'],
   viewRoles: ['hod', 'dofa', 'admin'],
@@ -100,13 +100,14 @@ export const outreach: ModuleConfig = {
       exportAs: { faculty: 'Mode', dofa: 'Mode' } },
 
     /* Where and when */
-    { key: 'organisation', label: 'Name of the organisation', type: 'text', required: true, maxLength: 240,
-      colSpan: 2, section: 'Where and when',
-      help: 'The university, institute, company or society that invited or appointed you (BIT Mesra if it was here).',
-      exportAs: { faculty: 'Name of the organisation', dofa: 'Name of the organisation' } },
-    { key: 'where', label: 'Where', type: 'select', required: true, options: ['Outside BIT', 'At BIT'],
-      section: 'Where and when', help: 'Outreach usually means outside BIT; activities at BIT are counted separately.',
-      exportAs: { faculty: 'Where', dofa: 'Where' } },
+    // A journal review names the journal and publisher above, so it has no host institute to ask for.
+    ...institutionField({
+      key: 'organisation', label: 'Institute or organisation outside BIT', required: true, maxLength: 240, colSpan: 2,
+      section: 'Where and when', excludeHome: true,
+      showIf: when(T.thesis, T.talk, T.viva, T.body, T.paperSetter, T.industry, T.chair, T.other),
+      help: 'Search for it. Companies and foreign institutes are listed too. Not listed? Add it.',
+      exportAs: { faculty: 'Name of the organisation', dofa: 'Name of the organisation' },
+    }),
     { key: 'date', label: 'Date (if on one day)', type: 'date', notFuture: true, section: 'Where and when',
       exportAs: { faculty: 'Date (if on one day)', dofa: 'Date (if on one day)' } },
     { key: 'year', label: 'Year', type: 'year', required: true, min: 1960, max: 2100, notFuture: true,
@@ -120,15 +121,12 @@ export const outreach: ModuleConfig = {
 
     affiliationField({ label: 'Was this done while you were at BIT?', section: 'Where and when' }),
   ],
-  listColumns: ['activityType', 'eventName', 'organisation', 'where', 'year'],
+  listColumns: ['activityType', 'eventName', 'organisation', 'year'],
   defaultSort: { key: 'year', dir: 'desc' },
   // IQAC's formats have no sheet for these yet: DARP adds an "Outreach" sheet to the Faculty and DoFA files.
   exportTargets: [
     { workbook: 'faculty', sheet: 'Outreach' },
     { workbook: 'dofa', sheet: 'Outreach' },
   ],
-  feedsCounters: [
-    'outreach.count.cycle', 'outreach.count.sinceJoining',
-    'outreach.count.outside.cycle', 'outreach.count.outside.sinceJoining',
-  ],
+  feedsCounters: ['outreach.count.cycle', 'outreach.count.sinceJoining'],
 };

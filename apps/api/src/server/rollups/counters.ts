@@ -227,11 +227,6 @@ export const COUNTERS: CounterDef[] = [
     label: 'Outreach activities (talks, reviews, examining, boards…), {CY}',
     labelSince: 'Outreach activities (talks, reviews, examining, boards…) since joining BIT',
   }),
-  ...both({
-    keyBase: 'outreach.count.outside', moduleKey: 'outreach', metric: 'count', format: 'number',
-    filter: { field: 'where', in: ['Outside BIT'] },
-    label: 'Outreach activities outside BIT, {CY}', labelSince: 'Outreach activities outside BIT since joining BIT',
-  }),
 
   /* ── E-content ────────────────────────────────────────────── */
   ...both({

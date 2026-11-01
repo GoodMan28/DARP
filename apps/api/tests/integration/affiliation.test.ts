@@ -93,7 +93,7 @@ describe('asked where the work has no date', () => {
 
   it('is filled in for an outreach activity with a date, and asked for one with only a year', async () => {
     const activity = (over: Record<string, unknown> = {}) => ({
-      activityType: 'Invited talk', eventName: 'Seminar', talkTitle: 'Talk', organisation: 'IIT Delhi', where: 'Outside BIT', ...over,
+      activityType: 'Invited talk', eventName: 'Seminar', talkTitle: 'Talk', organisation: 'IIT Delhi', organisationCode: 'U-0050', ...over,
     });
     const dated = await createRecord(faculty, 'outreach', activity({ date: '2021-06-01' }), 'submit');
     expect(await answerOf(faculty, 'outreach', dated.id)).toBe('Yes');

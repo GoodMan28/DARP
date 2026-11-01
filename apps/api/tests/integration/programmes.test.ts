@@ -100,7 +100,7 @@ describe('people and places outside BIT', () => {
   it('is asked a degree programme from the list of degrees', async () => {
     const rec = await createRecord(faculty, 'outreach', {
       activityType: 'PhD thesis review', eventName: 'Thesis of A. Roy', examinerRole: 'External examiner', degreeProgramme: 'Ph.D.',
-      organisation: 'IIT Delhi', where: 'Outside BIT', year: '2025', affiliatedToBit: 'Yes',
+      organisation: 'IIT Delhi', organisationCode: 'U-0050', year: '2025', affiliatedToBit: 'Yes',
     }, 'submit');
     expect((await getRecord(faculty, 'outreach', rec.id)).data.degreeProgramme).toBe('Ph.D.');
   });

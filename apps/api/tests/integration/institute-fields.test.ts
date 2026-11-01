@@ -95,11 +95,11 @@ describe('a name typed before the directory existed', () => {
 });
 
 describe('where the institute fields are', () => {
-  it('are the four qualification institutes, FDPs, students, QS contacts, MoUs, and the awarding, funding and employing bodies', () => {
+  it('are the four qualification institutes, FDPs, students, QS contacts, MoUs, outreach, and the awarding, funding and employing bodies', () => {
     const where = Object.values(MODULES).flatMap((m) => m.fields.filter((f) => f.type === 'institution').map((f) => `${m.key}.${f.key}`)).sort();
     expect(where).toEqual([
       'awards.agency', 'extawards.awardingBody', 'fdpattended.organisingInstitution', 'fellowships.agency', 'grants.agency',
-      'mous.institutionName', 'mous.organisation', 'profile.pgInstitution', 'profile.phdInstitution',
+      'mous.institutionName', 'mous.organisation', 'outreach.organisation', 'profile.pgInstitution', 'profile.phdInstitution',
       'profile.postdocInstitution', 'profile.ugInstitution', 'qscontacts.institution', 'riawards.awardingBody',
       'studentsguided.employerName', 'studentsguided.institutionEnrolled',
     ]);

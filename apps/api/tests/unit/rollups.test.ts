@@ -30,16 +30,16 @@ describe('counter catalogue', () => {
     // The sheet has no conference-paper row; NAAC 3.4 counts them with books and chapters.
     // The institute IDs beside the four qualification institutes are not rows of the sheet.
     expect(getModule('profile')!.fields.filter((f) => f.type !== 'institutionCode')).toHaveLength(22);
-    expect(COUNTERS).toHaveLength(67);
+    expect(COUNTERS).toHaveLength(65);
     expect(COUNTERS.filter((c) => c.key.startsWith('books.count.conference'))).toHaveLength(2);
     // Papers by their journal's indexing and quartile (Scopus, Web of Science, Q1/Q2).
     expect(COUNTERS.filter((c) => c.ranking)).toHaveLength(6);
     // Awards, research awards, extension awards and fellowships still valid today.
     expect(COUNTERS.filter((c) => c.window === 'today')).toHaveLength(4);
     expect(DECLARED_COUNTERS).toHaveLength(13);
-    // Outreach activities, all and outside BIT, for the range and since joining.
-    expect(COUNTERS.filter((c) => c.moduleKey === 'outreach')).toHaveLength(4);
-    expect(22 + COUNTERS.length + DECLARED_COUNTERS.length).toBe(84 + 2 + 6 + 2 + 4 + 4);
+    // Outreach activities (all of them are outside BIT), for the range and since joining.
+    expect(COUNTERS.filter((c) => c.moduleKey === 'outreach')).toHaveLength(2);
+    expect(22 + COUNTERS.length + DECLARED_COUNTERS.length).toBe(84 + 2 + 6 + 2 + 4 + 2);
   });
 
   it('has unique keys, a known module and a sum field wherever it sums', () => {
