@@ -27,7 +27,7 @@ const taken = (over: Record<string, unknown>) => ({
   statusAfterPassing: 'Competitive exams', examGiven: 'GATE', examRegistrationNo: 'GATE-0001', affiliatedToBit: 'Yes',
   email: 'ravi.private@example.com', phone: '9876500000', ...over,
 });
-const cdcEntry = (over: Record<string, unknown>) => ({ year: '2023', examName: 'GATE', studentName: 'Ravi Kumar', registrationNo: 'GATE-0001', ...over });
+const cdcEntry = (over: Record<string, unknown>) => ({ year: '2023', examName: 'GATE', studentName: 'Ravi Kumar', registrationNo: 'GATE-0001', rollNo: 'BTECH/1/19', ...over });
 
 beforeAll(async () => {
   await truncateAll();
@@ -124,6 +124,15 @@ describe('what the faculty entered', () => {
     expect(cells.filter((c) => c === 'Ravi Kumar')).toHaveLength(1);                // one student, even with two exams
     expect(cells).toContain('GATE 2023; CAT 2023');                                  // and both exams on his row
     expect(cells.some((c) => c === 'Total number of students who qualified')).toBe(true);
+  });
+});
+
+describe('CDC’s own entry', () => {
+  it('needs the student’s college roll number to be submitted, though a draft may wait for it', async () => {
+    const { rollNo: _drop, ...without } = cdcEntry({ studentName: 'No Roll', registrationNo: 'NOROLL-1' });
+    await expect(createRecord(cdc, 'exams', without, 'submit')).rejects.toMatchObject({ fields: { rollNo: expect.any(String) } });
+    const draft = await createRecord(cdc, 'exams', without, 'draft');
+    expect(draft.id).toBeTruthy();
   });
 });
 

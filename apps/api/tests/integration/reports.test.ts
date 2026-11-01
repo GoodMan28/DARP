@@ -62,7 +62,7 @@ beforeAll(async () => {
   }, 'submit');
   await createRecord(cse, 'awards', { awardDate: '2024-05-01', awardName: 'Draft only', level: 'State', agency: 'X' }, 'draft');
   // A year alone (academic year 2023-24): no calendar or financial year of its own.
-  await createRecord(cdc, 'exams', { year: '2023', examName: 'GATE', studentName: 'R. Kumar', registrationNo: 'G-1' }, 'submit');
+  await createRecord(cdc, 'exams', { year: '2023', examName: 'GATE', studentName: 'R. Kumar', registrationNo: 'G-1', rollNo: 'BTECH/1/19' }, 'submit');
 });
 
 afterAll(async () => { await closeDb(); });

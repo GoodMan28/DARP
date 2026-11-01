@@ -1,8 +1,8 @@
 /**
  * Replaces the DEMO data of two modules, Students Qualifying Competitive Exams (CDC) and Students Guided,
  * with a small set made to show what CDC's report does: a student CDC and a guide both entered, a student
- * with two exams, a student joined by the guide's roll number, a student with no roll number, and one the
- * guide says was not at BIT. Only records owned by the demo accounts (@demo.bitmesra.ac.in) are removed;
+ * with two exams (one from CDC and one from a guide), students only a guide entered, and one the guide says
+ * was not at BIT. Only records owned by the demo accounts (@demo.bitmesra.ac.in) are removed;
  * a real person's record is never touched. The removed rows are first written to a JSON file.
  *
  *   npm run db:seed:exams-demo -w @darp/api -- --backup <file.json>
@@ -60,11 +60,11 @@ const make = async (who: SessionUser, moduleKey: string, data: Record<string, un
 };
 
 /* CDC's own list */
-await make(cdc, 'exams', exam({ year: '2023', examName: 'GATE', studentName: 'Ravi Kumar', registrationNo: 'GATE-23-1001' }));                       // no roll number: lent by his guide
+await make(cdc, 'exams', exam({ year: '2023', examName: 'GATE', studentName: 'Ravi Kumar', registrationNo: 'GATE-23-1001', rollNo: 'BIT/2019/CSE/041' }));
 await make(cdc, 'exams', exam({ year: '2023', examName: 'CAT', studentName: 'Ravi Kumar', registrationNo: 'CAT-23-5521', rollNo: 'BIT/2019/CSE/041' }));
 await make(cdc, 'exams', exam({ year: '2022', examName: 'NET', studentName: 'Sneha Oraon', registrationNo: 'NET-22-3310', rollNo: 'BIT/2018/EEE/017' }));
 await make(cdc, 'exams', exam({ year: '2023', examName: 'Civil Services', studentName: 'Pooja Sinha', registrationNo: 'UPSC-23-90441', rollNo: 'BIT/2017/ME/009' }));
-await make(cdc, 'exams', exam({ year: '2024', examName: 'JAM', studentName: 'Aman Tirkey', registrationNo: 'JAM-24-778' }));                          // no roll number anywhere: a row of his own
+await make(cdc, 'exams', exam({ year: '2024', examName: 'JAM', studentName: 'Aman Tirkey', registrationNo: 'JAM-24-778', rollNo: 'BIT/2020/MBA/012' }));
 
 /* What the guides entered: students who went on to a competitive exam */
 const examGuided = (who: SessionUser, over: Record<string, unknown>) => make(who, 'studentsguided', guided({

@@ -41,8 +41,8 @@ export const exams: ModuleConfig = {
       required: true, maxLength: 60, section: 'Student',
       exportAs: { cdc: 'Registration number/roll number for the exam' } },
 
-    { key: 'rollNo', label: 'College roll number', type: 'text', maxLength: 40, section: 'Student',
-      help: 'Add it where you can. It puts a student who qualified in several exams on one row of the report, and lets DARP see that a faculty member who guided this student has entered the same exam.' },
+    { key: 'rollNo', label: 'College roll number', type: 'text', required: true, maxLength: 40, section: 'Student',
+      help: 'The student\u2019s roll number at BIT, not the exam\u2019s own number. It puts a student who qualified in several exams on one row of the report, and lets DARP see that a faculty member who guided this student has entered the same exam.' },
 
     { key: 'evidence', label: 'Attach scorecard / result', type: 'file',
       accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Evidence' },
