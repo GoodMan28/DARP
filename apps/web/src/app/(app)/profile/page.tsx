@@ -1,7 +1,7 @@
 import { AppShell } from '@/components/shell/AppShell';
 import { Card, CardHeader, Notice, LinkButton } from '@/components/ui';
 import { requireMe, apiGet, loadPageData } from '@/lib/api.server';
-import type { CounterValues, IdentityPayload, RecordListPayload } from '@darp/shared/contracts';
+import type { DeclaredSheet, IdentityPayload, RecordListPayload } from '@darp/shared/contracts';
 import { getModule } from '@darp/shared/modules';
 import { displayValue, formatDate } from '@darp/shared/format';
 import { ROLE_LABEL } from '@darp/shared/roles';
@@ -26,14 +26,12 @@ export default async function ProfilePage() {
   // have no records of their own, so their page shows only their account.
   const hasAnnexure = !!profileModule?.ownerRoles.includes(user.role);
 
-  const thisYear = new Date().getFullYear();
-  let counters: CounterValues = {
-    userId: user.id, range: { from: thisYear - 2, to: thisYear }, minYear: thisYear - 10, maxYear: thisYear, computed: [], declared: [],
-  };
+  // The figures a person declares, for the last academic and calendar year that have ended.
+  let declared: DeclaredSheet | null = null;
   if (cycle.id && hasAnnexure) {
-    const r = await loadPageData<CounterValues>('/api/profile/rollups');
+    const r = await loadPageData<DeclaredSheet>('/api/profile/declared');
     if (!r.ok) throw new Error(r.message);
-    counters = r.data;
+    declared = r.data;
   }
 
   // The Faculty Profile is a record like any other: one per user per cycle. Office roles
@@ -126,13 +124,9 @@ export default async function ProfilePage() {
       {research?.ok ? <ResearchCard initial={research.data} /> : null}
 
       {/* declared figures */}
-      {hasAnnexure ? (
+      {hasAnnexure && declared ? (
         <Card padded={false}>
-          <CardHeader
-            title="Figures you declare"
-            subtitle="Thirteen numbers the portal cannot compute until historical data is imported. Every change is audited."
-          />
-          <DeclaredCounters initial={counters.declared} />
+          <DeclaredCounters initial={declared} />
         </Card>
       ) : null}
 

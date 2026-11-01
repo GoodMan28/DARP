@@ -78,6 +78,20 @@ test.describe('faculty journey', () => {
     await expect(page.locator('#i-country')).toBeDisabled();
   });
 
+  test('sees the declared figures by year, and the counted ones only when asked', async ({ page }) => {
+    await useSession(page, 'verma');
+    await page.goto('/profile');
+    await expect(page.locator('select[aria-label="Academic year"] option').first()).toHaveText(/^AY \d{4}-\d{2}$/);
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+    await expect(page.getByText('Counted by DARP')).toHaveCount(0);
+    await page.getByRole('button', { name: 'Show counted figures' }).click();
+    await expect(page.getByText('Counted by DARP').first()).toBeVisible();
+    await page.locator('input[id$="manual.seminars.national.sinceJoining"]').fill('3');
+    await expect(page.getByRole('button', { name: 'Save changes' })).toBeEnabled();
+    await page.locator('select[aria-label="Academic year"]').selectOption({ index: 1 });
+    await expect(page.getByRole('heading', { name: 'Discard your changes?' })).toBeVisible();   // nothing is saved in this test
+  });
+
   test('sees computed totals on the profile, marked as not editable', async ({ page }) => {
     await useSession(page, 'verma');
     await page.goto('/profile');

@@ -170,6 +170,31 @@ export interface DeclaredCounter extends DeclaredCounterDef {
   value: number;
 }
 
+/** One line of the declared-figures sheet on My profile. */
+export interface DeclaredRow {
+  /** The key it is saved under: `<figure>@<year>` for a figure about one year. */
+  key: string;
+  label: string;
+  help: string;
+  format: 'number' | 'yesno';
+  /** Where it sits: a total since joining, one academic year's figure, or one calendar year's. */
+  section: 'since' | 'ay' | 'cy';
+  /** What the person declared; null when they have not answered (a real zero is 0). */
+  value: number | null;
+  /** What DARP counts from the person's records, only when asked for. */
+  counted?: { value: number | null; note: string; moduleKey: string | null };
+}
+
+/** GET /api/profile/declared */
+export interface DeclaredSheet {
+  /** The academic and calendar year the sheet shows, named by the year they start in. */
+  ay: number;
+  cy: number;
+  /** The years that can be filled in: from the year of joining to the last one that has ended, newest first. */
+  years: { ay: number[]; cy: number[] };
+  rows: DeclaredRow[];
+}
+
 /** GET /api/profile/rollups */
 export interface CounterValues {
   userId: string;

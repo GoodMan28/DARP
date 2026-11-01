@@ -261,20 +261,33 @@ export const COUNTERS: CounterDef[] = [
    the underlying detail, so they cannot be computed. The faculty member
    declares each one once; the value is stored in `profile_baselines`. */
 
-export const DECLARED_COUNTERS: DeclaredCounterDef[] = [
-  { key: 'manual.seminars.national.sinceJoining', label: 'National seminars attended since joining BIT', help: 'Seminars, conferences and workshops are told apart by the name of the programme.', format: 'number' },
-  { key: 'manual.seminars.national.cycle', label: 'National seminars attended last year ({lastAY})', help: '', format: 'number' },
-  { key: 'manual.seminars.international.sinceJoining', label: 'International seminars attended since joining BIT', help: '', format: 'number' },
-  { key: 'manual.seminars.international.cycle', label: 'International seminars attended last year ({lastAY})', help: '', format: 'number' },
-  { key: 'manual.workshops.attended.sinceJoining', label: 'Workshops and conferences attended since joining BIT', help: '', format: 'number' },
-  { key: 'manual.workshops.attended.cycle', label: 'Workshops and conferences attended last year ({lastAY})', help: '', format: 'number' },
-  { key: 'manual.foreignVisits.count.sinceJoining', label: 'Foreign universities visited since joining BIT', help: '', format: 'number' },
-  { key: 'manual.foreignVisits.lastYear', label: 'Visited a foreign university last year ({lastAY})?', help: '', format: 'yesno' },
-  { key: 'manual.papersPresented.national.sinceJoining', label: 'Papers presented at national conferences since joining BIT', help: 'Conference presentations, not journal papers.', format: 'number' },
-  { key: 'manual.papersPresented.national.cycle', label: 'Papers presented at national conferences last year ({lastCY})', help: '', format: 'number' },
-  { key: 'manual.papersPresented.international.sinceJoining', label: 'Papers presented at international conferences since joining BIT', help: '', format: 'number' },
-  { key: 'manual.papersPresented.international.cycle', label: 'Papers presented at international conferences last year ({lastCY})', help: '', format: 'number' },
-  { key: 'manual.collaborators.active', label: 'Total number of active research collaborators', help: '', format: 'number' },
+/** A declared figure, with its name without the year and where DARP can count the same thing from records. */
+export interface DeclaredDef extends DeclaredCounterDef {
+  short: string;
+  countedFrom?: { moduleKey: string; where?: Record<string, string[]>; note: string };
+}
+
+const SEMINAR_SUPPORT = { moduleKey: 'finsupport', note: 'Counted only where BIT gave financial support.' };
+const FIN_PURPOSE = 'Conference/Workshop/Seminar/Symposium, etc';
+const seminars = (type: 'National' | 'International') =>
+  ({ ...SEMINAR_SUPPORT, where: { purpose: [FIN_PURPOSE], type: [type] } });
+const WORKSHOPS = { moduleKey: 'fdpattended', note: 'Counted from your FDPs Attended.' };
+const PAPERS = { moduleKey: 'books', where: { publicationType: ['Conference paper'] }, note: 'All conference papers: not split by national and international.' };
+
+export const DECLARED_COUNTERS: DeclaredDef[] = [
+  { key: 'manual.seminars.national.sinceJoining', short: 'National seminars attended', countedFrom: seminars('National'), label: 'National seminars attended since joining BIT', help: 'Seminars, conferences and workshops are told apart by the name of the programme.', format: 'number' },
+  { key: 'manual.seminars.international.sinceJoining', short: 'International seminars attended', countedFrom: seminars('International'), label: 'International seminars attended since joining BIT', help: '', format: 'number' },
+  { key: 'manual.workshops.attended.sinceJoining', short: 'Workshops and conferences attended', countedFrom: WORKSHOPS, label: 'Workshops and conferences attended since joining BIT', help: '', format: 'number' },
+  { key: 'manual.foreignVisits.count.sinceJoining', short: 'Foreign universities visited', label: 'Foreign universities visited since joining BIT', help: '', format: 'number' },
+  { key: 'manual.papersPresented.national.sinceJoining', short: 'Papers presented at national conferences', countedFrom: PAPERS, label: 'Papers presented at national conferences since joining BIT', help: 'Conference presentations, not journal papers.', format: 'number' },
+  { key: 'manual.papersPresented.international.sinceJoining', short: 'Papers presented at international conferences', countedFrom: PAPERS, label: 'Papers presented at international conferences since joining BIT', help: '', format: 'number' },
+  { key: 'manual.collaborators.active', short: 'Active research collaborators (total)', label: 'Total number of active research collaborators', help: '', format: 'number' },
+  { key: 'manual.seminars.national.cycle', short: 'National seminars attended', countedFrom: seminars('National'), label: 'National seminars attended last year ({lastAY})', help: '', format: 'number' },
+  { key: 'manual.seminars.international.cycle', short: 'International seminars attended', countedFrom: seminars('International'), label: 'International seminars attended last year ({lastAY})', help: '', format: 'number' },
+  { key: 'manual.workshops.attended.cycle', short: 'Workshops and conferences attended', countedFrom: WORKSHOPS, label: 'Workshops and conferences attended last year ({lastAY})', help: '', format: 'number' },
+  { key: 'manual.foreignVisits.lastYear', short: 'Visited a foreign university', label: 'Visited a foreign university last year ({lastAY})?', help: '', format: 'yesno' },
+  { key: 'manual.papersPresented.national.cycle', short: 'Papers presented at national conferences', countedFrom: PAPERS, label: 'Papers presented at national conferences last year ({lastCY})', help: '', format: 'number' },
+  { key: 'manual.papersPresented.international.cycle', short: 'Papers presented at international conferences', countedFrom: PAPERS, label: 'Papers presented at international conferences last year ({lastCY})', help: '', format: 'number' },
 ];
 
 /**

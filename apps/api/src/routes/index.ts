@@ -102,6 +102,8 @@ api.get('/reports/:format', reports.GET);
 
 api.get('/profile/rollups', profileRollups.GET);
 api.patch('/profile/rollups', profileRollups.PATCH);
+api.get('/profile/declared', profileRollups.DECLARED_GET);
+api.put('/profile/declared', profileRollups.DECLARED_PUT);
 api.get('/profile/identity', profileIdentity.GET);
 api.patch('/profile/name', profileIdentity.PATCH_NAME);
 api.post('/profile/orcid', profileIdentity.POST_ORCID);
