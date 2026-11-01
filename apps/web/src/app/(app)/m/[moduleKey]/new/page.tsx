@@ -7,7 +7,7 @@ import { RecordForm } from '@/components/form/RecordForm';
 import { requireMe, loadPageData } from '@/lib/api.server';
 import type { ModuleSchemaPayload } from '@darp/shared/contracts';
 import { getModule } from '@darp/shared/modules';
-import { lockedStrip, periodRangeLabel } from '@/components/records/form-fields';
+import { lockedStrip } from '@/components/records/form-fields';
 
 export const dynamic = 'force-dynamic';
 
@@ -79,7 +79,6 @@ export default async function NewRecordPage({ params, searchParams }: PageProps)
     );
   }
 
-  const periodLabel = periodRangeLabel(schema.data.periods);
   const { fields } = schema.data;
 
   return shell(
@@ -98,7 +97,7 @@ export default async function NewRecordPage({ params, searchParams }: PageProps)
         parents={schema.data.parents}
         affiliation={schema.data.affiliation}
         joiningDate={user.dateOfJoining}
-        locked={lockedStrip(m, user, periodLabel)}
+        locked={lockedStrip(m, user, null)}
         handedOver={schema.data.lookup ? handedOver : undefined}
         singleton={!!m.singleton}
         returnTo={m.singleton ? '/profile' : undefined}

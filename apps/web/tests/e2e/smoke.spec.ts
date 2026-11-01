@@ -58,6 +58,13 @@ test.describe('faculty journey', () => {
     await expect(page.getByRole('button', { name: 'Save as draft' })).toBeVisible();
   });
 
+  test('is not told a year range on a new record: the year comes from the date', async ({ page }) => {
+    await useSession(page, 'verma');
+    await page.goto('/m/awards/new');
+    await expect(page.getByText('Entered by')).toBeVisible();
+    await expect(page.getByText('Counted in')).toHaveCount(0);
+  });
+
   test('sees the level follow the programme, and the branches narrow to it', async ({ page }) => {
     await useSession(page, 'verma');
     await page.goto('/m/studentsguided/new');

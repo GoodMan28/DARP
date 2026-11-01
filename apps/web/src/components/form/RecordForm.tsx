@@ -26,7 +26,7 @@ interface Props {
   fields: FormFieldDef[];
   recordId?: string;
   initialValues?: Record<string, unknown>;
-  locked: { period: string; department: string; enteredBy: string };
+  locked: { period: string | null; department: string; enteredBy: string };
   readOnly?: boolean;
   /** Present when the module fetches its facts from a register (DOI / ISBN / patent number). */
   lookup?: { kind: string; idFields: string[]; idLabel: string; sourceName: string } | null;
@@ -337,11 +337,13 @@ export function RecordForm({
 
       {singleton ? null : (
       <Card className="mb-4 bg-surface-2">
-        <div className="grid gap-3 text-sm sm:grid-cols-3">
-          <div>
-            <span className="text-xs font-semibold text-ink-muted">Counted in</span>
-            <div className="font-semibold">{locked.period}</div>
-          </div>
+        <div className={`grid gap-3 text-sm ${locked.period ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
+          {locked.period ? (
+            <div>
+              <span className="text-xs font-semibold text-ink-muted">Counted in</span>
+              <div className="font-semibold">{locked.period}</div>
+            </div>
+          ) : null}
           <div>
             <span className="text-xs font-semibold text-ink-muted">Department</span>
             <div className="font-semibold">{locked.department}</div>
