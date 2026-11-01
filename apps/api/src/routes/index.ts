@@ -21,6 +21,7 @@ import * as lookup from './lookup';
 import * as journals from './journals';
 import * as institutions from './institutions';
 import * as students from './students';
+import * as awardsRoute from './awards';
 import * as evidenceUpload from './evidence/upload';
 import * as evidenceFile from './evidence/file';
 import * as exportWorkbook from './export';
@@ -77,6 +78,7 @@ api.post('/lookup/:moduleKey', lookup.POST);
 api.get('/journals/ranking', journals.GET);
 api.get('/institutions/search', institutions.SEARCH);
 api.get('/students/earlier', students.EARLIER);
+api.get('/awards/similar', awardsRoute.SIMILAR);
 
 api.post('/evidence', evidenceUpload.POST);
 api.get('/evidence/:id', evidenceFile.GET);

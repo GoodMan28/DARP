@@ -19,6 +19,7 @@
     "./research": "./src/research.ts",
     "./views": "./src/views.ts",
     "./names": "./src/names.ts",
+    "./awards": "./src/awards.ts",
     "./sheets": "./src/sheets.ts"
   },
   "scripts": {

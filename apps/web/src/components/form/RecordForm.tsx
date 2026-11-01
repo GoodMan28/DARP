@@ -12,6 +12,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { SPAN_MODULES, spanText } from '@darp/shared/projectPeriod';
 import { JournalRankingCard } from './JournalRankingCard';
 import { InstitutionPicker } from './InstitutionPicker';
+import { SimilarAward } from './SimilarAward';
 import { SelectOrOther } from './SelectOrOther';
 import { applyComputed, computeValue } from '@darp/shared/computed';
 import { useLeaveGuard } from './useLeaveGuard';
@@ -515,6 +516,8 @@ export function RecordForm({
           ) : null,
         ];
       })}
+
+      {!readOnly ? <SimilarAward moduleKey={moduleKey} recordId={recordId} values={values} /> : null}
 
       {!readOnly ? (
         <div className="sticky bottom-0 flex flex-wrap items-center gap-2 border-t border-line bg-canvas py-3">
