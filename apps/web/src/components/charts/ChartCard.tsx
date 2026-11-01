@@ -16,7 +16,7 @@ export function ChartCard({ title, subtitle, children, table, className, id }: {
   id?: string;
 }) {
   return (
-    <section id={id} className={cx('rounded-lg bg-surface p-5 shadow-sm ring-1 ring-line transition-shadow hover:shadow-md motion-reduce:transition-none', className)}>
+    <section id={id} className={cx('min-w-0 rounded-lg bg-surface p-5 shadow-sm ring-1 ring-line transition-shadow hover:shadow-md motion-reduce:transition-none', className)}>
       <header className="mb-3">
         <h2 className="text-sm font-semibold text-ink">{title}</h2>
         {subtitle ? <p className="mt-0.5 text-xs text-ink-muted">{subtitle}</p> : null}

@@ -3,6 +3,7 @@ import { Sidebar, type SidebarGroup } from './Sidebar';
 import { Topbar, type Crumb } from './Topbar';
 import type { CurrentUser } from '@darp/shared/contracts';
 import { ROLE_LABEL } from '@darp/shared/roles';
+import { canSeeCollege } from '@darp/shared/insights';
 
 export interface ShellProps {
   user: CurrentUser;
@@ -24,7 +25,11 @@ export function AppShell({
       <a href="#main" className="skip-link">Skip to main content</a>
       <div className="flex min-h-dvh">
         {/* Reports: every role (a faculty member downloads their own workbook); the routes check it again. */}
-        <Sidebar groups={groups} roleLabel={ROLE_LABEL[user.role]} showAdmin={user.role === 'admin'} showReports />
+        <Sidebar
+          groups={groups} roleLabel={ROLE_LABEL[user.role]} showAdmin={user.role === 'admin'} showReports
+          showDepartment={(user.role === 'faculty' || user.role === 'hod') && !!user.departmentCode}
+          showCollege={canSeeCollege(user.role)}
+        />
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar
             name={user.name}

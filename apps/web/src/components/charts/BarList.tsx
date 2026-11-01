@@ -16,8 +16,8 @@ export function BarList({ rows, max, thing = 'figures', color = ACCENT }: { rows
     <ul className="space-y-3">
       {shown.map((r) => {
         const label = r.href
-          ? <Link href={r.href} className="truncate font-medium text-ink hover:text-maroon-700 hover:underline">{r.label}</Link>
-          : <span className="truncate font-medium text-ink">{r.label}</span>;
+          ? <Link href={r.href} className="min-w-0 truncate font-medium text-ink hover:text-maroon-700 hover:underline">{r.label}</Link>
+          : <span className="min-w-0 truncate font-medium text-ink">{r.label}</span>;
         return (
           <li key={r.label}>
             <div className="flex items-baseline justify-between gap-3 text-sm">
