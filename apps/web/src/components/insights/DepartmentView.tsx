@@ -6,13 +6,18 @@ import { Trend } from '@/components/charts/Trend';
 import { BarList } from '@/components/charts/BarList';
 import { RangePicker } from '@/components/charts/RangePicker';
 import { formatRupees } from '@darp/shared/format';
-import type { DepartmentInsights } from '@darp/shared/contracts';
+import type { DepartmentCompletionRow, DepartmentInsights } from '@darp/shared/contracts';
+import { CompletionTable } from './CompletionTable';
 import { Tabs } from './Tabs';
 import { FacultyGrid } from './FacultyGrid';
 import { FundersCard, HIndexCard, JournalQualityCard, JournalsCard, OutputCard, RecentPapers, Stat } from './parts';
 
 /** A department's page, for its own faculty and head, and for the deans and IQAC. */
-export function DepartmentView({ data: d, minYear, maxYear }: { data: DepartmentInsights; minYear: number; maxYear: number }) {
+export function DepartmentView({ data: d, completion, minYear, maxYear }: {
+  data: DepartmentInsights; minYear: number; maxYear: number;
+  /** The head's own department: how far its data entry has got. */
+  completion?: DepartmentCompletionRow | null;
+}) {
   const papers = d.byYear.map((y) => ({ year: y.year, value: y.papers }));
   const funding = d.byYear.map((y) => ({ year: y.year, value: y.funding }));
   const c = d.counts;
@@ -37,6 +42,8 @@ export function DepartmentView({ data: d, minYear, maxYear }: { data: Department
       </Hero>
 
       <RangePicker minYear={minYear} maxYear={maxYear} />
+
+      {completion ? <CompletionTable rows={[completion]} title="Data completion" /> : null}
 
       <Tabs label="Department" tabs={[
         {

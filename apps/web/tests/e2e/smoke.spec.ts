@@ -117,10 +117,13 @@ test.describe('faculty journey', () => {
 });
 
 test.describe('verification', () => {
-  test('a dean sees how each department is doing, as well as their own modules', async ({ page }) => {
+  test('a dean sees their own modules, and finds how each department is doing on the College page', async ({ page }) => {
     await openAs(page, 'drie');
-    await expect(page.getByRole('heading', { name: 'Completion by department' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'My modules' })).toBeVisible();
+    await page.getByRole('link', { name: 'College overview' }).click();
+    await page.waitForURL('**/college');
+    await page.getByRole('tab', { name: 'Data completion' }).click();
+    await expect(page.getByRole('heading', { name: 'Completion by department' })).toBeVisible();
   });
 
   test('a faculty member cannot reach the admin console', async ({ page }) => {

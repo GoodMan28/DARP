@@ -7,6 +7,8 @@ import { CorrectionActions } from '@/components/records/CorrectionActions';
 import { requireMe, loadPageData } from '@/lib/api.server';
 import type { DashboardPayload, ModuleProgress, PersonInsights } from '@darp/shared/contracts';
 import { PersonStats } from '@/components/insights/PersonStats';
+import { CompletionTable } from '@/components/insights/CompletionTable';
+import { canSeeCollege } from '@darp/shared/insights';
 import { rangeFrom, rangeQuery, yearBounds } from '@/lib/insights';
 import { ROLE_PURPOSE } from '@darp/shared/roles';
 import { plural } from '@darp/shared/format';
@@ -53,7 +55,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   if (!dashboard.ok) throw new Error(dashboard.message);
 
   const { ownsModules, modules: myModules, departments, corrections, autoUpdates } = dashboard.data;
-  const showDepartments = user.role !== 'faculty';
+  const showDepartments = user.role === 'cdc';
   // Everyone who fills in a Faculty Profile (faculty, HODs, professors holding an office) has numbers.
   const fillsProfile = !!getModule('profile')?.ownerRoles.includes(user.role);
   // A person who fills a profile gets their own page: figures, charts and what to do next.
@@ -91,6 +93,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           : null
       }
     >
+      {canSeeCollege(user.role) ? (
+        <p className="mb-4 text-sm"><Link href="/college" className="font-semibold text-maroon-700 hover:underline">College overview</Link><span className="text-ink-muted"> · every department, its people and figures</span></p>
+      ) : null}
+
       {insights?.ok ? (
         <div className="mb-4">
           <PersonStats data={insights.data} own {...yearBounds(insights.data.byYear, range)} />
@@ -286,52 +292,8 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
         <div className="mt-4"><MyNumbers /></div>
       ) : null}
 
-      {/* department completion */}
-      {showDepartments && departments.length > 0 ? (
-        <Card className="mt-4" padded={false}>
-          <CardHeader
-            title={user.role === 'hod' ? 'My department' : 'Completion by department'}
-            subtitle="Aggregates only — no record contents are shown here."
-          />
-          <Table>
-            <thead>
-              <tr>
-                <Th>Department</Th>
-                <Th className="w-24 text-right">Faculty</Th>
-                <Th className="w-28 text-right">Reporting</Th>
-                <Th className="w-24 text-right">Records</Th>
-                <Th className="w-40">Modules covered</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {departments.map((d) => (
-                <tr key={d.departmentId} className="hover:bg-surface-2">
-                  <Td>
-                    <span className="font-medium">{d.department}</span>
-                    <span className="ml-1.5 font-mono text-2xs text-ink-faint">{d.departmentCode}</span>
-                  </Td>
-                  <Td className="text-right font-mono tabular-nums">{d.facultyTotal}</Td>
-                  <Td className="text-right font-mono tabular-nums">{d.facultyReporting}</Td>
-                  <Td className="text-right font-mono tabular-nums">{d.records}</Td>
-                  <Td>
-                    <div className="flex items-center gap-2">
-                      <div className="h-1.5 w-24 overflow-hidden rounded-xs bg-surface-inset">
-                        <div
-                          className="h-full bg-primary"
-                          style={{ width: `${Math.min(d.pct, 100)}%` }}
-                        />
-                      </div>
-                      <span className="font-mono text-2xs tabular-nums text-ink-muted">
-                        {d.modulesComplete}/{d.modulesApplicable}
-                      </span>
-                    </div>
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </Card>
-      ) : null}
+      {/* how far each department has got: CDC's only view of it; the deans and IQAC find it on the College page, a head on the department page */}
+      {showDepartments && departments.length > 0 ? <div className="mt-4"><CompletionTable rows={departments} /></div> : null}
     </AppShell>
   );
 }

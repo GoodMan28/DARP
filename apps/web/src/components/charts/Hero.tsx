@@ -5,7 +5,7 @@ import { cx } from '@/lib/cx';
  * The deep maroon band at the top of the Overview, department and college pages: a title, a few chips,
  * and a row of figures. `aside` is a card that sits to the right on a wide screen and below on a phone.
  */
-export function Hero({ lead, title, subtitle, chips, children, aside, className }: {
+export function Hero({ lead, title, subtitle, chips, children, aside, columns = 4, className }: {
   /** Usually an Avatar. */
   lead?: ReactNode;
   title: string;
@@ -13,6 +13,8 @@ export function Hero({ lead, title, subtitle, chips, children, aside, className 
   chips?: string[];
   children?: ReactNode;
   aside?: ReactNode;
+  /** How many tiles fit in a row on a wide screen. */
+  columns?: 4 | 6;
   className?: string;
 }) {
   return (
@@ -31,7 +33,7 @@ export function Hero({ lead, title, subtitle, chips, children, aside, className 
               ) : null}
             </div>
           </div>
-          {children ? <div className="mt-5 grid grid-cols-2 gap-3 md:grid-cols-4">{children}</div> : null}
+          {children ? <div className={cx('mt-5 grid grid-cols-2 gap-3', columns === 6 ? 'md:grid-cols-3 xl:grid-cols-6' : 'md:grid-cols-4')}>{children}</div> : null}
         </div>
         {aside ? <div className="min-w-0">{aside}</div> : null}
       </div>
