@@ -23,6 +23,13 @@ const QUARTILE = /^(Q[1-4]|N\/A)$/;
 const NAME_ENDS_AT = 370;
 
 /**
+ * A name as the database may hold it. A PDF can carry invisible control characters inside a name (one
+ * journal's has a NUL byte, which PostgreSQL refuses), so they become spaces, and spaces are collapsed.
+ */
+const invisible = (n: number) => n < 32 || (n >= 127 && n <= 159) || (n >= 0x200b && n <= 0x200f) || n === 0x2028 || n === 0x2029 || n === 0xfeff;
+export const cleanName = (s: string): string => [...s].map((c) => (invisible(c.charCodeAt(0)) ? ' ' : c)).join('').replace(/\s+/g, ' ').trim();
+
+/**
  * The journals on some pages of text. A journal in several categories repeats with the same figures, so
  * it is kept once. Throws when the pages are not laid out like the Journal Citation Reports list.
  */
@@ -45,7 +52,7 @@ export function linesToRows(pages: TextItem[][]): JcrPdf {
         continue;
       }
       const sorted = [...line].sort((a, b) => a.x - b.x);
-      const name = sorted.filter((i) => i.x < NAME_ENDS_AT).map((i) => i.s.trim()).join(' ').trim();
+      const name = cleanName(sorted.filter((i) => i.x < NAME_ENDS_AT).map((i) => i.s).join(' '));
       const rest = sorted.filter((i) => i.x >= NAME_ENDS_AT).map((i) => i.s.trim());
       if (name && rest.length === 3 && NUMBER.test(rest[0]!) && NUMBER.test(rest[1]!) && QUARTILE.test(rest[2]!)) {
         rows += 1;

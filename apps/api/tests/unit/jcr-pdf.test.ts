@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { linesToRows } from '@/server/lookup/jcrPdf';
+import { linesToRows, cleanName } from '@/server/lookup/jcrPdf';
 import { journalTitleKey } from '@darp/shared/journals';
 import type { TextItem } from '@/server/lookup/patentJournal';
 
@@ -45,6 +45,15 @@ describe('reading the list', () => {
       word(384, 89, '1.9'), word(439, 89, '2.1'), word(491, 89, 'Q2')];
     const pdf = linesToRows([[...header(75), ...long], ...filler(1100)]);
     expect(pdf.journals.some((j) => j.name === 'Journal of Nondestructive Evaluation, Diagnostics and' && j.jif === '1.9')).toBe(true);
+  });
+
+  it('removes invisible control characters from a name, so the database accepts it', () => {
+    expect(cleanName('Revista de\u0000 Filosofia\u0001  Aurora')).toBe('Revista de Filosofia Aurora');
+    expect(cleanName('Journal\u200b of  Things\ufeff')).toBe('Journal of Things');
+    const bad = [word(57, 89, 'Odd\u0000'), word(100, 89, 'Journal'), word(384, 89, '1.0'), word(439, 89, '1.0'), word(491, 89, 'Q2')];
+    const pdf = linesToRows([[...header(75), ...bad], ...filler(1100)]);
+    expect(pdf.journals.some((j) => j.name === 'Odd Journal')).toBe(true);
+    expect(pdf.journals.every((j) => [...j.name].every((c) => c.charCodeAt(0) >= 32))).toBe(true);
   });
 
   it('refuses a file that is not this list', () => {
