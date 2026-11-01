@@ -81,6 +81,7 @@ api.get('/institutions/search', institutions.SEARCH);
 api.get('/institutions/countries', institutions.COUNTRIES);
 api.post('/institutions', institutions.ADD);
 api.get('/students/earlier', students.EARLIER);
+api.get('/exams/from-faculty', students.FROM_FACULTY);
 api.get('/awards/similar', awardsRoute.SIMILAR);
 
 api.post('/evidence', evidenceUpload.POST);

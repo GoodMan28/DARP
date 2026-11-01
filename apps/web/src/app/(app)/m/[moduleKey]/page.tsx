@@ -1,6 +1,7 @@
 import { notFound, redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { AppShell } from '@/components/shell/AppShell';
+import { FacultyExamsPanel } from '@/components/records/FacultyExamsPanel';
 import {
   Card, CardHeader, Eyebrow, LinkButton, Notice, EmptyState,
   Table, Th, Td, StatePill,
@@ -195,6 +196,8 @@ export default async function ModuleListPage({ params, searchParams }: PageProps
         <LinkButton href={managedLink.href} variant="secondary">{managedLink.label}</LinkButton>
       ) : null}
     >
+      {m.key === 'exams' && ['cdc', 'admin'].includes(user.role) ? <FacultyExamsPanel /> : null}
+
       <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-2">
         <div>
           <Eyebrow>Reference</Eyebrow>

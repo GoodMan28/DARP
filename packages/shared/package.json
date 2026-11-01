@@ -21,6 +21,7 @@
     "./names": "./src/names.ts",
     "./awards": "./src/awards.ts",
     "./affiliation": "./src/affiliation.ts",
+    "./exams": "./src/exams.ts",
     "./sheets": "./src/sheets.ts"
   },
   "scripts": {

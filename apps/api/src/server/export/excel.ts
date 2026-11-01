@@ -21,6 +21,7 @@ import {
   findTableHeader, addMissingHeaders, headerSpan, tableEnd, insertRows, retitleSheet, findLabelRow, textOf, withoutLetter,
 } from './template';
 import { figuresForUsers } from '@/server/rollups/completion';
+import { facultyExamEntries, readFacultyExams, mayReadFacultyExams, newFromFaculty } from '@/server/records/examsFromFaculty';
 import { defaultRange } from '@/server/records/range';
 
 const TEMPLATE_DIR = process.env.EXPORT_TEMPLATE_DIR ?? 'templates';
@@ -266,6 +267,24 @@ async function fetchExportRows(
     const v = (r.data as Record<string, unknown>)[plan.rowFilter.field];
     return typeof v === 'string' && plan.rowFilter.in.includes(v);
   });
+
+  // The exam sheet holds CDC's students and those the faculty entered, once each (CDC's own entry stands).
+  if (plan.moduleKey === 'exams' && (!opts.actor || mayReadFacultyExams(opts.actor))) {
+    const cdc = filtered.map((r) => {
+      const d = r.data as Record<string, unknown>;
+      return { year: Number(d.year), examName: String(d.examName ?? ''), registrationNo: String(d.registrationNo ?? ''), rollNo: String(d.rollNo ?? '') };
+    });
+    const departmentIds = [...(opts.departmentId ? [opts.departmentId] : []), ...(opts.departmentIds ?? [])];
+    const filter = opts.range || departmentIds.length ? { from: opts.range?.from ?? 1900, to: opts.range?.to ?? 2200, departmentIds } : undefined;
+    const { rows: more } = newFromFaculty(cdc, opts.actor ? await facultyExamEntries(opts.actor, filter) : await readFacultyExams(filter));
+    for (const e of more) {
+      filtered.push({
+        data: { year: e.year, examName: e.examName, studentName: e.studentName, registrationNo: e.registrationNo, rollNo: e.rollNo },
+        periodYear: e.year, year: e.year, ownerUserId: '', ownerName: e.guide, department: e.department,
+      } as (typeof filtered)[number]);
+    }
+    filtered.sort((a, b) => (a.year ?? a.periodYear) - (b.year ?? b.periodYear));
+  }
 
   // Profile lookups for sheets that need PAN/designation from the owner.
   const profiles = new Map<string, Record<string, string>>();
