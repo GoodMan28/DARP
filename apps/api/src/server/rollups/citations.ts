@@ -8,14 +8,14 @@ import { istClock } from '@/server/lookup/scopusList';
 
 /*
  * Each paper's Scopus citations, by DOI, so a department's h-index can be worked out. Papers are looked
- * up 25 DOIs at a time, 500 a night (20 calls, far inside Elsevier's weekly quota), the ones never checked
+ * up 25 DOIs at a time (Elsevier allows no more per request), 1,000 a night (40 calls, about 1.4% of the weekly quota of 20,000), the ones never checked
  * first and then those checked longest ago. A number is never wiped: when Elsevier refuses or cannot be
  * reached the stored counts stay as they were.
  */
 
 /** 05:00 India time, after the Scopus list (02:00), the patent journal (03:00) and the researchers (04:00). */
 export const CITATION_HOUR_IST = 5;
-export const BATCH_PER_NIGHT = 500;
+export const BATCH_PER_NIGHT = 1000;
 let lastRunDay: string | null = null;
 
 /**

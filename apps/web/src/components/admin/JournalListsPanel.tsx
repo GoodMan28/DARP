@@ -303,7 +303,7 @@ export function JournalListsPanel() {
               name="Citations"
               full="Scopus, by DOI"
               gives="Each paper’s citations, for the department and college h-index"
-              how="Automatic, 500 papers a night"
+              how="Automatic, 1,000 papers a night"
               state={!data.citations.connected ? 'optional' : data.citations.found > 0 ? 'ok' : 'missing'}
               status={!data.citations.connected
                 ? 'Elsevier is not connected: no API key'
