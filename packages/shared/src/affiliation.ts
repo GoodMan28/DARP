@@ -24,6 +24,6 @@ export function firstDate(m: Pick<ModuleConfig, 'affiliation'>, data: Record<str
 }
 
 /** True when the person says this work was not done while they were at BIT. Such work is left out of reports and counts. */
-export function isOutsideBit(m: Pick<ModuleConfig, 'affiliation'> | undefined, data: Record<string, unknown>): boolean {
+export function isOutsideBit(m: Pick<ModuleConfig, 'affiliation'> | null | undefined, data: Record<string, unknown>): boolean {
   return !!m?.affiliation && data[m.affiliation.field] === 'No';
 }

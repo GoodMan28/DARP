@@ -2,6 +2,7 @@ import { and, between, count, eq, inArray, isNull, or, sql, type SQL } from 'dri
 import { db } from '@/server/db';
 import { records, profileBaselines, moduleDeclarations, users, departments } from '@/server/db/schema';
 import { getModule, modulesOwnedBy, modulesVerifiedBy } from '@darp/shared/modules';
+import { isOutsideBit } from '@darp/shared/affiliation';
 import type { PeriodType, RecordStatus, Role } from '@darp/shared/modules/types';
 import type { SessionUser } from '@/server/auth/session';
 import { scopeFilter } from '@/server/records/scope';
@@ -196,6 +197,7 @@ export async function papersForUsers(
     ));
   const rankings = await rankingsFor(rows.map((r, i) => rankingItemOf(String(i), (r.data ?? {}) as Record<string, unknown>)));
   rows.forEach((r, i) => {
+    if (isOutsideBit(getModule('publications'), (r.data ?? {}) as Record<string, unknown>)) return;
     const t = out.get(r.ownerUserId)!;
     t.papers += 1;
     const rk = rankings.get(String(i));

@@ -12,7 +12,7 @@ import { ServiceError } from '@/server/records/service';
 import { defaultRange, parseRange, MIN_YEAR, type YearRange } from '@/server/records/range';
 import { labelFor } from '@/server/records/periods';
 import { WORKBOOK_KEYS, buildPlans, fullPlans, type SheetPlan } from './mapping';
-import { generateWorkbook, countExportRows, yearTypeFor, type ExportOptions, type ExportResult } from './excel';
+import { generateWorkbook, countExportRows, countLeftOut, yearTypeFor, type ExportOptions, type ExportResult } from './excel';
 
 /**
  * Which workbooks each level may download: its own format, and the Faculty format for the people
@@ -164,6 +164,7 @@ export async function generateReport(
 ): Promise<ExportResult & { fileName: string }> {
   const plans = plansOf(actor, q);
   const result = await generateWorkbook(q.format === 'full' ? 'full' : q.workbook!, optionsOf(actor, q), plans);
+  const leftOut = await countLeftOut(plans, optionsOf(actor, q));
 
   const about = result.workbook.addWorksheet('About this report');
   const info = REPORT_FORMATS.find((f) => f.key === q.format)!;
@@ -174,6 +175,7 @@ export async function generateReport(
     ['Year type', q.yearType === 'auto' ? 'Each sheet in its own year type' : YEAR_TYPE_LABEL[q.yearType]],
     ['Departments', departmentNames.length ? departmentNames.join(', ') : 'All departments'],
     ['Records', 'Approved records only'],
+    ['Work before BIT', leftOut === 0 ? 'None left out' : `${leftOut} ${leftOut === 1 ? 'record' : 'records'} left out: marked by their owners as not done while at BIT`],
     ['Rows written', result.rowsWritten],
     ['Made by', `${actor.name} on ${new Date().toLocaleString('en-GB', { timeZone: 'Asia/Kolkata' })}`],
   ];

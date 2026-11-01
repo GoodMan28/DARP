@@ -1,7 +1,7 @@
 import ExcelJS from 'exceljs';
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { and, between, eq, inArray, isNull } from 'drizzle-orm';
+import { and, between, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db } from '@/server/db';
 import { records, users, departments, evidenceFiles } from '@/server/db/schema';
 import type { PeriodType, WorkbookKey } from '@darp/shared/modules/types';
@@ -181,9 +181,11 @@ function presentPii(value: unknown, kind: 'pan' | 'aadhaar', ctx: PiiContext): s
   return kind === 'pan' ? maskPan(plain) : maskAadhaar(plain);
 }
 
-async function fetchExportRows(
-  plan: SheetPlan, opts: ExportOptions, ctx: PiiContext,
-): Promise<ExportRow[]> {
+/**
+ * The records a sheet draws on, before "was it done at BIT?" is asked: the sheet's module, approved or
+ * verified, the report's years and departments, and the caller's own scope.
+ */
+function exportWhere(plan: SheetPlan, opts: ExportOptions) {
   const where = [
     eq(records.moduleKey, plan.moduleKey),
     isNull(records.deletedAt),
@@ -204,9 +206,45 @@ async function fetchExportRows(
   // Deny-by-default: the exporter sees no more than the caller's own scope.
   if (opts.actor) {
     const m = getModule(plan.moduleKey);
-    if (!m) return [];
+    if (!m) { where.push(sql`false`); return { where, yearColumn }; }
     where.push(scopeFilter(opts.actor, m));
   }
+  return { where, yearColumn };
+}
+
+/** The field a module's "done while at BIT?" answer is in, when it has one. */
+const answerField = (moduleKey: string) => getModule(moduleKey)?.affiliation?.field;
+
+/**
+ * How many records the report leaves out because their owner says they were not done at BIT, over the
+ * sheets given. They stay in the person's modules; only reports and counts hold BIT's own work.
+ */
+export async function countLeftOut(plans: SheetPlan[], opts: ExportOptions): Promise<number> {
+  const seen = new Set<string>();
+  let n = 0;
+  for (const plan of plans) {
+    const field = answerField(plan.moduleKey);
+    if (!field) continue;
+    // A module with two sheets (consultancy and training) is counted once.
+    const key = `${plan.moduleKey}|${plan.rowFilter ? JSON.stringify(plan.rowFilter) : ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const { where } = exportWhere(plan, opts);
+    const rows = await db.select({ data: records.data }).from(records)
+      .where(and(...where, sql`${records.data} ->> ${field} = 'No'`));
+    n += rows.filter((r) => !plan.rowFilter || plan.rowFilter.in.includes(String((r.data as Record<string, unknown>)[plan.rowFilter.field] ?? ''))).length;
+  }
+  return n;
+}
+
+async function fetchExportRows(
+  plan: SheetPlan, opts: ExportOptions, ctx: PiiContext,
+): Promise<ExportRow[]> {
+  const { where, yearColumn } = exportWhere(plan, opts);
+  const type = yearTypeFor(getModule(plan.moduleKey)?.periodType ?? 'CY', opts.yearType);
+  // Work its owner says was not done at BIT is not BIT's: left out (blank counts as at BIT).
+  const field = answerField(plan.moduleKey);
+  if (field) where.push(sql`coalesce(${records.data} ->> ${field}, '') <> 'No'`);
 
   const rows = await db
     .select({

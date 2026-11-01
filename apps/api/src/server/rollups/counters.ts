@@ -2,6 +2,8 @@ import type { PeriodType, RecordStatus } from '@darp/shared/modules/types';
 import type { CounterWindow, DeclaredCounterDef } from '@darp/shared/contracts';
 import type { JournalRanking } from '@darp/shared/journals';
 import { recordActive } from '@darp/shared/projectPeriod';
+import { getModule } from '@darp/shared/modules';
+import { isOutsideBit } from '@darp/shared/affiliation';
 
 export type { CounterWindow, DeclaredCounterDef };
 
@@ -424,7 +426,8 @@ export function computeCounters(
   baselines: Record<string, number> = {},
   today = new Date(),
 ): Record<string, number> {
-  const counted = recordsIn.filter((r) => COUNTED_STATUSES.includes(r.status));
+  // Work its owner says was not done while at BIT stays in their modules but is not counted.
+  const counted = recordsIn.filter((r) => COUNTED_STATUSES.includes(r.status) && !isOutsideBit(getModule(r.moduleKey), r.data));
   const out: Record<string, number> = {};
 
   for (const def of COUNTERS) {

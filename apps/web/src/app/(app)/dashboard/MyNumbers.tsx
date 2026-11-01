@@ -118,7 +118,8 @@ export function MyNumbers() {
             </tbody>
           </Table>
           <p className="px-4 py-2.5 text-2xs text-ink-muted">
-            Drafts never count. If a number is wrong, correct the record it comes from and the total follows.
+            Drafts never count, and neither does work marked as not done while you were at BIT: it stays in your modules.
+            If a number is wrong, correct the record it comes from and the total follows.
           </p>
         </div>
       ) : null}

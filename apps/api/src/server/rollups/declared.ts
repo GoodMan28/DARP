@@ -5,6 +5,8 @@ import type { SessionUser } from '@/server/auth/session';
 import type { DeclaredRow, DeclaredSheet } from '@darp/shared/contracts';
 import { ServiceError, mustGetModule } from '@/server/records/service';
 import { scopeFilter } from '@/server/records/scope';
+import { getModule } from '@darp/shared/modules';
+import { isOutsideBit } from '@darp/shared/affiliation';
 import {
   DECLARED_COUNTERS, COUNTED_STATUSES, declaredYearType, lastCompletedYear, type DeclaredDef,
 } from './counters';
@@ -91,6 +93,8 @@ async function addCounted(actor: SessionUser, rows: DeclaredRow[], ay: number, c
     if (!from) { row.counted = { value: null, note: 'DARP has no records for this.', moduleKey: null }; return; }
     const found = (byModule.get(from.moduleKey) ?? []).filter((r) => {
       const data = r.data as Record<string, unknown>;
+      // The same rule as every count: work its owner says was not done at BIT is left out.
+      if (isOutsideBit(getModule(from.moduleKey), data)) return false;
       if (!Object.entries(from.where ?? {}).every(([k, allowed]) => allowed.includes(String(data[k] ?? '')))) return false;
       // A record dated only by year has no year of the other type, as in the reports: it is not counted there.
       return row.section === 'since' || (row.section === 'ay' ? r.ayYear === ay : r.cyYear === cy);
