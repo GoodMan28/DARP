@@ -120,19 +120,25 @@ function keyWord(p: Person): string {
  * whose name matches an author in its `authors` text. A cheap look at first letters and word lengths
  * keeps `namesMatch` (the careful comparison, with transliteration) for a handful of people per author.
  */
-function paperDepartments(row: Row, byLetter: Map<string, Person[]>): Set<string> {
+function paperDepartments(row: Row, byLetter: Map<string, Person[]>, memo: Map<string, string[]>): Set<string> {
   const out = new Set<string>();
   if (row.departmentId) out.add(row.departmentId);
   for (const author of splitAuthors(str(row.data.authors))) {
+    // The same name is on many papers: its departments are worked out once for this request (nothing is kept between requests).
+    const seen = memo.get(author);
+    if (seen) { for (const d of seen) out.add(d); continue; }
+    const found = new Set<string>();
     const words = letters(author).split(/\s+/).filter((w) => w.length >= 2);
     const tried = new Set<string>();
     for (const w of words) {
       for (const p of byLetter.get(w[0]!) ?? []) {
         if (tried.has(p.id) || !p.departmentId || Math.abs(keyWord(p).length - w.length) > 2) continue;
         tried.add(p.id);
-        if (!out.has(p.departmentId) && namesMatch(p.parts, { given: '', family: '', full: author })) out.add(p.departmentId);
+        if (!found.has(p.departmentId) && namesMatch(p.parts, { given: '', family: '', full: author })) found.add(p.departmentId);
       }
     }
+    memo.set(author, [...found]);
+    for (const d of found) out.add(d);
   }
   return out;
 }
@@ -305,8 +311,15 @@ function recentPapers(all: Row[], ctx: Ctx): InsightPaper[] {
     });
 }
 
-function cardOf(p: Person, rows: Row[], ctx: Ctx): PersonCard {
-  const s = summarise(rows.filter((r) => r.ownerUserId === p.id), ctx);
+/** The rows of each owner, grouped once: a card for each of hundreds of people must not scan every row. */
+function byOwner(rows: Row[]): Map<string, Row[]> {
+  const m = new Map<string, Row[]>();
+  for (const r of rows) { const l = m.get(r.ownerUserId); if (l) l.push(r); else m.set(r.ownerUserId, [r]); }
+  return m;
+}
+
+function cardOf(p: Person, owned: Map<string, Row[]>, ctx: Ctx): PersonCard {
+  const s = summarise(owned.get(p.id) ?? [], ctx);
   return {
     userId: p.id, name: p.name, designation: p.designation, department: p.departmentName ?? '', departmentCode: p.departmentCode,
     papers: s.counts.papers, patents: s.counts.patentsFiled, citations: s.citations.citations, hIndex: s.citations.hIndex, orcid: !!p.orcid,
@@ -330,10 +343,12 @@ export async function departmentInsights(viewer: SessionUser, code: string, rang
   const rows = await loadRows(or(eq(records.departmentId, dept.id), inArray(records.moduleKey, PAPER_MODULES)));
   const matched = new Map<string, Set<string>>();
   const byLetter = indexByLetter(staff);
-  for (const r of rows) if (PAPER_MODULES.includes(r.moduleKey)) matched.set(r.id, paperDepartments(r, byLetter));
+  const memo = new Map<string, string[]>();
+  for (const r of rows) if (PAPER_MODULES.includes(r.moduleKey)) matched.set(r.id, paperDepartments(r, byLetter, memo));
   const mine = rowsOfDepartment(dept.id, rows, matched);
   const ctx = await contextFor(mine, range);
   const reporting = new Set(mine.map((r) => r.ownerUserId));
+  const owned = byOwner(mine);
 
   return {
     ...summarise(mine, ctx),
@@ -341,7 +356,7 @@ export async function departmentInsights(viewer: SessionUser, code: string, rang
     facultyTotal: staff.length,
     reporting: staff.filter((p) => reporting.has(p.id)).length,
     designations: designationsOf(staff),
-    faculty: staff.map((p) => cardOf(p, mine, ctx)).sort((a, b) => b.papers - a.papers || a.name.localeCompare(b.name)),
+    faculty: staff.map((p) => cardOf(p, owned, ctx)).sort((a, b) => b.papers - a.papers || a.name.localeCompare(b.name)),
     recentPapers: recentPapers(mine, ctx),
   };
 }
@@ -355,7 +370,8 @@ export async function collegeInsights(viewer: SessionUser, range: YearRange | nu
   const ctx = await contextFor(rows, range);
   const matched = new Map<string, Set<string>>();
   const byLetter = indexByLetter(staff);
-  for (const r of rows) if (PAPER_MODULES.includes(r.moduleKey)) matched.set(r.id, paperDepartments(r, byLetter));
+  const memo = new Map<string, string[]>();
+  for (const r of rows) if (PAPER_MODULES.includes(r.moduleKey)) matched.set(r.id, paperDepartments(r, byLetter, memo));
   const reporting = new Set(rows.map((r) => r.ownerUserId));
 
   const depts = await db.select().from(departments).where(eq(departments.isActive, true)).orderBy(asc(departments.code));
@@ -369,7 +385,8 @@ export async function collegeInsights(viewer: SessionUser, range: YearRange | nu
     };
   });
 
-  const cards = staff.map((p) => cardOf(p, rows, ctx));
+  const owned = byOwner(rows);
+  const cards = staff.map((p) => cardOf(p, owned, ctx));
   return {
     ...summarise(rows, ctx),
     facultyTotal: staff.length,
