@@ -5,7 +5,9 @@ import {
 } from '@/components/ui';
 import { CorrectionActions } from '@/components/records/CorrectionActions';
 import { requireMe, loadPageData } from '@/lib/api.server';
-import type { DashboardPayload, ModuleProgress } from '@darp/shared/contracts';
+import type { DashboardPayload, ModuleProgress, PersonInsights } from '@darp/shared/contracts';
+import { PersonStats } from '@/components/insights/PersonStats';
+import { rangeFrom, rangeQuery, yearBounds } from '@/lib/insights';
 import { ROLE_PURPOSE } from '@darp/shared/roles';
 import { plural } from '@darp/shared/format';
 import type { Role } from '@darp/shared/modules/types';
@@ -45,7 +47,7 @@ function ProgressPill({ progress }: { progress: ModuleProgress }) {
   );
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
   const { user, groups } = await requireMe();
   const dashboard = await loadPageData<DashboardPayload>('/api/dashboard');
   if (!dashboard.ok) throw new Error(dashboard.message);
@@ -54,6 +56,10 @@ export default async function DashboardPage() {
   const showDepartments = user.role !== 'faculty';
   // Everyone who fills in a Faculty Profile (faculty, HODs, professors holding an office) has numbers.
   const fillsProfile = !!getModule('profile')?.ownerRoles.includes(user.role);
+  // A person who fills a profile gets their own page: figures, charts and what to do next.
+  const range = rangeFrom(await searchParams);
+  const insights = fillsProfile ? await loadPageData<PersonInsights>(`/api/insights/me${rangeQuery(range)}`) : null;
+  if (insights && !insights.ok) throw new Error(insights.message);
 
   const totals = myModules.reduce(
     (acc, m) => ({
@@ -85,8 +91,14 @@ export default async function DashboardPage() {
           : null
       }
     >
+      {insights?.ok ? (
+        <div className="mb-4">
+          <PersonStats data={insights.data} own {...yearBounds(insights.data.byYear, range)} />
+        </div>
+      ) : null}
+
       {/* summary tiles */}
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className={`mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 ${fillsProfile ? 'hidden' : ''}`}>
         {ownsModules ? (
           <>
             <StatTile label="My records" value={totals.records} note={`${plural(myModules.length, 'module')} assigned`} />
@@ -109,8 +121,54 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 [&>*]:min-w-0">
-        {/* my modules */}
+        {/* my modules: folded away for people whose Overview is their own page */}
         {ownsModules ? (
+          fillsProfile ? (
+            <details className="rounded-lg bg-surface shadow-sm ring-1 ring-line lg:col-span-3">
+              <summary className="cursor-pointer select-none px-5 py-3">
+                <h2 className="inline text-sm font-semibold text-ink">My modules</h2>
+                <span className="ml-2 text-xs text-ink-muted">{plural(myModules.length, 'module')} · {pct}% complete</span>
+              </summary>
+          <div>
+                        {myModules.length === 0 ? (
+              <EmptyState title="No modules assigned">
+                Your role does not own any data modules. Records are approved when their owners submit them; open a module to check them.
+              </EmptyState>
+            ) : (
+              <Table>
+                <thead>
+                  <tr>
+                    <Th>Module</Th>
+                    <Th className="w-20 text-right">Records</Th>
+                    <Th className="w-24 text-right">With me</Th>
+                    <Th className="w-28">Status</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {myModules.map((m) => (
+                    <tr key={m.key} className="hover:bg-surface-2">
+                      <Td>
+                        <Link href={`/m/${m.key}`} className="font-medium text-primary hover:underline">
+                          {m.name}
+                        </Link>
+                        <div className="text-2xs text-ink-faint">
+                          {m.group} · {m.periodType}
+                          {m.declaredNil ? ' · nothing to report' : ''}
+                        </div>
+                      </Td>
+                      <Td className="text-right font-mono tabular-nums">{m.total}</Td>
+                      <Td className="text-right font-mono tabular-nums">
+                        {m.drafts > 0 ? <span className="font-semibold text-warning-700">{m.drafts}</span> : '—'}
+                      </Td>
+                      <Td><ProgressPill progress={m.progress} /></Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            )}
+          </div>
+            </details>
+          ) : (
           <Card className="lg:col-span-2" padded={false}>
             <CardHeader
               title="My modules"
@@ -153,6 +211,7 @@ export default async function DashboardPage() {
               </Table>
             )}
           </Card>
+          )
         ) : null}
 
         {/* corrections waiting for a second look */}

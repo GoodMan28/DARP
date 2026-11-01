@@ -22,7 +22,7 @@ export function Hero({ lead, title, subtitle, chips, children, aside, className 
           <div className="flex items-start gap-4">
             {lead}
             <div className="min-w-0">
-              <h1 className="text-xl font-semibold leading-tight sm:text-2xl">{title}</h1>
+              <h2 className="text-xl font-semibold leading-tight sm:text-2xl">{title}</h2>
               {subtitle ? <p className="mt-1 text-sm text-white/75">{subtitle}</p> : null}
               {chips && chips.length > 0 ? (
                 <ul className="mt-3 flex flex-wrap gap-2">

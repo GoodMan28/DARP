@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Select } from '@/components/ui';
 
@@ -16,12 +16,17 @@ function Picker({ minYear, maxYear }: { minYear: number; maxYear: number }) {
   const router = useRouter();
   const path = usePathname();
   const params = useSearchParams();
-  const from = Number(params.get('from')) || null;
-  const to = Number(params.get('to')) || null;
+  const urlFrom = Number(params.get('from')) || null;
+  const urlTo = Number(params.get('to')) || null;
+  // What was just chosen is kept here, so a second choice made before the page has moved on still sees the first.
+  const [chosen, setChosen] = useState({ from: urlFrom, to: urlTo });
+  useEffect(() => setChosen({ from: urlFrom, to: urlTo }), [urlFrom, urlTo]);
+  const { from, to } = chosen;
   const years: number[] = [];
   for (let y = maxYear; y >= minYear; y -= 1) years.push(y);
 
   function go(f: number | null, t: number | null) {
+    setChosen({ from: f, to: t });
     const q = new URLSearchParams(params.toString());
     q.delete('from'); q.delete('to');
     if (f !== null && t !== null) { q.set('from', String(Math.min(f, t))); q.set('to', String(Math.max(f, t))); }
