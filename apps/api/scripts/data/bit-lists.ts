@@ -9,6 +9,8 @@
  */
 
 /** [code, name]. Placement Brochure 2025-26 (19 departments), and Hotel Management from NBA Table A6.1. */
+import { COUNTRIES } from './countries';
+
 export const DEPARTMENTS: Array<[string, string]> = [
   ['ARCH', 'Architecture and Planning'],
   ['BIO', 'Bioengineering and Biotechnology'],
@@ -107,5 +109,6 @@ export function bitListRows(): ListRow[] {
   add('externalDepartments', EXTERNAL_DEPARTMENTS);
   add('subjectAreas', SUBJECT_AREAS);
   add('higherStudyProgrammes', HIGHER_STUDY_PROGRAMMES);
+  add('countries', COUNTRIES);
   return rows;
 }

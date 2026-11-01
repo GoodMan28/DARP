@@ -7,7 +7,7 @@ import { departments, cycles, masterListItems, users, auditLog } from '../src/se
 import { hashPassword } from '../src/server/auth/password';
 import { DEPARTMENTS, bitListRows } from './data/bit-lists';
 
-// BIT Mesra's own departments, designations and programmes: scripts/data/bit-lists.ts.
+// BIT Mesra's own departments, designations and programmes, and the countries: scripts/data/bit-lists.ts.
 
 const LISTS: Record<string, string[]> = {
   natureOfAssociation: ['Regular', 'Contract', 'Visiting', 'Adjunct', 'Professor of Practice', 'Distinguished Visiting Professor'],
@@ -16,7 +16,6 @@ const LISTS: Record<string, string[]> = {
   indexingTypes: ['SCIE', 'Scopus', 'ESCI', 'SSCI', 'AHCI'],
   patentStatus: ['Applied', 'Published', 'Granted'],
   patentCategories: ['Engineering', 'Pharmacy', 'Management', 'Others'],
-  countries: ['India', 'United States', 'United Kingdom', 'Germany', 'Japan', 'Australia', 'Canada', 'Singapore', 'Other'],
   projectRoles: ['PI', 'Co-PI'],
   agencyCategories: ['Government', 'Non-Government'],
   fellowshipTypes: ['National fellowship', 'International fellowship', 'Financial support for advanced studies/research', 'International travel grant'],

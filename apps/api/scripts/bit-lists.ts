@@ -12,6 +12,7 @@ import { eq } from 'drizzle-orm';
 import { db, pool } from '../src/server/db';
 import { departments, masterListItems } from '../src/server/db/schema';
 import { DEPARTMENTS, bitListRows } from './data/bit-lists';
+import { COUNTRIES } from './data/countries';
 
 const apply = process.argv.includes('--apply');
 
@@ -49,7 +50,24 @@ if (apply && rows.length > 0) {
   for (const r of rows) offset[r.listKey] ??= lastOrder(r.listKey);
   await db.insert(masterListItems).values(rows.map((r) => ({ ...r, sortOrder: offset[r.listKey]! + r.sortOrder }))).onConflictDoNothing();
 }
+// The countries list began as nine entries with "Other" among them: put every country in the list's order
+// (India first, then A to Z, the two patent offices and Other last). Values IQAC added keep their place after.
+let reordered = 0;
+if (apply) {
+  const now = await db.select().from(masterListItems).where(eq(masterListItems.listKey, 'countries'));
+  for (const item of now) {
+    const at = COUNTRIES.indexOf(item.value);
+    if (at >= 0 && item.sortOrder !== at + 1) {
+      reordered += 1;
+      await db.update(masterListItems).set({ sortOrder: at + 1 }).where(eq(masterListItems.id, item.id));
+    }
+  }
+} else {
+  const have = new Map(items.filter((i) => i.listKey === 'countries').map((i) => [i.value, i.sortOrder]));
+  reordered = COUNTRIES.filter((c, at) => have.has(c) && have.get(c) !== at + 1).length;
+}
 console.log('list items to add:', perList);
+if (reordered) console.log(`countries ${apply ? 'put' : 'to put'} in order: ${reordered}`);
 if (missingParents.length) console.log('WARNING: these programmes need the level list first (run npm run db:seed):', missingParents.join(', '));
 console.log(apply
   ? `Done: ${added} department(s) added, ${renamed} renamed, ${rows.length} list item(s) added.`
