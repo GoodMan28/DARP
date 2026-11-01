@@ -8,7 +8,8 @@ import { normIssn } from '@darp/shared/journals';
  */
 export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async ({ query }) => {
   const issns = query.getAll('issn').slice(0, 4).map((s) => normIssn(s)).filter((x): x is string => x !== null);
-  if (issns.length === 0) return fail('VALIDATION', { message: 'Give an ISSN, e.g. 0167-739X.' });
+  const journal = (query.get('journal') ?? '').slice(0, 300);
+  if (issns.length === 0 && !journal.trim()) return fail('VALIDATION', { message: 'Give an ISSN, e.g. 0167-739X.' });
   const year = Number(query.get('year') ?? '');
-  return ok(await rankingFor(issns, Number.isInteger(year) && year >= 1900 && year <= 2100 ? year : null));
+  return ok(await rankingFor(issns, Number.isInteger(year) && year >= 1900 && year <= 2100 ? year : null, journal));
 });

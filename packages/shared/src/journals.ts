@@ -62,6 +62,15 @@ export function parseCsv(text: string): string[][] {
   return rows.filter((r) => r.some((c) => c.trim() !== ''));
 }
 
+/**
+ * A journal's name as it is compared: case, accents, punctuation, "&" and a leading "The" aside, and only
+ * the first 90 characters, because Journal Citation Reports cuts long names at about 100.
+ */
+export function journalTitleKey(s: string): string {
+  return s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/&/g, ' and ')
+    .replace(/^the\s+/, '').replace(/[^a-z0-9]+/g, ' ').trim().slice(0, 90).trim();
+}
+
 /** '0167-739x' / '0167739X' → '0167739X'; anything else → null. */
 export function normIssn(s: string): string | null {
   const v = s.replace(/[^0-9xX]/g, '').toUpperCase();
@@ -203,6 +212,8 @@ export interface JournalRanking {
   jif: string | null;
   jifQuartile: string | null;
   jifYear: number | null;
+  /** The Impact Factor was found by the journal's name, not its ISSN: worth a second look. */
+  jifByName?: boolean;
   /** Which of the three the owner typed (the figure above is then theirs, or NA). */
   typed?: { sjrQuartile?: boolean; jifQuartile?: boolean; jif?: boolean };
 }

@@ -11,6 +11,7 @@ import {
 } from '@darp/shared/journals';
 import { readXlsx } from '@darp/shared/sheets';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { JcrPdfCard } from './JcrPdfCard';
 import type { JournalListsPayload } from './types';
 
 /** Rows per request: well under the API's 1 MB JSON cap. */
@@ -164,7 +165,11 @@ export function JournalListsPanel() {
       set(p.id, { state: 'uploading', note: `Saving ${fmt(Math.min(i + BATCH, rows.length))} of ${fmt(rows.length)} ISSNs…` });
       const last = i + BATCH >= rows.length;
       const body = k === 'jcr'
-        ? { action: 'importJcr', jifYear: p.jifYear, rows: rows.slice(i, i + BATCH), last, totalRows: rows.length, fileName: p.file.name }
+        // The first file of a year replaces what was loaded for it, so a corrected list changes every figure.
+        ? {
+          action: 'importJcr', jifYear: p.jifYear, rows: rows.slice(i, i + BATCH), last, totalRows: rows.length, fileName: p.file.name,
+          replace: i === 0 && pending.find((x) => kindOf(x.choice) === 'jcr' && x.jifYear === p.jifYear)?.id === p.id,
+        }
         : {
           action: 'import', kind: k, year: Number(p.year), listName: listOf(p.choice), rows: rows.slice(i, i + BATCH),
           replace: i === 0, last, totalRows: rows.length, fileName: p.file.name,
@@ -283,7 +288,7 @@ export function JournalListsPanel() {
               gives="Impact Factor and JIF quartile"
               how="Library exports it, once a year (after June)"
               state={jcr ? 'ok' : 'missing'}
-              status={jcr ? `JIF ${jcr.jifYear} · ${fmt(jcr.withJif)} journals` : 'Not uploaded: Impact Factor shows NA'}
+              status={jcr ? `JIF ${jcr.jifYear} · ${fmt(jcr.journals || jcr.withJif)} journals` : 'Not uploaded: Impact Factor shows NA'}
             />
             <SourceRow
               name="Patents"
@@ -300,7 +305,10 @@ export function JournalListsPanel() {
         </Table>
       </Card>
 
-      {/* 2 ── upload */}
+      {/* 2 ── the Journal Citation Reports PDF */}
+      <JcrPdfCard onDone={() => void load()} />
+
+      {/* 3 ── upload */}
       <Card padded={false}>
         <CardHeader
           title="Upload journal files"

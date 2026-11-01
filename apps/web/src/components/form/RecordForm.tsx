@@ -539,6 +539,7 @@ export function RecordForm({
               key={`${section}-ranking`}
               issn={String(values.issn ?? '')}
               year={String(values.year ?? '')}
+              journal={String(values.journal ?? '')}
               values={values}
               errors={errors}
               readOnly={readOnly}

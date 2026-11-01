@@ -98,11 +98,14 @@ async function typedRankingReasons(m: ModuleConfig, data: Record<string, unknown
   const typed = RANKING_FIELDS.filter(([key]) => m.fields.some((f) => f.key === key) && text(data[key]).trim() !== '');
   if (typed.length === 0) return [];
   const item = rankingItemOf('0', data);
-  const lists = await rankingFor(item.issns, item.year);
+  const lists = await rankingFor(item.issns, item.year, item.journal ?? '');
   return typed.flatMap(([key, label, prop]) => {
     const mine = text(data[key]).trim().toUpperCase();
     const theirs = lists[prop] ?? 'NA';
-    return mine === String(theirs).toUpperCase() ? [] : [`The author typed ${label} ${mine}; the journal lists say ${theirs}.`];
+    if (mine === String(theirs).toUpperCase()) return [];
+    return theirs === 'NA'
+      ? [`The author typed ${label} ${mine}; the journal lists do not have it.`]
+      : [`The author typed ${label} ${mine}; the journal lists say ${theirs}.`];
   });
 }
 

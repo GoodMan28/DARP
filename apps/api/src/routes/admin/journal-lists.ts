@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import { withRoute, ok, fail } from '@/server/http/handler';
+import { readUpload } from '@/server/http/upload';
+import { ServiceError } from '@/server/records/service';
+import { toResponse } from '@/server/records/toResponse';
+import { readJcrPdf } from '@/server/lookup/jcrPdf';
+import { storeJcrPdf } from '@/server/lookup/jcrImport';
 import { getList } from '@/server/records/masterLists';
 import { audit } from '@/server/audit/log';
 import {
@@ -64,6 +69,8 @@ const bodySchema = z.discriminatedUnion('action', [
   z.object({
     action: z.literal('importJcr'),
     jifYear: z.number().int().min(1997).max(2100),
+    /** The first batch of a file: the year already loaded is replaced, not added to, so a corrected list changes every figure. */
+    replace: z.boolean().default(false),
     rows: z.array(jcrRowSchema).min(1).max(5000),
     last: z.boolean().default(false),
     totalRows: z.number().int().min(0).optional(),
@@ -105,6 +112,7 @@ export const POST = withRoute(
     }
 
     if (body.action === 'importJcr') {
+      if (body.replace) await clearJournalList('jcr', body.jifYear);
       const stored = await storeJcrRows(body.jifYear, body.rows);
       if (body.last) {
         await audit({
@@ -150,5 +158,42 @@ export const POST = withRoute(
       });
     }
     return ok({ stored });
+  },
+);
+
+const MAX_JCR_PDF = 25 * 1024 * 1024;
+
+/**
+ * POST /api/admin/journal-lists/jcr-pdf: the Journal Citation Reports list as a PDF. It replaces that
+ * year: every paper's Impact Factor and JIF quartile change at once, and a journal dropped from the list goes.
+ */
+export const JCR_PDF = withRoute(
+  { json: false, roles: ['admin'], capability: 'manageLists', rate: { limit: 5, windowSeconds: 60 } },
+  async ({ actor, req, res }) => {
+    if (!(req.get('content-type') ?? '').toLowerCase().startsWith('multipart/form-data')) {
+      return fail('UNSUPPORTED_MEDIA', { message: 'Upload the file as a form, not as JSON.' });
+    }
+    const declared = Number(req.get('content-length') ?? 0);
+    if (Number.isFinite(declared) && declared > MAX_JCR_PDF + 64 * 1024) {
+      return fail('PAYLOAD_TOO_LARGE', { message: 'The PDF must be 25 MB or smaller.' });
+    }
+    const parsed = await readUpload(req, res, MAX_JCR_PDF);
+    if (!parsed.ok) return parsed.result;
+    const { file } = parsed.upload;
+    if (!file) return fail('VALIDATION', { fields: { file: 'Choose a file to upload.' } });
+    if (file.bytes.subarray(0, 5).toString('latin1') !== '%PDF-') {
+      return fail('VALIDATION', { message: 'That is not a PDF file.', fields: { file: 'Choose the Journal Citation Reports PDF.' } });
+    }
+    try {
+      const report = await storeJcrPdf(await readJcrPdf(new Uint8Array(file.bytes)));
+      await audit({
+        actor, action: 'masterlist.update', entity: 'masterlist',
+        meta: { journalList: 'JCR', year: report.jifYear, rows: report.rows, journals: report.journals, file: file.name, nameOnly: report.nameOnly.length },
+      });
+      return ok(report);
+    } catch (e) {
+      if (e instanceof ServiceError) return toResponse(e);
+      throw e;
+    }
   },
 );

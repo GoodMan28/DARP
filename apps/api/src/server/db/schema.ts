@@ -389,6 +389,20 @@ export const journalJcr = pgTable('journal_jcr', {
 }, (t) => [primaryKey({ columns: [t.issn, t.jifYear] })]);
 
 /**
+ * Every journal of a Journal Citation Reports file, by name. The PDF has no ISSN: names are matched to
+ * ISSNs to fill `journal_jcr`, and a paper with no usable ISSN is found here by its journal's name.
+ */
+export const journalJcrTitles = pgTable('journal_jcr_titles', {
+  /** journalTitleKey(title): see @darp/shared/journals. */
+  titleKey: text('title_key').notNull(),
+  jifYear: integer('jif_year').notNull(),
+  title: text('title').notNull(),
+  jif: text('jif'),
+  jifQuartile: text('jif_quartile'),
+  importedAt: timestamp('imported_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.titleKey, t.jifYear] })]);
+
+/**
  * The years Scopus covered a journal, from Elsevier's list ('scopus-list': active titles, the last
  * range open-ended; 'scopus-discontinued': titles Scopus dropped, from_year 0 and to_year the final
  * year covered) or from SCImago's file ('scimago'). A paper counts as Scopus-indexed only when its

@@ -137,7 +137,7 @@ export interface JournalListsPayload {
   /** source 'upload' = loaded by IQAC; 'scopus-list' = fetched automatically. */
   lists: Array<{ listName: string; year: number; source: string; issns: number; importedAt: string | null }>;
   /** Journal Citation Reports exports (Impact Factor), one entry per JIF year. */
-  jcr: Array<{ jifYear: number; issns: number; withJif: number; importedAt: string | null }>;
+  jcr: Array<{ jifYear: number; issns: number; withJif: number; journals: number; importedAt: string | null }>;
   /** The automatic copy of Elsevier's public Scopus list, or null before the first fetch. */
   scopus: {
     file: string; listYear: number; listMonth: number; sjrYear: number;

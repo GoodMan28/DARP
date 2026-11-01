@@ -131,6 +131,7 @@ api.post('/admin/departments', adminDepartments.POST);
 api.patch('/admin/departments', adminDepartments.PATCH);
 api.get('/admin/journal-lists', adminJournalLists.GET);
 api.post('/admin/journal-lists', adminJournalLists.POST);
+api.post('/admin/journal-lists/jcr-pdf', adminJournalLists.JCR_PDF);
 api.get('/admin/deleted-records', adminDeleted.GET);
 api.post('/admin/deleted-records', adminDeleted.POST);
 api.post('/admin/reveal/:recordId/:fieldKey', adminReveal.POST);

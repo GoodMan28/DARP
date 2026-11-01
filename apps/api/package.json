@@ -30,6 +30,7 @@
     "db:affiliation-backfill": "tsx --env-file=.env.local scripts/affiliation-backfill.ts",
     "db:outreach-at-bit": "tsx --env-file=.env.local scripts/outreach-at-bit.ts",
     "db:seed:exams-demo": "tsx --env-file=.env.local scripts/seed-exams-demo.ts",
+    "db:jcr-pdf": "tsx --env-file=.env.local scripts/jcr-pdf.ts",
     "db:program-map": "tsx --env-file=.env.local scripts/program-map.ts",
     "db:year-to-date": "tsx --env-file=.env.local scripts/year-to-date.ts",
     "db:reset": "tsx --env-file=.env.local scripts/reset.ts",

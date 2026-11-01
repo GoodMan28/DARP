@@ -1,10 +1,10 @@
 import { spanColumnText } from '@darp/shared/projectPeriod';
 import { inArray, max } from 'drizzle-orm';
 import { db } from '@/server/db';
-import { journalMetrics, journalIndexListings, journalCoverage, journalJcr } from '@/server/db/schema';
+import { journalMetrics, journalIndexListings, journalCoverage, journalJcr, journalJcrTitles } from '@/server/db/schema';
 import { getList } from '@/server/records/masterLists';
 import { scopusCovered } from '@/server/lookup/journals';
-import { normIssn, rankingTexts, type JournalRanking } from '@darp/shared/journals';
+import { normIssn, journalTitleKey, rankingTexts, type JournalRanking } from '@darp/shared/journals';
 import type { ModuleConfig } from '@darp/shared/modules/types';
 
 /*
@@ -25,6 +25,8 @@ export interface RankingItem {
   issns: string[];
   /** The paper's year: decides whether Scopus covered the journal. */
   year: number | null;
+  /** The journal's name: finds the Impact Factor when no ISSN does. */
+  journal?: string;
   /** What the owner typed over the lists ('NA' = none): wins over the lists. */
   manual?: { sjrQuartile?: string; jifQuartile?: string; jif?: string };
 }
@@ -54,34 +56,39 @@ const issnsOf = (issns: string[]) => [...new Set(issns.map(normIssn).filter((x):
 export async function rankingsFor(items: RankingItem[]): Promise<Map<string, JournalRanking>> {
   const out = new Map<string, JournalRanking>();
   const all = [...new Set(items.flatMap((i) => issnsOf(i.issns)))];
-  if (all.length === 0) {
+  const titleKeys = [...new Set(items.map((i) => journalTitleKey(i.journal ?? '')).filter(Boolean))];
+  if (all.length === 0 && titleKeys.length === 0) {
     for (const i of items) out.set(i.key, applyManual(empty(), i.manual));
     return out;
   }
 
-  const [metrics, listings, coverage, jcr, newestLists, order] = await Promise.all([
-    db.select({
+  const any = all.length > 0;
+  const [metrics, listings, coverage, jcr, newestLists, order, byTitle] = await Promise.all([
+    any ? db.select({
       issn: journalMetrics.issn, year: journalMetrics.year, quartile: journalMetrics.quartile, source: journalMetrics.source,
-    }).from(journalMetrics).where(inArray(journalMetrics.issn, all)),
-    db.select({ issn: journalIndexListings.issn, listName: journalIndexListings.listName, year: journalIndexListings.year })
-      .from(journalIndexListings).where(inArray(journalIndexListings.issn, all)),
-    db.select({
+    }).from(journalMetrics).where(inArray(journalMetrics.issn, all)) : Promise.resolve([]),
+    any ? db.select({ issn: journalIndexListings.issn, listName: journalIndexListings.listName, year: journalIndexListings.year })
+      .from(journalIndexListings).where(inArray(journalIndexListings.issn, all)) : Promise.resolve([]),
+    any ? db.select({
       issn: journalCoverage.issn, source: journalCoverage.source, fromYear: journalCoverage.fromYear, toYear: journalCoverage.toYear,
-    }).from(journalCoverage).where(inArray(journalCoverage.issn, all)),
-    db.select({
+    }).from(journalCoverage).where(inArray(journalCoverage.issn, all)) : Promise.resolve([]),
+    any ? db.select({
       issn: journalJcr.issn, jifYear: journalJcr.jifYear, jif: journalJcr.jif, jifQuartile: journalJcr.jifQuartile,
-    }).from(journalJcr).where(inArray(journalJcr.issn, all)),
+    }).from(journalJcr).where(inArray(journalJcr.issn, all)) : Promise.resolve([]),
     // A journal dropped from the newest SCIE list is no longer SCIE, whatever older lists said.
     db.select({ listName: journalIndexListings.listName, year: max(journalIndexListings.year) })
       .from(journalIndexListings).groupBy(journalIndexListings.listName),
     getList('indexingTypes'),
+    // The Impact Factor by the journal's name, for a paper whose ISSN is missing or wrong.
+    titleKeys.length > 0 ? db.select({
+      titleKey: journalJcrTitles.titleKey, jifYear: journalJcrTitles.jifYear, jif: journalJcrTitles.jif, jifQuartile: journalJcrTitles.jifQuartile,
+    }).from(journalJcrTitles).where(inArray(journalJcrTitles.titleKey, titleKeys)) : Promise.resolve([]),
   ]);
   const newestYear = new Map(newestLists.map((l) => [l.listName, l.year]));
   const rank = (name: string) => { const i = order.indexOf(name); return i < 0 ? order.length : i; };
 
   for (const item of items) {
     const keys = new Set(issnsOf(item.issns));
-    if (keys.size === 0) { out.set(item.key, applyManual(empty(), item.manual)); continue; }
     const r = empty();
     const mine = <T extends { issn: string }>(rows: T[]) => rows.filter((x) => keys.has(x.issn));
 
@@ -105,6 +112,15 @@ export async function rankingsFor(items: RankingItem[]): Promise<Map<string, Jou
       r.jifYear = wos.jifYear;
     }
 
+    // No ISSN found it: the journal's name may. The name only ever gives the Impact Factor and its quartile, never an index.
+    if (!wos) {
+      const k = journalTitleKey(item.journal ?? '');
+      const named = k ? byTitle.filter((t) => t.titleKey === k).sort((a, b) => b.jifYear - a.jifYear)[0] : undefined;
+      if (named && (named.jif || named.jifQuartile)) {
+        r.jif = named.jif; r.jifQuartile = named.jifQuartile; r.jifYear = named.jifYear; r.jifByName = true;
+      }
+    }
+
     const names = new Set<string>();
     if (inScopus) names.add('Scopus');
     for (const l of mine(listings)) {
@@ -116,8 +132,8 @@ export async function rankingsFor(items: RankingItem[]): Promise<Map<string, Jou
   return out;
 }
 
-export async function rankingFor(issns: string[], year: number | null): Promise<JournalRanking> {
-  return (await rankingsFor([{ key: '0', issns, year }])).get('0') ?? empty();
+export async function rankingFor(issns: string[], year: number | null, journal = ''): Promise<JournalRanking> {
+  return (await rankingsFor([{ key: '0', issns, year, journal }])).get('0') ?? empty();
 }
 
 /** The ISSNs and year a record's ranking is worked out from (a Publications record). */
@@ -126,6 +142,7 @@ export function rankingItemOf(key: string, data: Record<string, unknown>): Ranki
   return {
     key,
     issns: String(data.issn ?? '').split(/[,;\s]+/).filter(Boolean),
+    journal: String(data.journal ?? ''),
     year: Number.isInteger(year) && year > 0 ? year : null,
     manual: {
       sjrQuartile: String(data.manualSjrQuartile ?? '') || undefined,
