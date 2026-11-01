@@ -127,6 +127,13 @@
       "when": 1793568963156,
       "tag": "0017_colossal_spencer_smythe",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1793571384144,
+      "tag": "0018_medical_crystal",
+      "breakpoints": true
     }
   ]
 }

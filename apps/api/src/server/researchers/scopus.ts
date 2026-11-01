@@ -211,6 +211,24 @@ export async function serialMetrics(issn: string): Promise<SerialMetrics | null>
   };
 }
 
+/**
+ * Scopus Search for up to 25 DOIs at once: the ones Scopus has, with their citation counts. A DOI holding a
+ * quotation mark or backslash cannot be put in the query and is skipped. Scopus answers a DOI in the case
+ * the publisher wrote it, so it is lower-cased here for comparing.
+ */
+export async function fetchCitationsByDoi(dois: string[]): Promise<Array<{ doi: string; scopusId: string; citedBy: number }>> {
+  const safe = dois.filter((d) => d && !/["\\]/.test(d)).slice(0, 25);
+  if (safe.length === 0) return [];
+  const query = safe.map((d) => `DOI("${d}")`).join(' OR ');
+  const page = await elsevier(`/search/scopus?query=${encodeURIComponent(query)}&field=dc:identifier,prism:doi,citedby-count&count=25`);
+  const results = obj(obj(page)['search-results']);
+  return list(results.entry).map(obj).filter((e) => !e.error && e['prism:doi']).map((e) => ({
+    doi: String(e['prism:doi']).toLowerCase(),
+    scopusId: String(e['dc:identifier'] ?? '').replace(/^SCOPUS_ID:/, ''),
+    citedBy: num(e['citedby-count']) ?? 0,
+  }));
+}
+
 /** How many papers a Scopus Search query finds. */
 export async function countDocuments(query: string): Promise<number> {
   const page = await elsevier(`/search/scopus?query=${encodeURIComponent(query)}&field=dc:identifier&count=1`);

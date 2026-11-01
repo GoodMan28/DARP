@@ -198,13 +198,13 @@ export function JournalListsPanel() {
     await load();
   }
 
-  async function sync(action: 'syncScopus' | 'syncPatents') {
+  async function sync(action: 'syncScopus' | 'syncPatents' | 'syncCitations') {
     setBusy(true);
     setResult(null);
     const res = await apiJson<unknown>('/api/admin/journal-lists', { method: 'POST', body: JSON.stringify({ action }) });
     setBusy(false);
     setResult(res.ok
-      ? { tone: 'success', text: action === 'syncScopus' ? 'The Scopus list was checked and is up to date.' : 'Reading new Patent Office Journal issues in the background. Reload this page later to see them.' }
+      ? { tone: 'success', text: action === 'syncScopus' ? 'The Scopus list was checked and is up to date.' : action === 'syncCitations' ? 'Asking Scopus for the papers’ citations in the background. Reload in a minute.' : 'Reading new Patent Office Journal issues in the background. Reload this page later to see them.' }
       : { tone: 'danger', text: res.error.message });
     await load();
   }
@@ -289,6 +289,18 @@ export function JournalListsPanel() {
               how="Library exports it, once a year (after June)"
               state={jcr ? 'ok' : 'missing'}
               status={jcr ? `JIF ${jcr.jifYear} · ${fmt(jcr.journals || jcr.withJif)} journals` : 'Not uploaded: Impact Factor shows NA'}
+            />
+            <SourceRow
+              name="Citations"
+              full="Scopus, by DOI"
+              gives="Each paper’s citations, for the department and college h-index"
+              how="Automatic, 500 papers a night"
+              state={!data.citations.connected ? 'optional' : data.citations.found > 0 ? 'ok' : 'missing'}
+              status={!data.citations.connected
+                ? 'Elsevier is not connected: no API key'
+                : data.citations.total === 0 ? 'No papers with a DOI yet'
+                  : `${fmt(data.citations.found)} of ${fmt(data.citations.total)} papers found in Scopus · ${fmt(data.citations.checked)} checked${data.citations.lastChecked ? ` · last ${day(data.citations.lastChecked)}` : ''}`}
+              action={<Button type="button" variant="ghost" disabled={busy || !data.citations.connected} onClick={() => void sync('syncCitations')}>Refresh now</Button>}
             />
             <SourceRow
               name="Patents"

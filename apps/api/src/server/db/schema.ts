@@ -520,6 +520,19 @@ export const researcherMetrics = pgTable('researcher_metrics', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex('researcher_metrics_once').on(t.userId, t.source, t.asOf)]);
 
+/**
+ * A paper's Scopus citations, by DOI, kept fresh by a nightly job. What the department and college
+ * h-indexes are worked out from. `found` false: Scopus has no such DOI (its stored count is then not trusted).
+ */
+export const paperCitations = pgTable('paper_citations', {
+  /** Lower case. */
+  doi: text('doi').primaryKey(),
+  scopusId: text('scopus_id'),
+  citedBy: integer('cited_by').notNull().default(0),
+  found: boolean('found').notNull().default(false),
+  checkedAt: timestamp('checked_at', { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [index('paper_citations_checked_idx').on(t.checkedAt)]);
+
 /** Small settings IQAC can change, by key (e.g. the research-quality thresholds). */
 export const appSettings = pgTable('app_settings', {
   key: text('key').primaryKey(),

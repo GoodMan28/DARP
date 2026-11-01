@@ -12,6 +12,7 @@ import {
 } from '@/server/lookup/journals';
 import { scopusListStatus, syncScopusList } from '@/server/lookup/scopusList';
 import { patentIndexStatus, updatePatentIndex } from '@/server/lookup/patentIndex';
+import { citationStatus, refreshCitations } from '@/server/rollups/citations';
 
 /**
  * The journal lists a paper's indexing, quartile and Impact Factor are worked out from (SCImago SJR,
@@ -26,6 +27,7 @@ export const GET = withRoute(
     listNames: await getList('indexingTypes'),
     scopus: await scopusListStatus(),
     patents: await patentIndexStatus(),
+    citations: await citationStatus(),
   }),
 );
 
@@ -52,6 +54,8 @@ const bodySchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('syncScopus') }),
   /** Read any Patent Office Journal issue not read yet, in the background (the first time, hours). */
   z.object({ action: z.literal('syncPatents') }),
+  /** Ask Scopus for the citations of the papers not checked yet, or checked longest ago, in the background. */
+  z.object({ action: z.literal('syncCitations') }),
   z.object({
     action: z.literal('import'),
     kind: z.enum(['sjr', 'list']),
@@ -109,6 +113,18 @@ export const POST = withRoute(
         actor, action: 'masterlist.update', entity: 'masterlist', meta: { journalList: 'Patent Office Journal (automatic)' },
       });
       return ok(await patentIndexStatus());
+    }
+
+    if (body.action === 'syncCitations') {
+      if (process.env.LOOKUP_OFFLINE === '1') {
+        return fail('VALIDATION', { message: 'Lookups are switched off on this server (LOOKUP_OFFLINE=1).' });
+      }
+      if (!process.env.ELSEVIER_API_KEY) {
+        return fail('VALIDATION', { message: 'Elsevier is not connected: no API key is set on this server.' });
+      }
+      void refreshCitations(5000);
+      await audit({ actor, action: 'masterlist.update', entity: 'masterlist', meta: { journalList: 'Citations (Scopus, automatic)' } });
+      return ok(await citationStatus());
     }
 
     if (body.action === 'importJcr') {
