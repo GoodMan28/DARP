@@ -209,6 +209,15 @@ export function JournalListsPanel() {
     await load();
   }
 
+  async function setHIndexPapers(value: 'all' | 'at-bit') {
+    setBusy(true);
+    setResult(null);
+    const res = await apiJson<unknown>('/api/admin/journal-lists', { method: 'POST', body: JSON.stringify({ action: 'setHIndexPapers', value }) });
+    setBusy(false);
+    setResult(res.ok ? { tone: 'success', text: value === 'all' ? 'The h-index now counts all papers.' : 'The h-index now counts only papers done at BIT.' } : { tone: 'danger', text: res.error.message });
+    await load();
+  }
+
   const labelOf = (k: Kind, y: number, name?: string) => (k === 'sjr' ? `SCImago SJR ${y}` : k === 'jcr' ? `Impact Factors (JCR ${y})` : `${name} ${y}`);
 
   async function clear(k: Kind, y: number, name?: string) {
@@ -315,6 +324,23 @@ export function JournalListsPanel() {
             />
           </tbody>
         </Table>
+      </Card>
+
+      {/* The department and college h-index: which papers it counts */}
+      <Card padded={false}>
+        <CardHeader title="Department h-index" subtitle="Worked out from the Scopus citations of the papers of a department or the college. Choose which papers it counts." />
+        <div className="flex flex-wrap gap-4 px-4 pt-3 text-sm" role="radiogroup" aria-label="Department h-index counts">
+          {([['all', 'All papers'], ['at-bit', 'Only papers done at BIT']] as const).map(([value, label]) => (
+            <label key={value} className="flex items-center gap-2">
+              <input
+                type="radio" name="hindex-papers" value={value} checked={data.hIndexPapers === value} disabled={busy}
+                onChange={() => void setHIndexPapers(value)}
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+        <p className="px-4 pb-3 pt-2 text-xs text-ink-muted">“All papers” also counts those a person answered “No” to “done at BIT?”. Other figures never count them.</p>
       </Card>
 
       {/* 2 ── the Journal Citation Reports PDF */}

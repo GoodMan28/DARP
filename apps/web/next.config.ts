@@ -12,6 +12,8 @@ const isProd = process.env.NODE_ENV === 'production';
 // the forwarding lives in src/app/api/[...path]/route.ts instead.
 
 const nextConfig: NextConfig = {
+  // The browser tests build a private copy of the site (see scripts/e2e-copy.mjs) without touching the running one.
+  distDir: process.env.NEXT_DIST_DIR ?? '.next',
   reactStrictMode: true,
   poweredByHeader: false,
   // A self-contained server bundle (.next/standalone) for container images. Opt-in, because

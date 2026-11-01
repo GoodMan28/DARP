@@ -140,6 +140,8 @@ export interface JournalListsPayload {
   jcr: Array<{ jifYear: number; issns: number; withJif: number; journals: number; importedAt: string | null }>;
   /** Each paper's Scopus citations, by DOI: how many papers have been checked. */
   citations: { connected: boolean; total: number; checked: number; found: number; lastChecked: string | null };
+  /** Which papers the department and college h-index counts. */
+  hIndexPapers: 'all' | 'at-bit';
   /** The automatic copy of Elsevier's public Scopus list, or null before the first fetch. */
   scopus: {
     file: string; listYear: number; listMonth: number; sjrYear: number;

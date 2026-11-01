@@ -325,7 +325,7 @@ export function workTypeNote(m: ModuleConfig, r: LookupResult): string | null {
 }
 
 /** Splits an author list typed as "A. K. Verma, S. Mahato; P. Ranjan and X" into names. */
-function splitAuthors(list: string): string[] {
+export function splitAuthors(list: string): string[] {
   return list.split(/[,;]|\band\b|&/i).map((s) => s.trim()).filter(Boolean);
 }
 

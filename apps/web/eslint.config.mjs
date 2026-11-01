@@ -9,6 +9,8 @@ export default [
   {
     ignores: [
       '.next/**',
+      '.next-test/**',
+      'scripts/**',                  // command-line runners print to the console
       'node_modules/**',
       'drizzle/**',
       'coverage/**',

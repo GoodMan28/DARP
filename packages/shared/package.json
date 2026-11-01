@@ -22,7 +22,8 @@
     "./awards": "./src/awards.ts",
     "./affiliation": "./src/affiliation.ts",
     "./exams": "./src/exams.ts",
-    "./sheets": "./src/sheets.ts"
+    "./sheets": "./src/sheets.ts",
+    "./insights": "./src/insights.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

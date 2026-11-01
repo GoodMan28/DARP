@@ -13,6 +13,8 @@ import {
 import { scopusListStatus, syncScopusList } from '@/server/lookup/scopusList';
 import { patentIndexStatus, updatePatentIndex } from '@/server/lookup/patentIndex';
 import { citationStatus, refreshCitations } from '@/server/rollups/citations';
+import { getHIndexPapers, setHIndexPapers } from '@/server/rollups/insights';
+import { HINDEX_PAPERS } from '@darp/shared/insights';
 
 /**
  * The journal lists a paper's indexing, quartile and Impact Factor are worked out from (SCImago SJR,
@@ -28,6 +30,7 @@ export const GET = withRoute(
     scopus: await scopusListStatus(),
     patents: await patentIndexStatus(),
     citations: await citationStatus(),
+    hIndexPapers: await getHIndexPapers(),
   }),
 );
 
@@ -56,6 +59,8 @@ const bodySchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('syncPatents') }),
   /** Ask Scopus for the citations of the papers not checked yet, or checked longest ago, in the background. */
   z.object({ action: z.literal('syncCitations') }),
+  /** Which papers the department and college h-index counts: all of them, or only those done at BIT. */
+  z.object({ action: z.literal('setHIndexPapers'), value: z.enum(HINDEX_PAPERS as [string, ...string[]]) }),
   z.object({
     action: z.literal('import'),
     kind: z.enum(['sjr', 'list']),
@@ -113,6 +118,15 @@ export const POST = withRoute(
         actor, action: 'masterlist.update', entity: 'masterlist', meta: { journalList: 'Patent Office Journal (automatic)' },
       });
       return ok(await patentIndexStatus());
+    }
+
+    if (body.action === 'setHIndexPapers') {
+      try {
+        const before = await getHIndexPapers();
+        const value = await setHIndexPapers(actor, body.value as 'all' | 'at-bit');
+        await audit({ actor, action: 'settings.update', entity: 'setting', entityId: 'insights.hIndexPapers', before: { value: before }, after: { value } });
+        return ok({ hIndexPapers: value });
+      } catch (e) { return toResponse(e); }
     }
 
     if (body.action === 'syncCitations') {

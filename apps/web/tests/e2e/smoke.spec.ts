@@ -117,9 +117,10 @@ test.describe('faculty journey', () => {
 });
 
 test.describe('verification', () => {
-  test('a dean sees a queue rather than a data-entry list', async ({ page }) => {
+  test('a dean sees how each department is doing, as well as their own modules', async ({ page }) => {
     await useSession(page, 'drie');
-    await expect(page.getByRole('heading', { name: 'Verification queue' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Completion by department' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'My modules' })).toBeVisible();
   });
 
   test('a faculty member cannot reach the admin console', async ({ page }) => {

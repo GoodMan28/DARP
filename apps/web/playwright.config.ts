@@ -16,8 +16,9 @@ export default defineConfig({
     { name: 'setup', testMatch: /auth\.setup\.ts/ },
     { name: 'chromium', use: { ...devices['Desktop Chrome'] }, dependencies: ['setup'] },
   ],
-  // Both tiers: the journeys sign in through the web tier, which forwards to the API.
-  webServer: [
+  // Both tiers: the journeys sign in through the web tier, which forwards to the API. The test-copy runner
+  // (scripts/e2e-copy.mjs) starts its own pair on other ports and sets E2E_NO_SERVERS.
+  webServer: process.env.E2E_NO_SERVERS ? undefined : [
     {
       command: 'npm run build && npm run start',
       cwd: '../api',

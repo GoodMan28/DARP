@@ -399,7 +399,7 @@ function matchesFilter(def: CounterDef, data: Record<string, unknown>): boolean 
  * Money is whole rupees kept as a string of digits in JSONB. Separators are tolerated,
  * anything else yields 0 — a counter must never become NaN.
  */
-function moneyOf(data: Record<string, unknown>, field: string): number {
+export function moneyOf(data: Record<string, unknown>, field: string): number {
   const raw = data[field];
   if (raw === undefined || raw === null || raw === '') return 0;
   const digits = String(raw).replace(/[^\d]/g, '');

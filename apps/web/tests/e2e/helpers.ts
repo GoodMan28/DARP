@@ -4,7 +4,7 @@ import type { Cookie, Page } from '@playwright/test';
 export const PASSWORD = 'DarpDemo!2026Pass';
 
 /** Every demo account a spec signs in as. auth.setup.ts signs each in once per run. */
-export const ACCOUNTS = ['verma', 'drie', 'hodcse', 'iqac'] as const;
+export const ACCOUNTS = ['verma', 'drie', 'hodcse', 'iqac', 'dofa', 'cdc', 'hodme'] as const;
 export type Account = (typeof ACCOUNTS)[number];
 
 /**
@@ -29,4 +29,17 @@ export async function useSession(page: Page, who: Account) {
   await page.context().clearCookies();
   await page.context().addCookies(state.cookies);
   await page.goto('/dashboard');
+}
+
+/** What the API answered to a signed-in person's GET (through the web tier, like the pages). */
+export async function apiGet(playwright: import('@playwright/test').PlaywrightWorkerArgs['playwright'], who: Account, path: string) {
+  const ctx = await playwright.request.newContext({ baseURL: process.env.APP_URL ?? 'http://localhost:3000', storageState: authFile(who) });
+  try {
+    const res = await ctx.get(path);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const body = (await res.json()) as any;
+    return { status: res.status(), body, data: body?.data, error: body?.error };
+  } finally {
+    await ctx.dispose();
+  }
 }

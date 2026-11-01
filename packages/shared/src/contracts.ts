@@ -545,3 +545,93 @@ export interface BulkSubmitResult {
   status: RecordStatus | null;
   message: string | null;
 }
+
+/* ═══════════════ insights: a person, a department, the college ═══════════════ */
+
+/** What a group (one person, a department, the college) did in the chosen years. Money is whole rupees. */
+export interface InsightCounts {
+  papers: number; books: number; chapters: number; conferencePapers: number;
+  patentsFiled: number; patentsPublished: number; patentsGranted: number;
+  projects: number; projectFunding: number; consultancyRevenue: number;
+  awards: number; fellowships: number; fdps: number; outreach: number; econtent: number;
+  studentsUg: number; studentsPg: number; studentsPhd: number;
+}
+
+export interface QuartileSplit { q1: number; q2: number; q3: number; q4: number; none: number }
+
+/** Scopus citations of the group's papers, from the stored per-DOI counts. */
+export interface CitationSummary {
+  citations: number; hIndex: number;
+  /** Papers with a DOI found in Scopus, a DOI Scopus lacks, a DOI not checked yet, and no DOI. */
+  found: number; notInScopus: number; notChecked: number; noDoi: number;
+  lastChecked: string | null;
+  /** Which papers the h-index counts: IQAC's setting. */
+  counts: 'all' | 'at-bit';
+}
+
+export interface Insights {
+  range: { from: number; to: number } | null;
+  /** The years the group has records in, oldest first, with what happened in each. */
+  byYear: Array<{ year: number; papers: number; books: number; patents: number; projects: number; funding: number }>;
+  counts: InsightCounts;
+  /** Papers by JIF quartile and by SJR quartile. */
+  jif: QuartileSplit;
+  sjr: QuartileSplit;
+  /** Papers in Scopus, in Web of Science, in neither. */
+  indexed: { scopus: number; wos: number; neither: number };
+  citations: CitationSummary;
+  topJournals: Array<{ journal: string; papers: number; jif: string | null }>;
+  funders: Array<{ agency: string; projects: number; amount: number }>;
+}
+
+export interface PersonCard {
+  userId: string; name: string; designation: string; department: string; departmentCode: string | null;
+  papers: number; patents: number; citations: number; hIndex: number; orcid: boolean;
+}
+
+export interface TodoItem { key: string; label: string; href: string; count?: number; tone: 'danger' | 'warning' | 'info' }
+
+export interface InsightPaper {
+  id: string; title: string; journal: string; year: number; doi: string;
+  jif: string | null; quartile: string | null; citations: number | null;
+}
+
+export interface PersonInsights extends Insights {
+  person: {
+    userId: string; name: string; designation: string; department: string | null; departmentCode: string | null;
+    orcid: string | null; scopusAuthorId: string | null; researcherId: string | null;
+    joining: string | null; experienceMonths: number | null;
+    education: Array<{ level: string; degree: string; institute: string }>;
+  };
+  /** Scopus, Web of Science and OpenAlex figures, as on My profile. */
+  profiles: {
+    scopus: { citations: number | null; hIndex: number | null; asOf: string } | null;
+    wos: { citations: number | null; hIndex: number | null; asOf: string } | null;
+    openalex: { citations: number | null; hIndex: number | null; asOf: string } | null;
+  };
+  recentPapers: InsightPaper[];
+  awards: Array<{ id: string; moduleKey: string; title: string; by: string; date: string }>;
+  memberships: Array<{ id: string; body: string; kind: string; from: string; to: string }>;
+  projects: Array<{ id: string; title: string; role: string; agency: string; amount: number; period: string }>;
+  theses: Array<{ id: string; student: string; year: number; status: string }>;
+  patents: Array<{ id: string; title: string; status: string; date: string; number: string }>;
+  coAuthors: Array<{ name: string; papers: number }>;
+  /** Only on the person's own page. */
+  todo: TodoItem[];
+}
+
+export interface DepartmentInsights extends Insights {
+  department: { code: string; name: string };
+  facultyTotal: number; reporting: number;
+  designations: Array<{ designation: string; people: number }>;
+  faculty: PersonCard[];
+  recentPapers: InsightPaper[];
+}
+
+export interface CollegeInsights extends Insights {
+  facultyTotal: number; reporting: number; departmentCount: number;
+  designations: Array<{ designation: string; people: number }>;
+  departments: Array<{ code: string; name: string; faculty: number; papers: number; patents: number; projects: number; funding: number; citations: number; hIndex: number }>;
+  topByPapers: PersonCard[];
+  topByCitations: PersonCard[];
+}
