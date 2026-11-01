@@ -30,7 +30,7 @@ const server = createApp().listen(port, host, () => {
   // Researchers' Scopus figures (h-index, citations): a thirtieth of them each night at 4 AM, once
   // BIT's Elsevier API key is set. Without the key it does nothing.
   scheduleResearcherRefresh();
-  // Each paper's Scopus citations, by DOI (for the department h-index): 1,000 a night at 5 AM, once the key is set.
+  // Each paper's Scopus citations, by DOI (for the department h-index): every paper every night at 5 AM, once the key is set.
   scheduleCitationRefresh();
 });
 
