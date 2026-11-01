@@ -121,7 +121,9 @@ describe('what the faculty entered', () => {
     const cells: string[] = [];
     report.workbook.eachSheet((ws) => ws.eachRow((row) => row.eachCell((c) => cells.push(c.text))));
     expect(cells).toContain('Asha Rao');
-    expect(cells.filter((c) => c === 'Ravi Kumar')).toHaveLength(2);                // GATE and CAT, once each
+    expect(cells.filter((c) => c === 'Ravi Kumar')).toHaveLength(1);                // one student, even with two exams
+    expect(cells).toContain('GATE 2023; CAT 2023');                                  // and both exams on his row
+    expect(cells.some((c) => c === 'Total number of students who qualified')).toBe(true);
   });
 });
 

@@ -21,7 +21,8 @@ import {
   findTableHeader, addMissingHeaders, headerSpan, tableEnd, insertRows, retitleSheet, findLabelRow, textOf, withoutLetter,
 } from './template';
 import { figuresForUsers } from '@/server/rollups/completion';
-import { facultyExamEntries, readFacultyExams, mayReadFacultyExams, newFromFaculty } from '@/server/records/examsFromFaculty';
+import { facultyExamEntries, readFacultyExams, mayReadFacultyExams, newFromFaculty, rollNumbersFromFaculty } from '@/server/records/examsFromFaculty';
+import { writeExamStudents } from './examStudents';
 import { defaultRange } from '@/server/records/range';
 
 const TEMPLATE_DIR = process.env.EXPORT_TEMPLATE_DIR ?? 'templates';
@@ -276,7 +277,10 @@ async function fetchExportRows(
     });
     const departmentIds = [...(opts.departmentId ? [opts.departmentId] : []), ...(opts.departmentIds ?? [])];
     const filter = opts.range || departmentIds.length ? { from: opts.range?.from ?? 1900, to: opts.range?.to ?? 2200, departmentIds } : undefined;
-    const { rows: more } = newFromFaculty(cdc, opts.actor ? await facultyExamEntries(opts.actor, filter) : await readFacultyExams(filter));
+    const faculty = opts.actor ? await facultyExamEntries(opts.actor, filter) : await readFacultyExams(filter);
+    const { rows: more } = newFromFaculty(cdc, faculty);
+    // CDC's own rows learn the college roll number from the guide's entry, so one student is one row in the report.
+    for (const [i, roll] of rollNumbersFromFaculty(cdc, faculty)) filtered[i] = { ...filtered[i]!, data: { ...(filtered[i]!.data as Record<string, unknown>), rollNo: roll } };
     for (const e of more) {
       filtered.push({
         data: { year: e.year, examName: e.examName, studentName: e.studentName, registrationNo: e.registrationNo, rollNo: e.rollNo },
@@ -400,7 +404,8 @@ export async function writeWorkbook(
   /** The sheets to write; by default the workbook's own (a Full data report passes its own). */
   givenPlans?: SheetPlan[],
 ): Promise<ExportResult> {
-  const mode: ExportMode = workbookKey !== 'full' && hasTemplate(workbookKey) ? 'template' : 'generated';
+  // CDC's report is DARP's own layout (one row for each student): IQAC's original repeated names under every exam.
+  const mode: ExportMode = workbookKey !== 'full' && workbookKey !== 'cdc' && hasTemplate(workbookKey) ? 'template' : 'generated';
   const wb = new ExcelJS.Workbook();
   wb.creator = 'DARP — BIT Mesra';
   wb.created = new Date();
@@ -420,6 +425,17 @@ export async function writeWorkbook(
   const filled = new Set<string>();
 
   for (const plan of plans) {
+    if (workbookKey === 'cdc' && plan.moduleKey === 'exams') {
+      const rows = await loadRows(plan);
+      const written = writeExamStudents(wb, rows.map((r) => ({
+        name: String(r.data.studentName ?? ''), rollNo: String(r.data.rollNo ?? ''), regNo: String(r.data.registrationNo ?? ''),
+        exam: String(r.data.examName ?? ''), year: Number(r.data.year),
+      })), opts.range);
+      filled.add(written.sheet.name);
+      rowsWritten += written.students;
+      sheetsWritten += 1;
+      continue;
+    }
     const allHeaders = plannedHeaders(plan);
     // A module IQAC's format has no sheet for yet (Outreach Activities) gets one built like a generated
     // sheet, after the format's own sheets and before "About this report".

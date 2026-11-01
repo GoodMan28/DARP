@@ -96,6 +96,28 @@ export function newFromFaculty(cdc: CdcExam[], faculty: FacultyExam[]): { rows: 
 }
 
 /**
+ * CDC's entry without a college roll number takes it from a guide's entry for the same exam number (or the
+ * same roll number is already there), so a student CDC listed under two exams is one student in the report.
+ * Returns the roll number for each CDC row, by its place in the list; rows with nothing to add are left out.
+ */
+export function rollNumbersFromFaculty(cdc: CdcExam[], faculty: FacultyExam[]): Map<number, string> {
+  const byKey = new Map<string, string>();
+  for (const f of faculty) {
+    if (!f.rollNo) continue;
+    for (const k of examKeys({ regNo: f.registrationNo, exam: f.examName, year: f.year })) byKey.set(k, f.rollNo);
+  }
+  const out = new Map<number, string>();
+  cdc.forEach((c, i) => {
+    if (c.rollNo) return;
+    for (const k of examKeys({ regNo: c.registrationNo, exam: c.examName, year: c.year })) {
+      const roll = byKey.get(k);
+      if (roll) { out.set(i, roll); return; }
+    }
+  });
+  return out;
+}
+
+/**
  * What the screen shows CDC: the students guides entered who are not in CDC's own list, and how many
  * repeats were left out. CDC's own entries are read through the module's scope as usual.
  */
