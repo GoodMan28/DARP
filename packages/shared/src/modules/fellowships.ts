@@ -1,6 +1,6 @@
 // src/modules/fellowships.ts
 import type { ModuleConfig } from './_types';
-import { FACULTY_MEMBERS } from './_types';
+import { FACULTY_MEMBERS, institutionField } from './_types';
 
 export const fellowships: ModuleConfig = {
   key: 'fellowships',
@@ -47,9 +47,9 @@ export const fellowships: ModuleConfig = {
         drie: 'Stature of fellowship (national/International)',
       } },
 
-    { key: 'agency', label: 'Awarding Agency', type: 'text', required: true, maxLength: 240,
+    ...institutionField({ key: 'agency', label: 'Awarding Agency', required: true, maxLength: 240,
       section: 'Award',
-      exportAs: { faculty: 'Awarding Agency', drie: 'Awarding Agency' } },
+      exportAs: { faculty: 'Awarding Agency', drie: 'Awarding Agency' } }, { exportId: false }),
 
     { key: 'awardDate', label: 'Date of award', type: 'date', required: true,
       notFuture: true, periodSource: true, exportYear: true, section: 'Award', help: 'The date of the award letter.',

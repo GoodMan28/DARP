@@ -10,7 +10,11 @@ import { hitOf } from './service';
 /** How many organisations one person may add in a day: enough for real use, too few to flood the list. */
 export const DAILY_LIMIT = 20;
 
-export interface ProposedInstitute { name: string; kind: string; country: string; city?: string | null; state?: string | null; website?: string | null }
+export interface ProposedInstitute {
+  name: string; kind: string; country: string; city?: string | null; state?: string | null; website?: string | null;
+  /** Other names it is searched by (SERB). Set by IQAC's own scripts, never by a form. */
+  aliases?: string[];
+}
 
 /**
  * An organisation the directory lacks, added by the person who needs it. It can be chosen at once and
@@ -45,8 +49,8 @@ export async function proposeInstitute(actor: SessionUser, input: ProposedInstit
   const [{ seq } = { seq: 0 }] = (await db.execute(sql`select nextval('institutions_local_seq')::int as seq`)).rows as Array<{ seq: number }>;
   const code = `DARP-${String(seq).padStart(6, '0')}`;
   const [row] = await db.insert(institutions).values({
-    code, scheme: 'local', name, aliases: [], city, state, country: input.country, kind, website,
-    searchText: normInstitution([name, code].join(' ')),
+    code, scheme: 'local', name, aliases: (input.aliases ?? []).map((a) => a.trim()).filter(Boolean), city, state, country: input.country, kind, website,
+    searchText: normInstitution([name, code, ...(input.aliases ?? [])].join(' ')),
     status: actor.role === 'admin' ? 'active' : 'pending', addedBy: actor.id,
   }).returning();
   return hitOf(row!);

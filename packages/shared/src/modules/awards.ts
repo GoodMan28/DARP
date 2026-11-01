@@ -1,6 +1,6 @@
 // src/modules/awards.ts
 import type { ModuleConfig } from './_types';
-import { FACULTY_MEMBERS } from './_types';
+import { FACULTY_MEMBERS, institutionField } from './_types';
 
 export const awards: ModuleConfig = {
   key: 'awards',
@@ -45,9 +45,9 @@ export const awards: ModuleConfig = {
       section: 'Award',
       exportAs: { faculty: 'Level of Award', dofa: 'Level of Award' } },
 
-    { key: 'agency', label: 'Name of the Awarding Agency', type: 'text', required: true,
+    ...institutionField({ key: 'agency', label: 'Name of the Awarding Agency', required: true,
       maxLength: 240, section: 'Award',
-      exportAs: { faculty: 'Name of the Awarding Agency', dofa: 'Name of the Awarding Agency' } },
+      exportAs: { faculty: 'Name of the Awarding Agency', dofa: 'Name of the Awarding Agency' } }, { exportId: false }),
 
     { key: 'evidence', label: 'Attach documents (Certificate Award Letters)', type: 'file',
       accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Evidence',

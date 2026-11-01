@@ -1,6 +1,6 @@
 // src/modules/riawards.ts
 import type { ModuleConfig } from './_types';
-import { FACULTY_MEMBERS } from './_types';
+import { FACULTY_MEMBERS, institutionField } from './_types';
 
 export const riawards: ModuleConfig = {
   key: 'riawards',
@@ -29,12 +29,12 @@ export const riawards: ModuleConfig = {
         faculty: 'Name of the award', drie: 'Name of the award', hod: 'Name of the award',
       } },
 
-    { key: 'awardingBody', label: 'Name of the awarding body', type: 'text', required: true,
+    ...institutionField({ key: 'awardingBody', label: 'Name of the awarding body', required: true,
       maxLength: 240, section: 'Award',
       exportAs: {
         faculty: 'Name of the awarding body', drie: 'Name of the awarding body',
         hod: 'Name of the awarding body',
-      } },
+      } }, { exportId: false }),
 
     { key: 'awardCategory', label: 'Category of award', type: 'select', required: true,
       listKey: 'riAwardCategories', section: 'Award',

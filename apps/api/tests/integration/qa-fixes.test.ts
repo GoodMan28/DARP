@@ -26,7 +26,7 @@ const consultancy = (revenue: string) => ({
 const grant = (tag: string, extra: Record<string, unknown> = {}) => ({
   role: 'PI',
   title: `Grant ${tag}`,
-  agency: 'SERB',
+  agency: 'SERB', agencyCode: 'ROR-07serb001',
   agencyCategory: 'Government',
   durationYears: '3',
   sanctionDate: '2025-02-12',
@@ -76,7 +76,7 @@ describe('returned records say who sent them back', () => {
     const b = await createRecord(faculty, 'grants', grant('same'), 'submit');
     await transitionRecord(drie, 'grants', a.id, 'return', 'Fix the agency');
     await transitionRecord(drie, 'grants', b.id, 'return', 'Look again');
-    await updateRecord(faculty, 'grants', a.id, grant('changed', { agency: 'DST' }), 'submit');
+    await updateRecord(faculty, 'grants', a.id, grant('changed', { agency: 'DST', agencyCode: 'ROR-08tata001' }), 'submit');
     await updateRecord(faculty, 'grants', b.id, grant('same'), 'submit');
     const rows = await correctionsFor(drie);
     expect(rows.find((r) => r.id === a.id)!.changed).toContain('Name of the funding agency');

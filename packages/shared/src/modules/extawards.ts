@@ -1,6 +1,6 @@
 // src/modules/extawards.ts
 import type { ModuleConfig } from './_types';
-import { FACULTY_MEMBERS } from './_types';
+import { FACULTY_MEMBERS, institutionField } from './_types';
 
 export const extawards: ModuleConfig = {
   key: 'extawards',
@@ -25,13 +25,13 @@ export const extawards: ModuleConfig = {
       maxLength: 300, colSpan: 2, section: 'Award',
       exportAs: { faculty: 'Name of the Award/ recognition', dofa: 'Name of the Award/ recognition' } },
 
-    { key: 'awardingBody',
-      label: 'Name of the Awarding government/ government recognised bodies', type: 'text',
+    ...institutionField({ key: 'awardingBody',
+      label: 'Name of the Awarding government/ government recognised bodies',
       required: true, maxLength: 240, section: 'Award',
       exportAs: {
         faculty: 'Name of the Awarding government/ government recognised bodies',
         dofa: 'Name of the Awarding government/ government recognised bodies',
-      } },
+      } }, { exportId: false }),
 
     { key: 'awardDate', label: 'Date of award', type: 'date', required: true,
       notFuture: true, periodSource: true, exportYear: true, section: 'Award', help: 'The date of the award letter.',

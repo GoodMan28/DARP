@@ -78,9 +78,10 @@ export const studentsguided: ModuleConfig = {
       maxSizeMB: 2, colSpan: 2, section: 'Competitive exams',
       showIf: { field: 'statusAfterPassing', in: ['Competitive exams'] } },
 
-    { key: 'employerName', label: 'Name of Employer', type: 'text', required: true, maxLength: 200,
+    ...institutionField({ key: 'employerName', label: 'Name of Employer', required: true, maxLength: 200,
       section: 'Employment', showIf: { field: 'statusAfterPassing', in: ['Employed'] },
-      exportAs: { faculty: 'Name of Employer', dofa: 'Name of Employer' } },
+      help: 'Search the company. If it is not listed, add it.',
+      exportAs: { faculty: 'Name of Employer', dofa: 'Name of Employer' } }, { exportId: false }),
 
     { key: 'payPackage', label: 'Pay package at appointment', type: 'money', required: true, min: 0,
       sensitive: true, pii: 'masked', section: 'Employment',

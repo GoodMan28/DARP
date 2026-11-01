@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { eq, max } from 'drizzle-orm';
 import { truncateAll, closeDb, db } from '../helpers/db';
 import { makeUser } from '../helpers/factories';
+import { loadTestInstitutes } from '../helpers/institutes';
 import { createRecord, listRecords, exportRows } from '@/server/records/service';
 import { toCsv, toXlsx } from '@/server/records/viewExport';
 import { viewColumnsFor } from '@/server/records/viewQuery';
@@ -20,7 +21,7 @@ let admin: SessionUser;
 
 const fellowship = (name: string, o: Record<string, unknown>) => ({
   supportType: 'National fellowship', name, amount: '50000', purpose: 'Research visit', stature: 'National',
-  agency: 'DST', awardDate: '2024-03-15', validityYears: '2', ...o,
+  agency: 'DST', agencyCode: 'ROR-07serb001', awardDate: '2024-03-15', validityYears: '2', ...o,
 });
 
 const c = (field: string, op: Condition['op'], value?: string[], value2?: string): Condition => ({ field, op, ...(value ? { value } : {}), ...(value2 ? { value2 } : {}) });
@@ -30,6 +31,7 @@ const names = async (actor: SessionUser, key: string, v: ViewState | Record<stri
 
 beforeAll(async () => {
   await truncateAll();
+  await loadTestInstitutes();
   faculty = await makeUser({ role: 'faculty', dept: 'CSE' });
   colleague = await makeUser({ role: 'faculty', dept: 'ME' });
   hodCse = await makeUser({ role: 'hod', dept: 'CSE' });

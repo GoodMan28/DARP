@@ -1,6 +1,6 @@
 // src/modules/grants.ts
 import type { ModuleConfig } from './_types';
-import { FACULTY_MEMBERS } from './_types';
+import { FACULTY_MEMBERS, institutionField } from './_types';
 
 export const grants: ModuleConfig = {
   key: 'grants',
@@ -15,7 +15,7 @@ export const grants: ModuleConfig = {
   verifierRoles: ['drie'],
   viewRoles: ['hod', 'drie', 'admin'],
   scope: 'self',
-  naturalKey: ['title', 'agency', 'sanctionDate'],
+  naturalKey: ['title', 'agencyCode', 'sanctionDate'],
   fields: [
     { key: 'role', label: 'Role of faculty', type: 'select', required: true, listKey: 'projectRoles',
       section: 'Project',
@@ -28,9 +28,9 @@ export const grants: ModuleConfig = {
         drie: 'Title of the research project, endowments, Research Chairs',
       } },
 
-    { key: 'agency', label: 'Name of the funding agency', type: 'text', required: true,
+    ...institutionField({ key: 'agency', label: 'Name of the funding agency', required: true,
       maxLength: 240, section: 'Funding', placeholder: 'SERB, DST',
-      exportAs: { faculty: 'Name of the funding agency', drie: 'Name of the funding agency' } },
+      exportAs: { faculty: 'Name of the funding agency', drie: 'Name of the funding agency' } }, { exportId: false }),
 
     { key: 'agencyCategory', label: 'Category of Funding Agency', type: 'select', required: true,
       listKey: 'agencyCategories', section: 'Funding',

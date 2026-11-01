@@ -41,7 +41,7 @@ function table(ws: ExcelJS.Worksheet, heading?: string): Array<Record<string, st
 
 const fellowship = (name: string, awardDate: string) => ({
   supportType: 'National fellowship', name, amount: '50000', purpose: 'Research visit', stature: 'National',
-  agency: 'DST', awardDate, validityYears: '2',
+  agency: 'DST', agencyCode: 'ROR-07serb001', awardDate, validityYears: '2',
 });
 
 beforeAll(async () => {
@@ -58,7 +58,7 @@ beforeAll(async () => {
   await createRecord(cse, 'fellowships', fellowship('INSA visiting', '2022-02-10'), 'submit');
   await createRecord(me, 'fellowships', fellowship('ME fellowship', '2024-06-01'), 'submit');
   await createRecord(cse, 'awards', {
-    awardDate: '2024-03-15', awardName: 'Best teacher', level: 'National', agency: 'AICTE', validityYears: '3',
+    awardDate: '2024-03-15', awardName: 'Best teacher', level: 'National', agency: 'AICTE', agencyCode: 'ROR-07serb001', validityYears: '3',
   }, 'submit');
   await createRecord(cse, 'awards', { awardDate: '2024-05-01', awardName: 'Draft only', level: 'State', agency: 'X' }, 'draft');
   // A year alone (academic year 2023-24): no calendar or financial year of its own.
