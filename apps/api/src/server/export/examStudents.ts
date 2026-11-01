@@ -144,14 +144,16 @@ function writeByYear(wb: ExcelJS.Workbook, students: ExamStudent[], totals: Exam
   const exams = totals.perExam.map((p) => p.exam);
 
   sheet.addRow([`5.2.1 Students qualifying in examinations, year by year${rangeText(range)}`]).font = { bold: true, size: 12 };
-  sheet.addRow(['A student who qualified in two years is counted in each year, and once in "All years". Several items in one cell are separated by ";".']).font = { italic: true };
+  sheet.addRow(['A student who qualified in two years is counted in each year. "All years" counts each student once; "Sum of the years" adds the yearly figures. Several items in one cell are separated by ";".']).font = { italic: true };
   sheet.addRow([]);
   styleHeader(sheet.addRow(['Year', 'Students who qualified', 'Qualifications', ...exams]));
   const count = (t: ExamTotals, exam: string) => t.perExam.find((p) => p.exam === exam)?.students ?? 0;
   for (const y of years) sheet.addRow([y.year, y.totals.students, y.totals.qualifications, ...exams.map((e) => count(y.totals, e))]);
-  const all = sheet.addRow(['All years', totals.students, totals.qualifications, ...exams.map((e) => count(totals, e))]);
+  const all = sheet.addRow(['All years (each student once)', totals.students, totals.qualifications, ...exams.map((e) => count(totals, e))]);
   all.font = { bold: true };
   all.eachCell((c) => { c.border = { top: { style: 'thin' } }; });
+  const sum = (pick: (t: ExamTotals) => number) => years.reduce((n, y) => n + pick(y.totals), 0);
+  sheet.addRow(['Sum of the years', sum((t) => t.students), sum((t) => t.qualifications), ...exams.map((e) => sum((t) => count(t, e)))]).font = { bold: true };
 
   for (const y of years) {
     sheet.addRow([]);

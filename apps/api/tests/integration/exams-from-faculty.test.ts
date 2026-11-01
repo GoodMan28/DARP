@@ -131,7 +131,8 @@ describe('what the faculty entered', () => {
     expect(students).toContain('gate 0001; CAT-1');                                   // each number in the place of its exam, as CDC typed it
     expect(students.some((c) => c === 'Total number of students who qualified')).toBe(true);
     const byYear = textOf('By year');
-    expect(byYear).toContain('All years');
+    expect(byYear).toContain('All years (each student once)');
+    expect(byYear).toContain('Sum of the years');
     expect(byYear.filter((c) => c === 'Ravi Kumar')).toHaveLength(1);                // in 2023's list, once
   });
 });

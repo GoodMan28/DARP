@@ -92,7 +92,8 @@ describe('the same students, year by year', () => {
     expect(flat).toContain('Year|Students who qualified|Qualifications|NET|GATE|CAT');
     expect(flat).toContain('2023|2|3|1|1|1');
     expect(flat).toContain('2024|2|2|0|2|0');
-    expect(flat).toContain('All years|3|5|1|2|1');                  // Ravi is one student over both years
+    expect(flat).toContain('All years (each student once)|3|5|1|2|1');     // Ravi is one student over both years
+    expect(flat).toContain('Sum of the years|4|5|1|3|1');                    // the yearly figures added up: Ravi is in both years, GATE both times
     expect(flat).toContain('2023: 2 students, 3 qualifications');
     expect(flat).toContain('1|Asha Rao|MTECH/7/20|N-1|NET|1');
     expect(flat).toContain('2|Ravi Kumar|BTECH/1/19|G-1; C-1|GATE; CAT|2');   // the same delimiter as the first tab
