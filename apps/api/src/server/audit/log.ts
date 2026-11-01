@@ -11,7 +11,7 @@ export type AuditAction =
   | 'pii.reveal' | 'export.generate'
   | 'user.create' | 'user.update' | 'user.deactivate' | 'user.seed'
   | 'masterlist.update' | 'department.update' | 'cycle.update' | 'baseline.update' | 'declaration.update'
-  | 'bulk.start' | 'institution.propose' | 'institution.approve' | 'institution.merge'
+  | 'bulk.start' | 'institution.propose' | 'institution.approve' | 'institution.merge' | 'institution.match'
   | 'research.ids' | 'research.wos' | 'research.scopus' | 'research.refresh' | 'settings.update';
 
 /** Strips values that must never be written to the audit trail. */
