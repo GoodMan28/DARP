@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { useSession } from './helpers';
+import { openAs } from './helpers';
 
 const DIR = 'test-results/shots';
 
@@ -16,7 +16,7 @@ test('capture the screens', async ({ page }) => {
   await page.goto('/instructions');
   await page.screenshot({ path: `${DIR}/03-instructions.png` });
 
-  await useSession(page, 'verma');
+  await openAs(page, 'verma');
   await page.screenshot({ path: `${DIR}/04-dashboard-faculty.png` });
 
   await page.goto('/m/publications');
@@ -38,13 +38,13 @@ test('capture the screens', async ({ page }) => {
   await page.waitForLoadState('networkidle');
   await page.screenshot({ path: `${DIR}/08-profile.png`, fullPage: true });
 
-  await useSession(page, 'drie');
+  await openAs(page, 'drie');
   await page.screenshot({ path: `${DIR}/09-dashboard-drie.png` });
 
-  await useSession(page, 'hodcse');
+  await openAs(page, 'hodcse');
   await page.screenshot({ path: `${DIR}/10-dashboard-hod.png` });
 
-  await useSession(page, 'iqac');
+  await openAs(page, 'iqac');
   await page.screenshot({ path: `${DIR}/11-dashboard-iqac.png` });
   await page.goto('/admin');
   await page.waitForLoadState('networkidle');

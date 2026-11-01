@@ -24,7 +24,7 @@ export async function signIn(page: Page, who: Account) {
 }
 
 /** Swaps in the account's saved session and lands on the dashboard, like a fresh sign-in. */
-export async function useSession(page: Page, who: Account) {
+export async function openAs(page: Page, who: Account) {
   const state = JSON.parse(await readFile(authFile(who), 'utf8')) as { cookies: Cookie[] };
   await page.context().clearCookies();
   await page.context().addCookies(state.cookies);

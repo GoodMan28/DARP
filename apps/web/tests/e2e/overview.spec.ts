@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { useSession, apiGet } from './helpers';
+import { openAs, apiGet } from './helpers';
 
 /*
  * Phase 5 of the visual-insights plan: the personal Overview and a person's page, in the browser. Read-only, so it
@@ -22,7 +22,7 @@ test.beforeAll(async ({ playwright }) => {
 
 test.describe('the personal Overview', () => {
   test('opens with the person’s name, what to do next, and the charts, each with its numbers', async ({ page }) => {
-    await useSession(page, 'verma');
+    await openAs(page, 'verma');
     await expect(page.getByRole('heading', { name: /Good to see you/ })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'What to do next' })).toBeVisible();
     for (const title of ['Publications by year', 'What was produced', 'Journal quality', 'Citations', 'Recent publications']) {
@@ -40,7 +40,7 @@ test.describe('the personal Overview', () => {
   });
 
   test('keeps the modules table, folded away', async ({ page }) => {
-    await useSession(page, 'verma');
+    await openAs(page, 'verma');
     const summary = page.locator('summary', { has: page.getByRole('heading', { name: 'My modules' }) });
     await expect(summary).toBeVisible();
     await expect(page.getByRole('link', { name: 'Patents' }).and(page.locator('tbody a')).first()).toBeHidden();
@@ -49,7 +49,7 @@ test.describe('the personal Overview', () => {
   });
 
   test('counts the chosen years, and a refreshed page keeps them', async ({ page }) => {
-    await useSession(page, 'verma');
+    await openAs(page, 'verma');
     await page.getByLabel('From year').selectOption('2024');
     await page.getByLabel('To year').selectOption('2025');
     await page.waitForURL('**/dashboard?from=2024&to=2025');
@@ -63,7 +63,7 @@ test.describe('the personal Overview', () => {
 
   test('fits a phone: nothing scrolls sideways', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await useSession(page, 'verma');
+    await openAs(page, 'verma');
     await expect(page.getByRole('heading', { name: 'What to do next' })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   });
@@ -71,14 +71,14 @@ test.describe('the personal Overview', () => {
 
 test.describe('another person’s page', () => {
   test('a colleague sees the page without the to-do list', async ({ page }) => {
-    await useSession(page, 'verma');
+    await openAs(page, 'verma');
     await page.goto(`/people/${colleague}`);
     await expect(page.getByRole('heading', { name: 'Publications by year' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'What to do next' })).toHaveCount(0);
   });
 
   test('a person from another department reads as not found, as does a made-up address', async ({ page }) => {
-    await useSession(page, 'verma');
+    await openAs(page, 'verma');
     await page.goto(`/people/${stranger}`);
     await expect(page.getByRole('heading', { name: 'This page cannot be opened' })).toBeVisible();
     await page.goto('/people/not-a-person');
@@ -86,7 +86,7 @@ test.describe('another person’s page', () => {
   });
 
   test('IQAC can open anyone’s page', async ({ page }) => {
-    await useSession(page, 'iqac');
+    await openAs(page, 'iqac');
     await page.goto(`/people/${stranger}`);
     await expect(page.getByRole('heading', { name: 'Publications by year' })).toBeVisible();
   });

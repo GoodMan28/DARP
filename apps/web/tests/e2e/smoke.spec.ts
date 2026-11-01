@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { useSession } from './helpers';
+import { openAs } from './helpers';
 
 test.describe('public pages', () => {
   test('the landing page states what the portal is for', async ({ page }) => {
@@ -35,7 +35,7 @@ test.describe('public pages', () => {
 
 test.describe('faculty journey', () => {
   test('sees their own dashboard, modules and records', async ({ page }) => {
-    await useSession(page, 'verma');
+    await openAs(page, 'verma');
     await expect(page.getByRole('heading', { name: /Good to see you/ })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'My modules' })).toBeVisible();
 
@@ -51,7 +51,7 @@ test.describe('faculty journey', () => {
   });
 
   test('can open the add-record form and see locked attribution', async ({ page }) => {
-    await useSession(page, 'verma');
+    await openAs(page, 'verma');
     await page.goto('/m/publications/new');
     await expect(page.getByText('Pre-filled from your account and locked', { exact: false }))
       .toBeVisible();
@@ -59,14 +59,14 @@ test.describe('faculty journey', () => {
   });
 
   test('is not told a year range on a new record: the year comes from the date', async ({ page }) => {
-    await useSession(page, 'verma');
+    await openAs(page, 'verma');
     await page.goto('/m/awards/new');
     await expect(page.getByText('Entered by')).toBeVisible();
     await expect(page.getByText('Counted in')).toHaveCount(0);
   });
 
   test('sees the level follow the programme, and the branches narrow to it', async ({ page }) => {
-    await useSession(page, 'verma');
+    await openAs(page, 'verma');
     await page.goto('/m/studentsguided/new');
     await page.locator('#i-program').selectOption({ label: 'M.Tech.' });
     await expect(page.locator('#i-level')).toHaveValue('PG');
@@ -77,7 +77,7 @@ test.describe('faculty journey', () => {
   });
 
   test('sees a QS contact’s country follow the chosen institution', async ({ page }) => {
-    await useSession(page, 'verma');
+    await openAs(page, 'verma');
     await page.goto('/m/qscontacts/new');
     await page.locator('#i-institution').fill('Indian Institute of Technology Delhi');
     await page.locator('[role="listbox"] [role="option"]').first().click();
@@ -86,7 +86,7 @@ test.describe('faculty journey', () => {
   });
 
   test('sees the declared figures by year, and the counted ones only when asked', async ({ page }) => {
-    await useSession(page, 'verma');
+    await openAs(page, 'verma');
     await page.goto('/profile');
     await expect(page.locator('select[aria-label="Academic year"] option').first()).toHaveText(/^AY \d{4}-\d{2}$/);
     await expect(page.getByRole('button', { name: 'Save changes' })).toBeDisabled();
@@ -100,7 +100,7 @@ test.describe('faculty journey', () => {
   });
 
   test('sees computed totals on the profile, marked as not editable', async ({ page }) => {
-    await useSession(page, 'verma');
+    await openAs(page, 'verma');
     await page.goto('/profile');
     await expect(page.getByRole('heading', { name: 'My profile' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Figures you declare' })).toBeVisible();
@@ -109,7 +109,7 @@ test.describe('faculty journey', () => {
   });
 
   test('never shows a full Aadhaar anywhere in the page', async ({ page }) => {
-    await useSession(page, 'verma');
+    await openAs(page, 'verma');
     await page.goto('/profile');
     const body = await page.locator('body').innerText();
     expect(body).not.toMatch(/\b\d{12}\b/);
@@ -118,13 +118,13 @@ test.describe('faculty journey', () => {
 
 test.describe('verification', () => {
   test('a dean sees how each department is doing, as well as their own modules', async ({ page }) => {
-    await useSession(page, 'drie');
+    await openAs(page, 'drie');
     await expect(page.getByRole('heading', { name: 'Completion by department' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'My modules' })).toBeVisible();
   });
 
   test('a faculty member cannot reach the admin console', async ({ page }) => {
-    await useSession(page, 'verma');
+    await openAs(page, 'verma');
     await page.goto('/admin');
     // Either redirected away, or told plainly — never the console itself.
     await expect(page.getByRole('heading', { name: 'IQAC administration' })).toHaveCount(0);
@@ -133,7 +133,7 @@ test.describe('verification', () => {
 
 test.describe('administration', () => {
   test('IQAC sees the console and its tabs', async ({ page }) => {
-    await useSession(page, 'iqac');
+    await openAs(page, 'iqac');
     await page.goto('/admin');
     await expect(page.getByRole('heading', { name: /administration/i }).first()).toBeVisible();
   });

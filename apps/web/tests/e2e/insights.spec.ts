@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { useSession, apiGet } from './helpers';
+import { openAs, apiGet } from './helpers';
 
 /*
  * Phase 2 and 3 of the visual-insights plan, through the browser's own session: who may read the
@@ -86,7 +86,7 @@ test.describe('who may read the insights', () => {
 
 test.describe('IQAC’s h-index setting and the Citations row', () => {
   test('the setting is changed on the Administration page and reaches the department figures at once', async ({ page, playwright }) => {
-    await useSession(page, 'iqac');
+    await openAs(page, 'iqac');
     await page.goto('/admin?tab=journals');
     const all = page.getByRole('radio', { name: 'All papers' });
     const atBit = page.getByRole('radio', { name: 'Only papers done at BIT' });
@@ -107,13 +107,13 @@ test.describe('IQAC’s h-index setting and the Citations row', () => {
   });
 
   test('only IQAC finds the setting, and a dean cannot change it', async ({ page }) => {
-    await useSession(page, 'drie');
+    await openAs(page, 'drie');
     await page.goto('/admin?tab=journals');
     await expect(page.getByRole('radio', { name: 'All papers' })).toHaveCount(0);
   });
 
   test('the Citations row says what is checked, and refreshing says plainly when lookups are off', async ({ page }) => {
-    await useSession(page, 'iqac');
+    await openAs(page, 'iqac');
     await page.goto('/admin?tab=journals');
     const row = page.locator('tr', { hasText: 'Scopus, by DOI' });
     await expect(row).toBeVisible();

@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
-import { useSession } from './helpers';
+import { openAs } from './helpers';
 
 /*
  * Phase 1 of the visual-insights plan, in the browser: IQAC uploads the Journal Citation Reports PDF, a
@@ -24,7 +24,7 @@ async function upload(page: import('@playwright/test').Page) {
 }
 
 test('IQAC uploads the PDF and sees how many journals were read', async ({ page }) => {
-  await useSession(page, 'iqac');
+  await openAs(page, 'iqac');
   await page.goto('/admin?tab=journals');
   await upload(page);
   await expect(page.getByText(/journals read\. [\d,]+ were matched to ISSNs/)).toBeVisible();
@@ -32,7 +32,7 @@ test('IQAC uploads the PDF and sees how many journals were read', async ({ page 
 });
 
 test('a paper form finds the Impact Factor by the journal’s name when there is no ISSN', async ({ page }) => {
-  await useSession(page, 'verma');
+  await openAs(page, 'verma');
   await page.goto('/m/publications/new');
   await page.locator('#i-journal').fill('Nature');
   const jif = page.locator('#rank-manualJif');
@@ -42,7 +42,7 @@ test('a paper form finds the Impact Factor by the journal’s name when there is
 });
 
 test('a figure the faculty member changes is highlighted and can be taken back', async ({ page }) => {
-  await useSession(page, 'verma');
+  await openAs(page, 'verma');
   await page.goto('/m/publications/new');
   await page.locator('#i-journal').fill('Nature');
   const jif = page.locator('#rank-manualJif');
@@ -55,7 +55,7 @@ test('a figure the faculty member changes is highlighted and can be taken back',
 });
 
 test('a journal that is in no list asks for the figure to be typed', async ({ page }) => {
-  await useSession(page, 'verma');
+  await openAs(page, 'verma');
   await page.goto('/m/publications/new');
   await page.locator('#i-journal').fill('Journal Of Things Nobody Ever Printed 4471');
   await expect(page.getByText('Not in the journal lists. Enter it if you know it.').first()).toBeVisible({ timeout: 15_000 });
@@ -64,7 +64,7 @@ test('a journal that is in no list asks for the figure to be typed', async ({ pa
 });
 
 test('uploading the PDF again replaces the year instead of adding to it', async ({ page }) => {
-  await useSession(page, 'iqac');
+  await openAs(page, 'iqac');
   await page.goto('/admin?tab=journals');
   const before = await journalRow(page).innerText();
   await upload(page);
@@ -73,7 +73,7 @@ test('uploading the PDF again replaces the year instead of adding to it', async 
 });
 
 test('removing the list takes the Impact Factor away from the paper form at once', async ({ page }) => {
-  await useSession(page, 'iqac');
+  await openAs(page, 'iqac');
   await page.goto('/admin?tab=journals');
   await page.getByText(/Uploaded files \(\d+\)/).click();                       // the list of uploads is folded away
   const uploaded = page.locator('tr', { hasText: /JCR|Impact Factor/ }).filter({ has: page.getByRole('button', { name: 'Remove' }) }).last();
@@ -81,7 +81,7 @@ test('removing the list takes the Impact Factor away from the paper form at once
   await page.getByRole('dialog').getByRole('button', { name: 'Remove' }).click();
   await expect(page.getByText(/removed\./)).toBeVisible();
 
-  await useSession(page, 'verma');
+  await openAs(page, 'verma');
   await page.goto('/m/publications/new');
   await page.locator('#i-journal').fill('Nature');
   await expect(page.getByText('Not in the journal lists. Enter it if you know it.').first()).toBeVisible({ timeout: 15_000 });
