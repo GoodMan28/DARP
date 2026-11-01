@@ -11,7 +11,7 @@ export type AuditAction =
   | 'pii.reveal' | 'export.generate'
   | 'user.create' | 'user.update' | 'user.deactivate' | 'user.seed'
   | 'masterlist.update' | 'department.update' | 'cycle.update' | 'baseline.update' | 'declaration.update'
-  | 'bulk.start'
+  | 'bulk.start' | 'institution.propose' | 'institution.approve' | 'institution.merge'
   | 'research.ids' | 'research.wos' | 'research.scopus' | 'research.refresh' | 'settings.update';
 
 /** Strips values that must never be written to the audit trail. */
@@ -30,7 +30,7 @@ function sanitise(obj: unknown): unknown {
 export async function audit(params: {
   actor?: SessionUser | null;
   action: AuditAction;
-  entity: 'record' | 'user' | 'evidence' | 'session' | 'export' | 'masterlist' | 'cycle' | 'baseline' | 'declaration' | 'bulk_import' | 'setting' | 'department';
+  entity: 'record' | 'user' | 'evidence' | 'session' | 'export' | 'masterlist' | 'cycle' | 'baseline' | 'declaration' | 'bulk_import' | 'setting' | 'department' | 'institution';
   entityId?: string | null;
   ip?: string;
   userAgent?: string;

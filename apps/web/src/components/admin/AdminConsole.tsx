@@ -10,6 +10,7 @@ import { CyclePanel } from './CyclePanel';
 import { AuditPanel } from './AuditPanel';
 import { ReportsPanel } from '@/components/reports/ReportsPanel';
 import { DepartmentsPanel } from './DepartmentsPanel';
+import { InstitutionsPanel } from './InstitutionsPanel';
 import { ADMIN_TABS, type AdminTab } from './types';
 
 /**
@@ -61,6 +62,7 @@ export function AdminConsole({
         {tab === 'accounts' ? <AccountsPanel currentUserId={currentUserId} /> : null}
         {tab === 'lists' ? <MasterListsPanel /> : null}
         {tab === 'departments' ? <DepartmentsPanel /> : null}
+        {tab === 'institutions' ? <InstitutionsPanel /> : null}
         {tab === 'journals' ? <JournalListsPanel /> : null}
         {tab === 'cycle' ? <CyclePanel /> : null}
         {tab === 'deleted' ? <DeletedRecordsPanel /> : null}

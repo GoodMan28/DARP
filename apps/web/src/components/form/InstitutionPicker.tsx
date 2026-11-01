@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { apiJson } from '@/lib/csrf-client';
 import { Button, Input } from '@/components/ui';
+import { AddInstitute } from './AddInstitute';
 import type { InstituteHit } from '@darp/shared/institutions';
 
 /**
@@ -10,7 +11,7 @@ import type { InstituteHit } from '@darp/shared/institutions';
  * institute is always written the same way. Shows the chosen name with its ID and a Change button;
  * a name typed before the directory existed is shown as such, with the search box under it.
  */
-export function InstitutionPicker({ id, name, code, disabled, invalid, excludeHome, onPick, onClear }: {
+export function InstitutionPicker({ id, name, code, disabled, invalid, excludeHome, allowAdd = true, onPick, onClear }: {
   id: string;
   /** The saved text, "Name, State, Country". */
   name: string;
@@ -19,6 +20,8 @@ export function InstitutionPicker({ id, name, code, disabled, invalid, excludeHo
   disabled: boolean;
   invalid: boolean;
   excludeHome: boolean;
+  /** "Not listed? Add it" (not wanted where the choice must be an existing entry, such as a merge). */
+  allowAdd?: boolean;
   onPick: (hit: InstituteHit) => void;
   onClear: () => void;
 }) {
@@ -28,6 +31,8 @@ export function InstitutionPicker({ id, name, code, disabled, invalid, excludeHo
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [state, setState] = useState<'idle' | 'busy' | 'failed'>('idle');
+  const [adding, setAdding] = useState(false);
+  const [justAdded, setJustAdded] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -57,6 +62,7 @@ export function InstitutionPicker({ id, name, code, disabled, invalid, excludeHo
   /* A saved choice: its name, its ID and a way to change it. */
   if (code) {
     return (
+      <>
       <div className="flex flex-wrap items-center gap-2" id={id}>
         <span className="min-w-0 flex-1 text-sm font-semibold">{name}</span>
         <span className="rounded-xs border border-line bg-surface-2 px-1.5 py-0.5 font-mono text-2xs text-ink-muted">{code}</span>
@@ -66,9 +72,21 @@ export function InstitutionPicker({ id, name, code, disabled, invalid, excludeHo
           </Button>
         ) : null}
       </div>
+      {justAdded ? <p className="mt-1 text-xs text-ink-muted">Added. You can use it now; IQAC will review it.</p> : null}
+      </>
     );
   }
   if (disabled) return <p className="text-sm" id={id}>{name || '—'}</p>;
+
+  if (adding && allowAdd) {
+    return (
+      <AddInstitute
+        initialName={text.trim()}
+        onCancel={() => setAdding(false)}
+        onAdded={(hit) => { setAdding(false); setJustAdded(true); pick(hit); }}
+      />
+    );
+  }
 
   return (
     <div className="relative">
@@ -128,7 +146,19 @@ export function InstitutionPicker({ id, name, code, disabled, invalid, excludeHo
               {state === 'busy' ? 'Searching…' : state === 'failed' ? 'The search is not available just now.' : 'No match found.'}
             </li>
           ) : null}
+          {allowAdd ? (
+            <li className="border-t border-line px-3 py-2 text-sm" role="presentation">
+              <button type="button" className="font-semibold text-primary hover:underline" onMouseDown={(e) => { e.preventDefault(); setAdding(true); setOpen(false); }}>
+                Not listed? Add it
+              </button>
+            </li>
+          ) : null}
         </ul>
+      ) : null}
+      {allowAdd ? (
+        <button type="button" className="mt-1 text-xs font-semibold text-primary hover:underline" onClick={() => setAdding(true)}>
+          Not listed? Add it
+        </button>
       ) : null}
     </div>
   );

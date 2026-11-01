@@ -25,7 +25,7 @@ function codeOf(q: string): string | null {
 /** A word for a LIKE pattern: its own % and _ made plain, with ! as the escape character. */
 const likeWord = (w: string) => `%${w.replace(/[!%_]/g, (c) => `!${c}`)}%`;
 
-const hitOf = (r: Institution): InstituteHit => ({
+export const hitOf = (r: Institution): InstituteHit => ({
   code: r.code, name: r.name, city: r.city, state: r.state, country: r.country,
   scheme: r.scheme as InstituteHit['scheme'], pending: r.status === 'pending',
 });

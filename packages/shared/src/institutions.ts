@@ -62,3 +62,14 @@ export function institutionText(i: { name: string; state: string | null; country
   if (i.country && !has(i.country)) parts.push(i.country);
   return parts.join(', ');
 }
+
+/** What a person says an added organisation is, and the type the directory keeps for it (ROR's words). */
+export const INSTITUTE_KINDS: Array<{ label: string; kind: string }> = [
+  { label: 'College or university', kind: 'education' },
+  { label: 'Company', kind: 'company' },
+  { label: 'Government or funder', kind: 'government' },
+  { label: 'Other', kind: 'other' },
+];
+
+/** Countries an added organisation can be in: the countries list without the two patent offices and "Other". */
+export const NOT_A_COUNTRY = ['European Patent Office', 'WIPO (PCT)', 'Other'];
