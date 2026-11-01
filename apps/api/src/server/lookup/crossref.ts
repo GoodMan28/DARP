@@ -39,6 +39,29 @@ const yearOf = (d?: CrossrefDate): number | null => {
   return typeof y === 'number' ? y : null;
 };
 
+/** "2019", "2019-03" or "2019-03-12" from Crossref's date parts, as far as they go. */
+const dateOf = (d?: CrossrefDate): string => {
+  const p = d?.['date-parts']?.[0];
+  if (!p || typeof p[0] !== 'number') return '';
+  return [p[0], p[1], p[2]].filter((n): n is number => typeof n === 'number').slice(0, 3)
+    .map((n, i) => (i === 0 ? String(n) : String(n).padStart(2, '0'))).join('-');
+};
+
+/**
+ * The earliest the work appeared, whichever of its dates that is: a paper online before it joined an
+ * issue was published then. Dates of different lengths are compared as far as the shorter goes.
+ */
+export function earliestDate(dates: string[]): string {
+  const real = dates.filter(Boolean);
+  if (real.length === 0) return '';
+  return real.reduce((best, d) => {
+    const n = Math.min(best.length, d.length);
+    const a = best.slice(0, n);
+    const b = d.slice(0, n);
+    return b < a || (b === a && d.length > best.length) ? d : best;
+  });
+}
+
 const RETRACTION = new Set(['retraction', 'withdrawal', 'removal']);
 
 export const WORK_TYPE_LABEL: Record<string, string> = {
@@ -102,6 +125,7 @@ export function fromCrossref(w: CrossrefWork): LookupResult {
       containerTitle: clean(w['container-title']?.[0]),
       issn: issnMain ? formatIssn(issnMain) : '',
       year: year ? String(year) : '',
+      publishedOn: earliestDate([dateOf(w['published-online']), dateOf(w['published-print']), dateOf(w['journal-issue']?.['published-print']), dateOf(w.issued)]),
       onlineYear: String(yearOf(w['published-online']) ?? ''),
       volume: clean(w.volume),
       issue: clean(w.issue),

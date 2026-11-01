@@ -29,6 +29,7 @@ export const books: ModuleConfig = {
     ownerMustBeIn: 'authors',
     evidenceField: 'evidence',
   },
+  affiliation: { field: 'sameAffiliation', dates: ['publishedOn'] },
   fields: [
     { key: 'doi', label: 'DOI', type: 'doi', section: 'Publication',
       help: 'Chapters from Springer, Elsevier, Taylor & Francis, Wiley and IGI have a DOI — paste it above instead of the ISBN.',
@@ -77,7 +78,8 @@ export const books: ModuleConfig = {
       exportAs: { faculty: 'ISBN number', drie: 'ISBN number' } },
 
     { key: 'sameAffiliation',
-      label: 'Whether at the time of publication Affiliating Institution was same Yes/No',
+      label: 'Were you at BIT when this was published?',
+      help: 'Answer for the time of publication, whatever your affiliation is now. Filled in from the publication date and your joining date; change it if it is wrong.',
       type: 'select', required: true, options: ['Yes', 'No'], section: 'Publication',
       exportAs: {
         faculty: 'Whether at the time of publication Affiliating Institution  was same Yes/No',
@@ -106,6 +108,10 @@ export const books: ModuleConfig = {
         faculty: 'Attach documents (link that opens directly to book/book chapter or 1st page of book/book chapter in pdf)',
         drie: 'Attach documents (link that opens directly to book/book chapter or 1st page of book/book chapter in pdf)',
       } },
+
+    // The date the work first appeared (year, month or day), kept so the answer above can be worked out. Not on the form.
+    { key: 'publishedOn', label: 'Date first published', type: 'text', maxLength: 10, section: 'Publication', hidden: true,
+      autofill: { from: 'publishedOn', locked: false, alwaysLocked: true } },
   ],
   listColumns: ['bookTitle', 'publicationType', 'year', 'isbn', 'publisher'],
   defaultSort: { key: 'year', dir: 'desc' },

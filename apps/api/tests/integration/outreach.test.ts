@@ -12,7 +12,7 @@ import type { SessionUser } from '@/server/auth/session';
 let faculty: SessionUser;
 let colleague: SessionUser;
 
-const base = { organisation: 'IIT Kharagpur', where: 'Outside BIT', year: '2025' };
+const base = { organisation: 'IIT Kharagpur', where: 'Outside BIT', year: '2025', affiliatedToBit: 'Yes' };
 
 beforeAll(async () => {
   await truncateAll();

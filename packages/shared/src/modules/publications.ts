@@ -33,6 +33,7 @@ export const publications: ModuleConfig = {
     ownerMustBeIn: 'authors',
     evidenceField: 'evidence',
   },
+  affiliation: { field: 'affiliatedToBit', dates: ['publishedOn'] },
   fields: [
     { key: 'doi', label: 'DOI', type: 'doi', required: true, section: 'Paper',
       placeholder: 'https://doi.org/10.1016/j.ijpharm.2024.123793',
@@ -53,9 +54,9 @@ export const publications: ModuleConfig = {
       help: 'Filled in from the publisher\'s record. Your own name must be in this list before you can submit — add it if it is hidden (for example behind "et al."), and attach evidence.',
       exportAs: { faculty: 'Name of the author/s', drie: 'Name of the author/s' } },
 
-    { key: 'affiliatedToBit', label: 'Were you affiliated to BIT when this paper was published?', type: 'select',
+    { key: 'affiliatedToBit', label: 'Were you at BIT when this was published?', type: 'select',
       required: true, options: ['Yes', 'No'], colSpan: 2, section: 'Paper',
-      help: 'Answer for the time of publication, whatever your affiliation is now.',
+      help: 'Answer for the time of publication, whatever your affiliation is now. Filled in from the publication date and your joining date; change it if it is wrong.',
       exportAs: {
         faculty: 'Affiliated to BIT at the time of publication (Yes/No)',
         drie: 'Affiliated to BIT at the time of publication (Yes/No)',
@@ -106,6 +107,10 @@ export const publications: ModuleConfig = {
       accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Evidence',
       required: true,
       help: 'Required for every paper. DRIE and IQAC check it against the details above — especially anything you changed or typed yourself.' },
+
+    // The date the work first appeared (year, month or day), kept so the answer above can be worked out. Not on the form.
+    { key: 'publishedOn', label: 'Date first published', type: 'text', maxLength: 10, section: 'Paper', hidden: true,
+      autofill: { from: 'publishedOn', locked: false, alwaysLocked: true } },
   ],
   // Not stored with the paper: worked out from the ISSN, from the latest lists, whenever shown.
   derived: [

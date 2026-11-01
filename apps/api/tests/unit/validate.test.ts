@@ -74,7 +74,7 @@ describe('field validation', () => {
   it('asks every paper whether the author was affiliated to BIT: not on a draft, but on a submission', async () => {
     const { affiliatedToBit: _omit, ...without } = paper;
     expect((await validateRecord(pubs, without, 'draft')).errors.affiliatedToBit).toBeUndefined();
-    expect((await validateRecord(pubs, without, 'submit')).errors.affiliatedToBit).toBe('Were you affiliated to BIT when this paper was published? is required.');
+    expect((await validateRecord(pubs, without, 'submit')).errors.affiliatedToBit).toBe('Were you at BIT when this was published? is required.');
     for (const answer of ['Yes', 'No']) expect((await validateRecord(pubs, { ...paper, affiliatedToBit: answer }, 'submit')).errors.affiliatedToBit).toBeUndefined();
     expect((await validateRecord(pubs, { ...paper, affiliatedToBit: 'Maybe' }, 'submit')).errors.affiliatedToBit).toBe('Choose one of the listed values.');
   });

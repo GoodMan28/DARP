@@ -199,6 +199,8 @@ export default async function RecordPage({ params, searchParams }: PageProps) {
             lookup={schema.data.lookup}
             showRanking={schema.data.derived.length > 0}
             parents={schema.data.parents}
+            affiliation={schema.data.affiliation}
+            joiningDate={record.isMine ? user.dateOfJoining : null}
             initialLocked={record.lockedFields}
             initialProvenance={record.verification?.fields}
             locked={lockedStrip(m, user, record.periodLabel, record.ownerName, record)}

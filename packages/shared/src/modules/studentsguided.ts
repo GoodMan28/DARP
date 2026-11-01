@@ -1,6 +1,6 @@
 // src/modules/studentsguided.ts
 import type { ModuleConfig } from './_types';
-import { FACULTY_MEMBERS, institutionField } from './_types';
+import { FACULTY_MEMBERS, affiliationField, institutionField } from './_types';
 
 export const studentsguided: ModuleConfig = {
   key: 'studentsguided',
@@ -16,6 +16,7 @@ export const studentsguided: ModuleConfig = {
   viewRoles: ['hod', 'dofa', 'admin'],
   scope: 'self',
   naturalKey: ['rollNo', 'yearOfPassing'],
+  affiliation: { field: 'affiliatedToBit', dates: [] },
   fields: [
     { key: 'studentName', label: 'Name of Student', type: 'text', required: true, maxLength: 160,
       section: 'Student',
@@ -114,6 +115,8 @@ export const studentsguided: ModuleConfig = {
     { key: 'admissionLetter', label: 'Admission letter / ID card', type: 'file',
       accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Higher studies',
       showIf: { field: 'statusAfterPassing', in: ['Higher Studies'] } },
+
+    affiliationField({ label: 'Did you guide this student while you were at BIT?', section: 'Student' }),
   ],
   listColumns: ['studentName', 'rollNo', 'level', 'yearOfPassing', 'statusAfterPassing'],
   defaultSort: { key: 'yearOfPassing', dir: 'desc' },

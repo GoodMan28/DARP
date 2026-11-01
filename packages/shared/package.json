@@ -20,6 +20,7 @@
     "./views": "./src/views.ts",
     "./names": "./src/names.ts",
     "./awards": "./src/awards.ts",
+    "./affiliation": "./src/affiliation.ts",
     "./sheets": "./src/sheets.ts"
   },
   "scripts": {

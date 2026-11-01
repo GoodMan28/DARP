@@ -113,7 +113,7 @@ describe('adding many papers from a file', () => {
     const before = await getBulkImport(faculty, 'publications', upload.id);
     expect(before.items.find((i) => i.record?.id === two)!.record).toMatchObject({ affiliation: '' });
     const [needsAnswer] = await submitBulk(faculty, 'publications', upload.id, [two!]);
-    expect(needsAnswer).toMatchObject({ ok: false, message: expect.stringMatching(/affiliated to BIT/i) });
+    expect(needsAnswer).toMatchObject({ ok: false, message: expect.stringMatching(/at BIT/i) });
     expect(await setBulkAffiliation(faculty, 'publications', upload.id, [two!], 'Yes')).toEqual({ updated: 1 });
     expect((await getBulkImport(faculty, 'publications', upload.id)).items.find((i) => i.record?.id === two)!.record)
       .toMatchObject({ affiliation: 'Yes' });

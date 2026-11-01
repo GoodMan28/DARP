@@ -1,6 +1,6 @@
 // src/modules/extawards.ts
 import type { ModuleConfig } from './_types';
-import { FACULTY_MEMBERS, institutionField } from './_types';
+import { FACULTY_MEMBERS, affiliationField, institutionField } from './_types';
 
 export const extawards: ModuleConfig = {
   key: 'extawards',
@@ -16,6 +16,7 @@ export const extawards: ModuleConfig = {
   viewRoles: ['hod', 'dofa', 'admin'],
   scope: 'self',
   naturalKey: ['awardName', 'awardDate'],
+  affiliation: { field: 'affiliatedToBit', dates: ['awardDate'] },
   fields: [
     { key: 'activityName', label: 'Name of the activity', type: 'text', required: true,
       maxLength: 300, colSpan: 2, section: 'Activity',
@@ -54,6 +55,8 @@ export const extawards: ModuleConfig = {
       exportAs: {
         faculty: 'Attach documents  (Award letters)', dofa: 'Attach documents  (Award letters)',
       } },
+
+    affiliationField({ label: 'Did you receive this while you were at BIT?', section: 'Award' }),
   ],
   derived: [{ key: 'validUntil', label: 'Valid until', exportAs: { faculty: 'Valid until', dofa: 'Valid until' } }],
   listColumns: ['awardName', 'activityName', 'awardingBody', 'awardDate', 'validUntil'],

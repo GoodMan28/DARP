@@ -35,6 +35,7 @@ const engagement = (tag: string) => ({
   recordType: 'Consultancy',
   consultants: 'A. K. Verma',
   projectTitle: `Project ${tag}`,
+  affiliatedToBit: 'Yes',
   agency: 'Tata Steel, Jamshedpur',
   financialYear: '2024',
   revenue: '250000',

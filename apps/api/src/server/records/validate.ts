@@ -6,6 +6,7 @@ import { isbn13 } from '@/server/lookup/isbn';
 import { normalisePatentNumber } from './patentNumber';
 import { institutesByCode } from '@/server/institutions/service';
 import { HOME_INSTITUTE, institutionText } from '@darp/shared/institutions';
+import { affiliationFrom, firstDate } from '@darp/shared/affiliation';
 import { applyComputed, computeValue, type ComputeContext } from '@darp/shared/computed';
 
 /** Patterns that are checked server-side, never only in the browser. */
@@ -140,6 +141,13 @@ export async function validateRecord(
   const merged = applyComputed(m.fields, input, {
     ...ctx, institutes: new Map([...institutes].map(([k, r]) => [k, { country: r.country }])),
   });
+  // "Done at BIT?" is filled in from the owner's joining date and the work's first date when the person has
+  // not answered; an answer already given always stands. With no date, or no joining date, it is asked.
+  const aff = m.affiliation;
+  if (aff && (merged[aff.field] === undefined || merged[aff.field] === null || merged[aff.field] === '')) {
+    const answer = affiliationFrom(ctx.account?.dateOfJoining, firstDate(m, merged));
+    if (answer) merged[aff.field] = answer;
+  }
   const out: Record<string, unknown> = {};
   const errors: Record<string, string> = {};
 

@@ -20,7 +20,7 @@ let dofa: SessionUser;
 let admin: SessionUser;
 
 const consultancy = (revenue: string) => ({
-  recordType: 'Consultancy', consultants: 'A. K. Verma', projectTitle: 'History', agency: 'Tata Steel', financialYear: '2024', revenue,
+  recordType: 'Consultancy', consultants: 'A. K. Verma', projectTitle: 'History', agency: 'Tata Steel', financialYear: '2024', revenue, affiliatedToBit: 'Yes',
 });
 
 const grant = (tag: string, extra: Record<string, unknown> = {}) => ({

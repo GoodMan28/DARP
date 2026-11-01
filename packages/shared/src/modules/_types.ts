@@ -35,7 +35,7 @@ export type PiiLevel = 'none' | 'masked' | 'encrypted';
 
 /** Facts an external register can supply. Field configs name the one they take. */
 export type MetaKey =
-  | 'doi' | 'title' | 'authors' | 'containerTitle' | 'issn' | 'year' | 'onlineYear' | 'volume' | 'issue' | 'pages'
+  | 'doi' | 'title' | 'authors' | 'containerTitle' | 'issn' | 'year' | 'onlineYear' | 'publishedOn' | 'volume' | 'issue' | 'pages'
   | 'publisher' | 'workType' | 'citation'
   | 'bookType' | 'bookTitle' | 'chapterTitle' | 'isbn' | 'eventName'
   // Patents (the Patent Office Journal)
@@ -211,6 +211,14 @@ export interface ModuleConfig {
    */
   periodic?: boolean;
 
+  /**
+   * Whether the work was done while the person was at BIT: one Yes/No answer, in `field`. It is filled in
+   * from the person's joining date and the first of `dates` that the record carries (and can be changed);
+   * with no date it is asked. Work answered No stays in the person's modules but is left out of reports
+   * and counts. A module whose work is always BIT's own (financial support, seed money) has none.
+   */
+  affiliation?: { field: string; dates: string[] };
+
   /** Fetch this module's facts from an external register (DOI, ISBN). */
   lookup?: LookupConfig;
 
@@ -255,4 +263,12 @@ export function institutionField(f: Omit<FieldConfig, 'type'>, opts: { exportId?
       ...(f.section ? { section: f.section } : {}), ...(f.showIf ? { showIf: f.showIf } : {}), ...(exportAs ? { exportAs } : {}),
     },
   ];
+}
+
+/** The "was this done while you were at BIT?" question of a module that has `affiliation`. */
+export function affiliationField(f: { label: string; section: string; help?: string }): FieldConfig {
+  return {
+    key: 'affiliatedToBit', label: f.label, type: 'select', required: true, options: ['Yes', 'No'], colSpan: 2, section: f.section,
+    help: f.help ?? 'Filled in from your joining date when the work has a date. Change it if it is wrong.',
+  };
 }

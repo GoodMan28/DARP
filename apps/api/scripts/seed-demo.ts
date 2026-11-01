@@ -185,6 +185,8 @@ const DEMO_INSTITUTES = ['U-0202', 'U-0573', 'U-0357', 'U-0220', 'U-0439'];
 
 /** One plausible, valid value for a field, decided entirely by its config. */
 function valueFor(f: FieldConfig, ctx: GenContext): unknown {
+  // "Done while at BIT?": the demo people all joined before their records, so the answer is Yes (a random No would hide records from reports).
+  if (f.key === 'affiliatedToBit' || f.key === 'sameAffiliation') return 'Yes';
   const { rng, lists } = ctx;
   const label = f.label.toLowerCase();
   // A field in the duplicate guard has to differ between records, or the seeder

@@ -27,6 +27,7 @@
     "db:profile-sync": "tsx --env-file=.env.local scripts/profile-sync.ts",
     "db:bit-lists": "tsx --env-file=.env.local scripts/bit-lists.ts",
     "db:starter-orgs": "tsx --env-file=.env.local scripts/starter-orgs.ts",
+    "db:affiliation-backfill": "tsx --env-file=.env.local scripts/affiliation-backfill.ts",
     "db:program-map": "tsx --env-file=.env.local scripts/program-map.ts",
     "db:year-to-date": "tsx --env-file=.env.local scripts/year-to-date.ts",
     "db:reset": "tsx --env-file=.env.local scripts/reset.ts",

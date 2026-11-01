@@ -47,6 +47,7 @@ export const GET = withRoute({ rate: { limit: 120, windowSeconds: 60 } }, async 
           sourceName: m.lookup.sourceName ?? "the publisher's record",
         }
         : null,
+      affiliation: m.affiliation ?? null,
       listColumns: m.listColumns,
       viewColumns: await viewColumnsFor(m),
       periods,

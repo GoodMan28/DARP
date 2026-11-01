@@ -1,6 +1,6 @@
 // src/modules/consultancy.ts
 import type { ModuleConfig } from './_types';
-import { FACULTY_MEMBERS } from './_types';
+import { FACULTY_MEMBERS, affiliationField } from './_types';
 
 export const consultancy: ModuleConfig = {
   key: 'consultancy',
@@ -15,6 +15,7 @@ export const consultancy: ModuleConfig = {
   viewRoles: ['hod', 'drie', 'admin'],
   scope: 'self',
   naturalKey: ['projectTitle', 'agency', 'financialYear'],
+  affiliation: { field: 'affiliatedToBit', dates: [] },
   fields: [
     { key: 'recordType', label: 'This entry is', type: 'select', required: true,
       options: ['Consultancy', 'Corporate training'], section: 'Engagement',
@@ -59,6 +60,8 @@ export const consultancy: ModuleConfig = {
         faculty: 'Attach document (Letter from beneficiary of consultancy with details of consultancy fee)',
         drie: 'Attach document (Letter from beneficiary of consultancy with details of consultancy fee)',
       } },
+
+    affiliationField({ label: 'Was this done while you were at BIT?', section: 'Engagement' }),
   ],
   listColumns: ['projectTitle', 'recordType', 'agency', 'financialYear', 'revenue'],
   defaultSort: { key: 'financialYear', dir: 'desc' },

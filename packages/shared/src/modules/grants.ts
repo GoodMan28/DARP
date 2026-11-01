@@ -1,6 +1,6 @@
 // src/modules/grants.ts
 import type { ModuleConfig } from './_types';
-import { FACULTY_MEMBERS, institutionField } from './_types';
+import { FACULTY_MEMBERS, affiliationField, institutionField } from './_types';
 
 export const grants: ModuleConfig = {
   key: 'grants',
@@ -16,6 +16,7 @@ export const grants: ModuleConfig = {
   viewRoles: ['hod', 'drie', 'admin'],
   scope: 'self',
   naturalKey: ['title', 'agencyCode', 'sanctionDate'],
+  affiliation: { field: 'affiliatedToBit', dates: ['sanctionDate'] },
   fields: [
     { key: 'role', label: 'Role of faculty', type: 'select', required: true, listKey: 'projectRoles',
       section: 'Project',
@@ -62,6 +63,8 @@ export const grants: ModuleConfig = {
         faculty: 'Attach documents (Project Sanction letter)',
         drie: 'Attach documents (Project Sanction letter)',
       } },
+
+    affiliationField({ label: 'Was this project sanctioned while you were at BIT?', section: 'Funding' }),
   ],
   derived: [{ key: 'projectPeriod', label: 'Project period' }],
   listColumns: ['title', 'agency', 'role', 'agencyCategory', 'amount', 'sanctionDate', 'projectPeriod'],

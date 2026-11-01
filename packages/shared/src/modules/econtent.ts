@@ -1,6 +1,6 @@
 // src/modules/econtent.ts
 import type { ModuleConfig } from './_types';
-import { FACULTY_MEMBERS } from './_types';
+import { FACULTY_MEMBERS, affiliationField } from './_types';
 
 export const econtent: ModuleConfig = {
   key: 'econtent',
@@ -16,6 +16,7 @@ export const econtent: ModuleConfig = {
   viewRoles: ['hod', 'dugs', 'admin'],
   scope: 'self',
   naturalKey: ['moduleName', 'platform'],
+  affiliation: { field: 'affiliatedToBit', dates: ['launchDate'] },
   fields: [
     { key: 'moduleName', label: 'Name of the module developed', type: 'text', required: true,
       maxLength: 300, colSpan: 2, section: 'Module',
@@ -40,6 +41,8 @@ export const econtent: ModuleConfig = {
     { key: 'moduleLink', label: 'Link to the module developed', type: 'url', required: true,
       maxLength: 500, colSpan: 2, section: 'Module',
       exportAs: { faculty: 'Link to the module developed', dugs: 'Link to the module developed' } },
+
+    affiliationField({ label: 'Was this developed while you were at BIT?', section: 'Module' }),
   ],
   listColumns: ['moduleName', 'platform', 'launchDate'],
   defaultSort: { key: 'launchDate', dir: 'desc' },

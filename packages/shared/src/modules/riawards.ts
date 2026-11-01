@@ -1,6 +1,6 @@
 // src/modules/riawards.ts
 import type { ModuleConfig } from './_types';
-import { FACULTY_MEMBERS, institutionField } from './_types';
+import { FACULTY_MEMBERS, affiliationField, institutionField } from './_types';
 
 export const riawards: ModuleConfig = {
   key: 'riawards',
@@ -16,6 +16,7 @@ export const riawards: ModuleConfig = {
   viewRoles: ['hod', 'drie', 'admin'],
   scope: 'self',
   naturalKey: ['awardName', 'awardDate', 'awardeeName'],
+  affiliation: { field: 'affiliatedToBit', dates: ['awardDate'] },
   fields: [
     { key: 'awardeeName', label: 'Name of the awardee', type: 'text', required: true,
       maxLength: 240, section: 'Award', prefill: 'ownerName',
@@ -76,6 +77,8 @@ export const riawards: ModuleConfig = {
         faculty: 'Attach documents  (Award letters)', drie: 'Attach documents  (Award letters)',
         hod: 'Attach documents  (Award letters)',
       } },
+
+    affiliationField({ label: 'Did you receive this while you were at BIT?', section: 'Award' }),
   ],
   derived: [{ key: 'validUntil', label: 'Valid until', exportAs: { faculty: 'Valid until', drie: 'Valid until', hod: 'Valid until' } }],
   listColumns: ['awardName', 'awardeeName', 'awardingBody', 'awardCategory', 'awardDate', 'validUntil'],

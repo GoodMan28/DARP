@@ -1,6 +1,6 @@
 // src/modules/patents.ts
 import type { ModuleConfig } from './_types';
-import { FACULTY_MEMBERS } from './_types';
+import { FACULTY_MEMBERS, affiliationField } from './_types';
 
 export const patents: ModuleConfig = {
   key: 'patents',
@@ -25,6 +25,7 @@ export const patents: ModuleConfig = {
     ownerMustBeIn: 'inventors',
     evidenceField: 'evidence',
   },
+  affiliation: { field: 'affiliatedToBit', dates: ['filedDate', 'statusDate'] },
   fields: [
     { key: 'inventors', label: 'Name of the Inventor(s)', type: 'text', required: true,
       maxLength: 400, colSpan: 2, section: 'Patent', autofill: { from: 'inventors', locked: false },
@@ -99,6 +100,8 @@ export const patents: ModuleConfig = {
         faculty: 'Attach documents (published/grant certificate)',
         drie: 'Attach documents (published/grant certificate)',
       } },
+
+    affiliationField({ label: 'Was this patent filed while you were at BIT?', section: 'Patent' }),
   ],
   listColumns: ['title', 'applicationNo', 'patentNumber', 'status', 'statusDate'],
   defaultSort: { key: 'statusDate', dir: 'desc' },

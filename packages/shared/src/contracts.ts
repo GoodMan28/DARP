@@ -269,6 +269,8 @@ export interface FormFieldDef {
 export interface ModuleSchemaPayload {
   /** A dropdown value → its parent (programme → level), for fields worked out from a choice. */
   parents?: Record<string, string>;
+  /** The "was this done while you were at BIT?" answer, and the dates it is worked out from. */
+  affiliation?: { field: string; dates: string[] } | null;
   /** The columns the Filter, Sort, Group and Hide fields tools offer for this module. */
   viewColumns: import('./views').ViewColumn[];
   key: string;

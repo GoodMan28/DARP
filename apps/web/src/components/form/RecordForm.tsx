@@ -15,6 +15,8 @@ import { InstitutionPicker } from './InstitutionPicker';
 import { SimilarAward } from './SimilarAward';
 import { SelectOrOther } from './SelectOrOther';
 import { applyComputed, computeValue } from '@darp/shared/computed';
+import { affiliationFrom, firstDate } from '@darp/shared/affiliation';
+import { formatDate } from '@darp/shared/format';
 import { useLeaveGuard } from './useLeaveGuard';
 
 export type { FormFieldDef } from '@darp/shared/contracts';
@@ -48,6 +50,10 @@ interface Props {
   singleton?: boolean;
   /** A dropdown value → its parent (programme → level), for fields worked out from a choice. */
   parents?: Record<string, string>;
+  /** "Was this done while you were at BIT?": the answer's field and the dates it is worked out from. */
+  affiliation?: { field: string; dates: string[] } | null;
+  /** The record owner's joining date, for suggesting that answer as the work's date is filled in. */
+  joiningDate?: string | null;
 }
 
 /** The same text for this purpose: case and spacing aside (the server compares the same way). */
@@ -57,7 +63,7 @@ const sameText = (a: unknown, b: string) => (
 
 export function RecordForm({
   moduleKey, fields, recordId, initialValues, locked, readOnly, lookup, initialLocked, handedOver,
-  initialProvenance, showRanking, approved, estimatedDates, needsInput, returnTo, singleton, parents,
+  initialProvenance, showRanking, approved, estimatedDates, needsInput, returnTo, singleton, parents, affiliation, joiningDate,
 }: Props) {
   /**
    * Suggestions on a new record: the owner's name where a field says so, and a field that follows another
@@ -162,6 +168,28 @@ export function RecordForm({
     [instituteCountries, parents],
   );
   const shownValues = useMemo(() => applyComputed(fields, values, computeContext), [fields, values, computeContext]);
+
+  /*
+   * "Was this done while you were at BIT?" is suggested from the joining date as the work's date is filled
+   * in or fetched. It only ever fills a blank, or follows its own earlier suggestion: an answer the person
+   * gave (or a saved one) is never changed, and the server works the answer out again on saving.
+   */
+  const lastSuggestion = useRef<string | null>(null);
+  const workDate = affiliation ? firstDate({ affiliation }, values) : '';
+  const suggestion = affiliation ? affiliationFrom(joiningDate, workDate) : null;
+  const answerNow = affiliation ? String(values[affiliation.field] ?? '') : '';
+  useEffect(() => {
+    if (!affiliation || readOnly || !suggestion || suggestion === answerNow) return;
+    if (answerNow === '' || answerNow === lastSuggestion.current) {
+      lastSuggestion.current = suggestion;
+      setValues((v) => ({ ...v, [affiliation.field]: suggestion }));
+    }
+  }, [affiliation, readOnly, suggestion, answerNow]);
+  const affiliationHint = !affiliation || readOnly ? undefined
+    : !joiningDate ? 'DARP has no joining date for you. IQAC can add it.'
+      : suggestion && answerNow === suggestion
+        ? `Filled in: this is ${suggestion === 'Yes' ? 'after' : 'before'} you joined BIT on ${formatDate(joiningDate)}. Change it if it is wrong.`
+        : undefined;
 
   const sections = useMemo(() => {
     const map = new Map<string, FormFieldDef[]>();
@@ -398,7 +426,8 @@ export function RecordForm({
                 const mayChange = isLocked && !readOnly && !system && !mirror;
                 // A figure the system works out from other fields: shown, never typed.
                 const workedOut = !!f.computed && computeValue(f.computed, values, computeContext) !== undefined;
-                const hint = workedOut ? 'Worked out for you'
+                const hint = f.key === affiliation?.field && affiliationHint ? affiliationHint
+                  : workedOut ? 'Worked out for you'
                   : mirror && !readOnly ? `From the ${lookup!.idLabel} box above`
                   : f.autofill?.alwaysLocked ? 'Filled automatically'
                   : f.autofill?.generated && isLocked ? 'Generated from the details'

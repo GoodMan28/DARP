@@ -1,6 +1,6 @@
 // src/modules/outreach.ts
 import type { ModuleConfig } from './_types';
-import { FACULTY_MEMBERS } from './_types';
+import { FACULTY_MEMBERS, affiliationField } from './_types';
 
 /** The kinds of academic service, a fixed list: each kind's own fields depend on its exact wording. */
 export const OUTREACH_TYPES = {
@@ -33,6 +33,7 @@ export const outreach: ModuleConfig = {
   scope: 'self',
   // No duplicate guard: the guard is institute-wide, and two colleagues may well review for the same
   // journal or speak at the same event in the same year.
+  affiliation: { field: 'affiliatedToBit', dates: ['date'] },
   fields: [
     { key: 'activityType', label: 'Type of activity', type: 'select', required: true,
       options: Object.values(T), section: 'Activity',
@@ -116,6 +117,8 @@ export const outreach: ModuleConfig = {
     { key: 'evidence', label: 'Attach the invitation, appointment letter or certificate', type: 'file',
       accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Evidence',
       exportAs: { faculty: 'Attach the invitation, appointment letter or certificate', dofa: 'Attach the invitation, appointment letter or certificate' } },
+
+    affiliationField({ label: 'Was this done while you were at BIT?', section: 'Where and when' }),
   ],
   listColumns: ['activityType', 'eventName', 'organisation', 'where', 'year'],
   defaultSort: { key: 'year', dir: 'desc' },

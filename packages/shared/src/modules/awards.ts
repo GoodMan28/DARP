@@ -1,6 +1,6 @@
 // src/modules/awards.ts
 import type { ModuleConfig } from './_types';
-import { FACULTY_MEMBERS, institutionField } from './_types';
+import { FACULTY_MEMBERS, affiliationField, institutionField } from './_types';
 
 export const awards: ModuleConfig = {
   key: 'awards',
@@ -16,6 +16,7 @@ export const awards: ModuleConfig = {
   viewRoles: ['hod', 'dofa', 'admin'],
   scope: 'self',
   naturalKey: ['awardName', 'awardDate'],
+  affiliation: { field: 'affiliatedToBit', dates: ['awardDate'] },
   fields: [
     { key: 'awardDate', label: 'Date of award', type: 'date', required: true,
       notFuture: true, periodSource: true, exportYear: true, section: 'Award', help: 'The date of the award letter.',
@@ -55,6 +56,8 @@ export const awards: ModuleConfig = {
         faculty: 'Attach documents (Certificate Award Letters )',
         dofa: 'Attach documents (Certificate Award Letters )',
       } },
+
+    affiliationField({ label: 'Did you receive this while you were at BIT?', section: 'Award' }),
   ],
   derived: [{ key: 'validUntil', label: 'Valid until', exportAs: { faculty: 'Valid until', dofa: 'Valid until' } }],
   listColumns: ['awardName', 'level', 'agency', 'awardDate', 'validUntil'],

@@ -1,6 +1,6 @@
 // src/modules/fellowships.ts
 import type { ModuleConfig } from './_types';
-import { FACULTY_MEMBERS, institutionField } from './_types';
+import { FACULTY_MEMBERS, affiliationField, institutionField } from './_types';
 
 export const fellowships: ModuleConfig = {
   key: 'fellowships',
@@ -16,6 +16,7 @@ export const fellowships: ModuleConfig = {
   viewRoles: ['hod', 'drie', 'admin'],
   scope: 'self',
   naturalKey: ['name', 'awardDate'],
+  affiliation: { field: 'affiliatedToBit', dates: ['awardDate'] },
   fields: [
     { key: 'supportType', label: 'Type of support', type: 'select', required: true,
       listKey: 'fellowshipTypes', section: 'Support',
@@ -73,6 +74,8 @@ export const fellowships: ModuleConfig = {
         faculty: 'Attach Grant letter/Award Letter',
         drie: 'Attach Grant letter/Award Letter',
       } },
+
+    affiliationField({ label: 'Did you receive this while you were at BIT?', section: 'Award' }),
   ],
   derived: [{ key: 'validUntil', label: 'Valid until', exportAs: { faculty: 'Valid until', drie: 'Valid until' } }],
   listColumns: ['name', 'supportType', 'stature', 'agency', 'amount', 'awardDate', 'validUntil'],

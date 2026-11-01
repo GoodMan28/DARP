@@ -14,7 +14,7 @@ let hod: SessionUser;
 
 const student = (over: Record<string, unknown> = {}) => ({
   studentName: 'Asha Kumari', rollNo: `MTECH/${Math.random().toString(36).slice(2, 8)}/24`, program: 'M.Tech.',
-  specialisation: 'Aerospace Engineering', yearOfPassing: '2025', statusAfterPassing: 'None of the above', ...over,
+  specialisation: 'Aerospace Engineering', yearOfPassing: '2025', statusAfterPassing: 'None of the above', affiliatedToBit: 'Yes', ...over,
 });
 
 beforeAll(async () => {
@@ -55,7 +55,7 @@ describe('Students Guided', () => {
   });
 
   it('takes the programme a student moved on to from a list, or a typed one', async () => {
-    const base = { statusAfterPassing: 'Higher Studies', institutionEnrolledCode: 'U-0050' };
+    const base = { statusAfterPassing: 'Higher Studies', institutionEnrolledCode: 'U-0050', affiliatedToBit: 'Yes' };
     const listed = await createRecord(faculty, 'studentsguided', student({ ...base, programEnrolled: 'M.Tech./M.E.' }), 'submit');
     expect((await getRecord(faculty, 'studentsguided', listed.id)).data.programEnrolled).toBe('M.Tech./M.E.');
     const typed = await createRecord(faculty, 'studentsguided', student({ ...base, programEnrolled: 'Master of Fine Arts' }), 'submit');
@@ -100,7 +100,7 @@ describe('people and places outside BIT', () => {
   it('is asked a degree programme from the list of degrees', async () => {
     const rec = await createRecord(faculty, 'outreach', {
       activityType: 'PhD thesis review', eventName: 'Thesis of A. Roy', examinerRole: 'External examiner', degreeProgramme: 'Ph.D.',
-      organisation: 'IIT Delhi', where: 'Outside BIT', year: '2025',
+      organisation: 'IIT Delhi', where: 'Outside BIT', year: '2025', affiliatedToBit: 'Yes',
     }, 'submit');
     expect((await getRecord(faculty, 'outreach', rec.id)).data.degreeProgramme).toBe('Ph.D.');
   });

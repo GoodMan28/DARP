@@ -1,6 +1,6 @@
 // src/modules/fdpattended.ts
 import type { ModuleConfig } from './_types';
-import { FACULTY_MEMBERS, institutionField } from './_types';
+import { FACULTY_MEMBERS, affiliationField, institutionField } from './_types';
 
 export const fdpattended: ModuleConfig = {
   key: 'fdpattended',
@@ -16,6 +16,7 @@ export const fdpattended: ModuleConfig = {
   viewRoles: ['hod', 'dofa', 'admin'],
   scope: 'self',
   naturalKey: ['organisingInstitutionCode', 'startDate'],
+  affiliation: { field: 'affiliatedToBit', dates: ['startDate'] },
   fields: [
     { key: 'programType', label: 'Type of Program', type: 'select', required: true,
       listKey: 'fdpProgramTypes', section: 'Programme',
@@ -44,6 +45,8 @@ export const fdpattended: ModuleConfig = {
     { key: 'evidence', label: 'Attach e-copy of Certificate', type: 'file',
       accept: ['pdf', 'jpg', 'jpeg', 'png'], maxSizeMB: 2, colSpan: 2, section: 'Evidence',
       exportAs: { faculty: 'Attach e-copy of Certificate', dofa: 'Attach e-copy of Certificate' } },
+
+    affiliationField({ label: 'Did you attend this while you were at BIT?', section: 'Dates' }),
   ],
   listColumns: ['organisingInstitution', 'programType', 'startDate', 'durationDays'],
   defaultSort: { key: 'startDate', dir: 'desc' },

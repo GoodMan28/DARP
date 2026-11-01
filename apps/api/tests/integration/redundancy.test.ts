@@ -76,7 +76,7 @@ describe('Student Workshops: the count follows the list', () => {
 
 describe('Outreach: the year follows the date', () => {
   const activity = (over: Record<string, unknown> = {}) => ({
-    activityType: 'Invited talk', eventName: 'Seminar', talkTitle: 'Talk', organisation: 'IIT Delhi', where: 'Outside BIT', year: '2023', ...over,
+    activityType: 'Invited talk', eventName: 'Seminar', talkTitle: 'Talk', organisation: 'IIT Delhi', where: 'Outside BIT', year: '2023', affiliatedToBit: 'Yes', ...over,
   });
 
   it('takes the year from the date, over a different one typed', async () => {
