@@ -25,6 +25,8 @@ export async function* csvRows(path: string): AsyncGenerator<Record<string, stri
     return out;
   };
 
+  // The path is typed by the person running the import script, never by a web request.
+  // eslint-disable-next-line security/detect-non-literal-fs-filename
   for await (const chunk of createReadStream(path, { encoding: 'utf8' }) as AsyncIterable<string>) {
     let text = chunk;
     if (first) { first = false; if (text.charCodeAt(0) === 0xfeff) text = text.slice(1); }

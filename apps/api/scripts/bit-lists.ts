@@ -8,7 +8,7 @@
  * Only reference rows change, never a record. Departments are matched by code and renamed to BIT's own
  * wording; a list item that is already there is left as it is, and nothing is switched off.
  */
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db, pool } from '../src/server/db';
 import { departments, masterListItems } from '../src/server/db/schema';
 import { DEPARTMENTS, bitListRows } from './data/bit-lists';
