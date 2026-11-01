@@ -58,6 +58,26 @@ test.describe('faculty journey', () => {
     await expect(page.getByRole('button', { name: 'Save as draft' })).toBeVisible();
   });
 
+  test('sees the level follow the programme, and the branches narrow to it', async ({ page }) => {
+    await useSession(page, 'verma');
+    await page.goto('/m/studentsguided/new');
+    await page.locator('#i-program').selectOption({ label: 'M.Tech.' });
+    await expect(page.locator('#i-level')).toHaveValue('PG');
+    await expect(page.locator('#i-level')).toBeDisabled();
+    await expect(page.locator('#i-specialisation option', { hasText: 'Aerospace Engineering' })).toHaveCount(1);
+    await page.locator('#i-program').selectOption({ label: 'B.Tech.' });
+    await expect(page.locator('#i-level')).toHaveValue('UG');
+  });
+
+  test('sees a QS contact’s country follow the chosen institution', async ({ page }) => {
+    await useSession(page, 'verma');
+    await page.goto('/m/qscontacts/new');
+    await page.locator('#i-institution').fill('Indian Institute of Technology Delhi');
+    await page.locator('[role="listbox"] [role="option"]').first().click();
+    await expect(page.locator('#i-country')).toHaveValue('India');
+    await expect(page.locator('#i-country')).toBeDisabled();
+  });
+
   test('sees computed totals on the profile, marked as not editable', async ({ page }) => {
     await useSession(page, 'verma');
     await page.goto('/profile');

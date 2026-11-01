@@ -156,10 +156,11 @@ export function RecordForm({
   );
 
   /** Every figure the system works out, over what is typed so far: shown live, and replaced by the server on saving. */
-  const shownValues = useMemo(
-    () => applyComputed(fields, values, { parents, institutes: new Map(Object.entries(instituteCountries).map(([c, country]) => [c, { country }])) }),
-    [fields, values, instituteCountries, parents],
+  const computeContext = useMemo(
+    () => ({ parents, institutes: new Map(Object.entries(instituteCountries).map(([c, country]) => [c, { country }])) }),
+    [instituteCountries, parents],
   );
+  const shownValues = useMemo(() => applyComputed(fields, values, computeContext), [fields, values, computeContext]);
 
   const sections = useMemo(() => {
     const map = new Map<string, FormFieldDef[]>();
@@ -395,7 +396,7 @@ export function RecordForm({
                   && values[f.key] !== undefined && values[f.key] !== '';
                 const mayChange = isLocked && !readOnly && !system && !mirror;
                 // A figure the system works out from other fields: shown, never typed.
-                const workedOut = !!f.computed && computeValue(f.computed, values) !== undefined;
+                const workedOut = !!f.computed && computeValue(f.computed, values, computeContext) !== undefined;
                 const hint = workedOut ? 'Worked out for you'
                   : mirror && !readOnly ? `From the ${lookup!.idLabel} box above`
                   : f.autofill?.alwaysLocked ? 'Filled automatically'
