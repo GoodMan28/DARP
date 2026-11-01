@@ -85,7 +85,7 @@ export function OrcidBox({ initial }: { initial: IdentityPayload }) {
                 <Line tone="success">Name matches ORCID ({c.orcidName})</Line>
               ) : (
                 <Line tone="danger">
-                  Name on ORCID ({c.orcidName || 'not shown'}) does not match your account. Ask IQAC to correct your name, or fix it on orcid.org.
+                  Name on ORCID ({c.orcidName || 'not shown'}) does not match your account. Correct your name above, or fix it on orcid.org.
                 </Line>
               )}
               {c.bitEmployment ? <Line tone="success">BIT Mesra listed as your employer</Line> : <Line tone="neutral">BIT Mesra not listed as your employer (optional)</Line>}

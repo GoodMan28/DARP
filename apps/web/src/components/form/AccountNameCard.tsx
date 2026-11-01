@@ -4,7 +4,7 @@ import type { NameParts } from '@darp/shared/names';
 
 /**
  * A person's name in four parts, with the account facts the Faculty Profile does not ask again.
- * IQAC keeps these: the name is matched against author and inventor lists, so it is not edited here.
+ * The name is changed on My profile, not here; the Faculty Profile only shows it.
  */
 export function AccountNameCard({ parts, email, department, dateOfJoining }: {
   parts: NameParts;
@@ -23,7 +23,7 @@ export function AccountNameCard({ parts, email, department, dateOfJoining }: {
   ];
   return (
     <Card className="mb-4" padded={false}>
-      <CardHeader title="Your name" subtitle="IQAC keeps these. Ask IQAC to correct them; they are matched against author and inventor lists, so keep them as you publish." />
+      <CardHeader title="Your name" subtitle="Change your name on My profile. Keep it as you publish: it is matched against author and inventor lists." actions={<a href="/profile" className="text-sm font-semibold text-primary hover:underline">My profile →</a>} />
       <dl className="grid gap-x-8 gap-y-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
         {rows.map(([label, value]) => (
           <div key={label} className="min-w-0">

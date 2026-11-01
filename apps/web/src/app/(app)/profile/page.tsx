@@ -8,6 +8,7 @@ import { ROLE_LABEL } from '@darp/shared/roles';
 import { accountNameParts } from '@darp/shared/names';
 import { DeclaredCounters } from './DeclaredCounters';
 import { OrcidBox } from './OrcidBox';
+import { NameEditor } from './NameEditor';
 import { ResearchCard } from '@/components/research/ResearchCard';
 import type { ResearchProfile } from '@darp/shared/research';
 
@@ -69,13 +70,10 @@ export default async function ProfilePage() {
     >
       {/* the account, for every role */}
       <Card className="mb-4" padded={false}>
-        <CardHeader title="Account" subtitle="Your name is set by IQAC; ask IQAC to correct it. Your name is matched against author and inventor lists, so keep it as you publish." />
-        <dl className="grid gap-x-8 gap-y-3 p-4 sm:grid-cols-2 lg:grid-cols-3">
+        <CardHeader title="Account" subtitle="Keep your name as you publish: it is matched against author and inventor lists." />
+        <NameEditor initial={shown} />
+        <dl className="grid gap-x-8 gap-y-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            ['Prefix', shown.prefix || '—'],
-            ['First name', shown.first],
-            ['Middle name', shown.middle || '—'],
-            ['Last name', shown.last || '—'],
             ['Institute e-mail', user.email],
             ['Role', ROLE_LABEL[user.role]],
             ['Department', user.departmentName ?? '—'],

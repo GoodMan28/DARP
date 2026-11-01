@@ -98,6 +98,7 @@ api.get('/reports/:format', reports.GET);
 api.get('/profile/rollups', profileRollups.GET);
 api.patch('/profile/rollups', profileRollups.PATCH);
 api.get('/profile/identity', profileIdentity.GET);
+api.patch('/profile/name', profileIdentity.PATCH_NAME);
 api.post('/profile/orcid', profileIdentity.POST_ORCID);
 api.delete('/profile/orcid', profileIdentity.DELETE_ORCID);
 
