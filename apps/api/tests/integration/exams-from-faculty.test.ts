@@ -118,12 +118,21 @@ describe('what the faculty entered', () => {
 
   it('reaches the CDC report’s sheet', async () => {
     const report = await generateReport(cdc, readReportRequest(cdc, 'naac', q({ from: '2023', to: '2023', workbook: 'cdc' })), []);
-    const cells: string[] = [];
-    report.workbook.eachSheet((ws) => ws.eachRow((row) => row.eachCell((c) => cells.push(c.text))));
-    expect(cells).toContain('Asha Rao');
-    expect(cells.filter((c) => c === 'Ravi Kumar')).toHaveLength(1);                // one student, even with two exams
-    expect(cells).toContain('GATE 2023; CAT 2023');                                  // and both exams on his row
-    expect(cells.some((c) => c === 'Total number of students who qualified')).toBe(true);
+    const textOf = (name: string) => {
+      const cells: string[] = [];
+      report.workbook.getWorksheet(name)!.eachRow((row) => row.eachCell((c) => cells.push(c.text)));
+      return cells;
+    };
+    expect(report.workbook.worksheets.map((w) => w.name)).toEqual(['5.2.1 Students', 'By year', 'About this report']);
+    const students = textOf('5.2.1 Students');
+    expect(students).toContain('Asha Rao');
+    expect(students.filter((c) => c === 'Ravi Kumar')).toHaveLength(1);              // one student, even with two exams
+    expect(students).toContain('GATE 2023; CAT 2023');                                // and both exams on his row
+    expect(students).toContain('gate 0001; CAT-1');                                   // each number in the place of its exam, as CDC typed it
+    expect(students.some((c) => c === 'Total number of students who qualified')).toBe(true);
+    const byYear = textOf('By year');
+    expect(byYear).toContain('All years');
+    expect(byYear.filter((c) => c === 'Ravi Kumar')).toHaveLength(1);                // in 2023's list, once
   });
 });
 
